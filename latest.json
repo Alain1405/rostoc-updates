@@ -1,0 +1,11 @@
+{
+  "version": "0.1.8",
+  "notes": "Release 0.1.8",
+  "pub_date": "2025-10-02T09:02:32Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://alain1405.github.io/rostoc-updates/macos/Coro.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUK3VyeXNpb0NqbXdIK1BjRGVscGlWR1I3TERPRG9ZNU5yRjFpU2tFVnl3UnhYL2JXUW11bFdNdU1aZWkwRXZvelI2UlVCOENFNnBNcFRhWGY3d0pXWWpDRm8xaUptY3dRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU5Mzk1NzEyCWZpbGU6Q29yby5hcHAudGFyLmd6CkV5MXJlRHRZVGNvTU5QV3FrbmJhSlltSVRKWVAzL0labXZqQTJla25IWFREY2gyNFg5UzVHdkk3dU5kWjNlUlE5eUhyUDUzOVI3NG1RZXZhRktlcUFBPT0K"
+    }
+  }
+}
