@@ -1,11 +1,11 @@
 {
-  "version": "0.1.8",
-  "notes": "Release 0.1.8",
-  "pub_date": "2025-10-02T09:02:32Z",
+  "version": "0.2.1",
+  "notes": "Fixed updater service initialization",
+  "pub_date": "2025-10-08T00:56:00Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://alain1405.github.io/rostoc-updates/macos/Coro.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUK3VyeXNpb0NqbXdIK1BjRGVscGlWR1I3TERPRG9ZNU5yRjFpU2tFVnl3UnhYL2JXUW11bFdNdU1aZWkwRXZvelI2UlVCOENFNnBNcFRhWGY3d0pXWWpDRm8xaUptY3dRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU5Mzk1NzEyCWZpbGU6Q29yby5hcHAudGFyLmd6CkV5MXJlRHRZVGNvTU5QV3FrbmJhSlltSVRKWVAzL0labXZqQTJla25IWFREY2gyNFg5UzVHdkk3dU5kWjNlUlE5eUhyUDUzOVI3NG1RZXZhRktlcUFBPT0K"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTkvdkNCRnJtYnRMWGVWWkpjOW5XUmJ6aTgyR3dWODZuSlBYbTI0RXhFdHdNeVpQWEtneWtyL00wZ2JnVlYrYUh0QUxYRzlmb2oxRWdZQ3l3TFF0SlE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU5ODU2MTk0CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKUkxQWm5NQ2FFdWZHdG5RQTlHb2pzMGozRjByYkZLRldjYy8xRXltcTZ0RlFUUWVqWGwxTHpCN3ZaUDFaRno4elVHRWN5VTlWYXIzV2lIa01yVW1rQXc9PQo=",
+      "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc.app.tar.gz"
     }
   }
 }
