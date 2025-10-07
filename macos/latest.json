@@ -1,10 +1,10 @@
 {
-  "version": "0.2.1",
-  "notes": "Fixed updater service initialization",
-  "pub_date": "2025-10-08T00:56:00Z",
+  "version": "0.2.2",
+  "notes": "Cleaned up navigation menu and set premium as default",
+  "pub_date": "2025-10-08T01:27:00Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTkvdkNCRnJtYnRMWGVWWkpjOW5XUmJ6aTgyR3dWODZuSlBYbTI0RXhFdHdNeVpQWEtneWtyL00wZ2JnVlYrYUh0QUxYRzlmb2oxRWdZQ3l3TFF0SlE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU5ODU2MTk0CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKUkxQWm5NQ2FFdWZHdG5RQTlHb2pzMGozRjByYkZLRldjYy8xRXltcTZ0RlFUUWVqWGwxTHpCN3ZaUDFaRno4elVHRWN5VTlWYXIzV2lIa01yVW1rQXc9PQo=",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQStsKzVwN0NmLytHSUUvKzZDeWZaMDlUbnFnUmFiMGVkNHZZUFFtSnlrWW5oU1lid1A5MUNjdWdwV0tld3Q2SHI1TlBNQk9LdHdxL1FDYWF4UjgwQUFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU5ODU4MTAzCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKR2VXVDgzSGVMWndWSUxxeEJTNlh5QTUzUjFhV3hNV3kzdjg4ZVhQcnVXRGMxSjZmVG5VVThvYnV4b1BBbkNJTzM4QllNZERDVWdJSzNsRy9PUUVTRHc9PQo=",
       "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc.app.tar.gz"
     }
   }
