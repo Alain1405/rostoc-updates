@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "notes": "Version 0.2.0 - Added dark mode toggle to settings page",
+  "pub_date": "2025-10-08T00:23:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQThtZkliaHdrTjZIakdjNFVoeWVkUVovOGFpenhrSVlxaVR6SlZyZHZvc1NFZkl4VnBqOWZvb0tqaGZGZnphOWhHZlZNUEl2bi81OWVSc0wyNDBzZmd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzU5ODU0MjY3CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKK1Nqc25YZTRWNnNOV2xYVlR3YllDbjlxVVRZY0k2TjhreVVKRjJySGh6anI4dUxiSkpxc2dOWmZXVDI1RFlmQTNRQlBqQVYwVFBqbEFqTVBveVJWRGc9PQo=",
+      "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc.app.tar.gz"
+    }
+  }
+}
