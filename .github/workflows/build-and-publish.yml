@@ -18,7 +18,7 @@ permissions:
   id-token: write         # OIDC for Pages
 
 env:
-  PRIVATE_REPO: ForteStudio/coro
+  PRIVATE_REPO: alain1405/rostoc
   UPDATES_DIR: updates
   VERSION_FILE: version.txt
   PYTAURI_GEN_TS: 0
