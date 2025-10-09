@@ -1,21 +1,30 @@
-name: Build Rostoc (from private repo) and publish updates
+name: Build Rostoc Core
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      private_ref:
+      ref:
         description: "Branch, tag, or SHA to build from private repo"
         required: false
+        type: string
         default: "main"
-  repository_dispatch:
-    types: [trigger-build]
-  schedule:
-    - cron: "0 2 * * *" # Optional nightly build at 2 AM UTC
+      commit_sha:
+        description: "Commit SHA of the private repo (for stamping)"
+        required: false
+        type: string
+      initiator:
+        description: "Who triggered the run (for logging/summaries)"
+        required: false
+        type: string
+      is_release:
+        description: "Whether to execute release publishing steps"
+        required: true
+        type: boolean
 
 permissions:
-  contents: write # Push updates to this repo
-  pages: write # Deploy Pages
-  id-token: write # OIDC for Pages
+  contents: write # Push updates to this repo / checkout private repo
+  pages: write # Deploy Pages when releasing
+  id-token: write # OIDC for Pages when releasing
 
 env:
   PRIVATE_REPO: alain1405/rostoc
@@ -36,6 +45,7 @@ jobs:
     steps:
       # --- Checkout this updates repo ---
       - name: Checkout updates repo
+        if: inputs.is_release
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -56,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
-          ref: ${{ github.event.inputs.private_ref || github.event.client_payload.ref || 'main' }}
+          ref: ${{ inputs.ref }}
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           path: private-src
           fetch-depth: 0
@@ -142,7 +152,7 @@ jobs:
       - name: Stamp build version
         working-directory: private-src
         env:
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ inputs.commit_sha || github.sha }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: scripts/ci/stamp_dev_version.sh
 
@@ -381,6 +391,7 @@ jobs:
           echo "tarball_name=$TARBALL_NAME" >> $GITHUB_OUTPUT
 
       - name: Generate latest.json
+        if: inputs.is_release
         working-directory: updates-repo
         env:
           VERSION: ${{ steps.extract_version.outputs.version }}
@@ -417,6 +428,7 @@ jobs:
           cat "../${{ env.UPDATES_DIR }}/latest.json"
 
       - name: Upload artifacts for Pages deployment
+        if: inputs.is_release
         uses: actions/upload-artifact@v4
         with:
           name: rostoc-updates
@@ -441,7 +453,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
-          ref: ${{ github.event.inputs.private_ref || github.event.client_payload.ref || 'main' }}
+          ref: ${{ inputs.ref }}
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           path: private-src
           fetch-depth: 0
@@ -501,7 +513,7 @@ jobs:
         working-directory: private-src
         shell: bash
         env:
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ inputs.commit_sha || github.sha }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: scripts/ci/stamp_dev_version.sh
 
@@ -632,6 +644,7 @@ jobs:
 
   publish-to-pages:
     needs: build-macos
+    if: inputs.is_release
     runs-on: ubuntu-22.04
     permissions:
       contents: write
