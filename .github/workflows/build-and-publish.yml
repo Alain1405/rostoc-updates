@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       private_ref:
-        description: 'Branch, tag, or SHA to build from private repo'
+        description: "Branch, tag, or SHA to build from private repo"
         required: false
-        default: 'main'
+        default: "main"
   repository_dispatch:
     types: [trigger-build]
   schedule:
-    - cron: "0 2 * * *"   # Optional nightly build at 2 AM UTC
+    - cron: "0 2 * * *" # Optional nightly build at 2 AM UTC
 
 permissions:
-  contents: write         # Push updates to this repo
-  pages: write            # Deploy Pages
-  id-token: write         # OIDC for Pages
+  contents: write # Push updates to this repo
+  pages: write # Deploy Pages
+  id-token: write # OIDC for Pages
 
 env:
   PRIVATE_REPO: alain1405/rostoc
@@ -60,6 +60,10 @@ jobs:
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           path: private-src
           fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/references/
+          sparse-checkout-cone-mode: false
 
       # --- Setup toolchains ---
       - name: Setup Node
@@ -128,6 +132,20 @@ jobs:
         working-directory: private-src
         run: pnpm install --frozen-lockfile
 
+      - name: Install uv (Python package manager)
+        working-directory: private-src
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "UV_BIN=$HOME/.local/bin" >> $GITHUB_ENV
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Stamp build version
+        working-directory: private-src
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: scripts/ci/stamp_dev_version.sh
+
       - name: Extract version
         id: extract_version
         working-directory: private-src
@@ -158,6 +176,149 @@ jobs:
         working-directory: private-src
         run: bash scripts/verify_app_bundle.sh
 
+      - name: Locate macOS app bundle
+        id: locate_macos_bundle
+        working-directory: private-src
+        run: |
+          set -euo pipefail
+          SEARCH_DIRS=(target/bundle-release/bundle/macos src-tauri/target/bundle-release/bundle/macos src-tauri/target/release/bundle/macos target/release/bundle/macos)
+          APP_PATH=""
+          for dir in "${SEARCH_DIRS[@]}"; do
+            if [ -d "$dir" ]; then
+              cand=$(find "$dir" -maxdepth 1 -type d -name '*.app' -print -quit 2>/dev/null || true)
+              if [ -n "$cand" ]; then
+                APP_PATH="$cand"
+                break
+              fi
+            fi
+          done
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app bundle located in expected directories"
+            for dir in "${SEARCH_DIRS[@]}"; do
+              if [ -d "$dir" ]; then
+                echo "[INFO] Contents of $dir:"
+                ls -al "$dir"
+              else
+                echo "[INFO] Missing search dir: $dir"
+              fi
+            done
+            exit 1
+          fi
+          PY_CANDIDATES=("$APP_PATH/Contents/Resources/pyembed/python/bin/python3" "$APP_PATH/Contents/Resources/bin/python3")
+          PYBIN=""
+          for py in "${PY_CANDIDATES[@]}"; do
+            if [ -x "$py" ]; then
+              PYBIN="$py"
+              break
+            fi
+          done
+          APP_PARENT=$(dirname "$APP_PATH")
+          APP_NAME=$(basename "$APP_PATH")
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "bundle_dir=$APP_PARENT" >> "$GITHUB_OUTPUT"
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+          echo "python_path=$PYBIN" >> "$GITHUB_OUTPUT"
+          if [ -z "$PYBIN" ]; then
+            echo "::warning::Embedded python binary not found inside bundle (expected pyembed/python/bin/python3 or Resources/bin/python3)"
+          fi
+
+      - name: Runtime smoke test (mac)
+        if: steps.locate_macos_bundle.outputs.app_path != ''
+        working-directory: private-src
+        env:
+          APP_BUNDLE: ${{ steps.locate_macos_bundle.outputs.app_path }}
+          PYBIN_HINT: ${{ steps.locate_macos_bundle.outputs.python_path }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_BUNDLE}" ]; then
+            echo '::error::app_path output missing from locate step'
+            exit 1
+          fi
+          if [[ "${APP_BUNDLE}" == /* ]]; then
+            ABS_APP="${APP_BUNDLE}"
+          else
+            ABS_APP="$GITHUB_WORKSPACE/private-src/${APP_BUNDLE}"
+          fi
+          if [ ! -d "$ABS_APP" ]; then
+            echo "::error::Resolved app bundle directory not found: $ABS_APP"
+            ls -al "$GITHUB_WORKSPACE/private-src"
+            exit 1
+          fi
+          PYBIN="${PYBIN_HINT}"
+          if [[ -n "$PYBIN" && "$PYBIN" != /* ]]; then
+            PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
+          fi
+          if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
+            echo "[INFO] Falling back to bundle-local search for python3"
+            CANDIDATES=(
+              "$ABS_APP/Contents/Resources/pyembed/python/bin/python3"
+              "$ABS_APP/Contents/Resources/bin/python3"
+            )
+            for cand in "${CANDIDATES[@]}"; do
+              if [ -x "$cand" ]; then
+                PYBIN="$cand"
+                break
+              fi
+            done
+          fi
+          if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
+            echo '::error::Embedded python3 not found in bundle'
+            find "$ABS_APP/Contents/Resources" -maxdepth 5 -name 'python3' -print || true
+            exit 1
+          fi
+          echo "[INFO] Running embedded python smoke test: $PYBIN"
+          "$PYBIN" -c "import sys, json, coro_profiles; print(json.dumps({'result':'OK','py':sys.version.split()[0]}))"
+
+      - name: Archive macOS preview artifacts
+        if: steps.locate_macos_bundle.outputs.app_path != ''
+        id: archive_macos_preview
+        working-directory: private-src
+        env:
+          APP_BUNDLE: ${{ steps.locate_macos_bundle.outputs.app_path }}
+          BUNDLE_DIR: ${{ steps.locate_macos_bundle.outputs.bundle_dir }}
+          APP_NAME: ${{ steps.locate_macos_bundle.outputs.app_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_BUNDLE}" ] || [ -z "${BUNDLE_DIR}" ] || [ -z "${APP_NAME}" ]; then
+            echo "::error::Missing bundle metadata from locate_macos_bundle step"
+            exit 1
+          fi
+          if [[ "${BUNDLE_DIR}" == /* ]]; then
+            ABS_BUNDLE_DIR="${BUNDLE_DIR}"
+          else
+            ABS_BUNDLE_DIR="$GITHUB_WORKSPACE/private-src/${BUNDLE_DIR}"
+          fi
+          if [[ "${APP_BUNDLE}" == /* ]]; then
+            ABS_APP="${APP_BUNDLE}"
+          else
+            ABS_APP="$GITHUB_WORKSPACE/private-src/${APP_BUNDLE}"
+          fi
+          if [ ! -d "$ABS_BUNDLE_DIR" ]; then
+            echo "::error::Bundle directory not found: $ABS_BUNDLE_DIR"
+            exit 1
+          fi
+          if [ ! -d "$ABS_APP" ]; then
+            echo "::error::App bundle not found: $ABS_APP"
+            ls -al "$ABS_BUNDLE_DIR"
+            exit 1
+          fi
+          if [ "${APP_NAME}" != "$(basename "$ABS_APP")" ]; then
+            echo "::warning::App name output (${APP_NAME}) did not match bundle basename ($(basename "$ABS_APP"))"
+          fi
+          codesign --force --deep -s - "$ABS_APP" || echo "Ad-hoc codesign failed (continuing)"
+          tar -czf coro-macos-build-preview.tar.gz -C "$ABS_BUNDLE_DIR" "$APP_NAME"
+          ditto -c -k --sequesterRsrc --keepParent "$ABS_APP" coro-macos-build-preview.zip || echo "ditto zip failed"
+
+      - name: Upload macOS preview artifacts
+        if: steps.archive_macos_preview.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-preview
+          path: |
+            private-src/coro-macos-build-preview.tar.gz
+            private-src/coro-macos-build-preview.zip
+          if-no-files-found: ignore
+
       - name: Locate updater artifacts
         id: locate
         working-directory: private-src
@@ -171,20 +332,20 @@ jobs:
           if [[ -z "$TARBALL" ]]; then
             TARBALL=$(find target/bundle-release/bundle/macos -name '*.app.tar.gz' -print -quit 2>/dev/null || true)
           fi
-          
+
           SIG_FILE=""
           if [[ -n "$TARBALL" ]]; then
             SIG_FILE="${TARBALL}.sig"
           fi
-          
+
           echo "Tarball: $TARBALL" >&2
           echo "Signature: $SIG_FILE" >&2
-          
+
           if [[ -z "$TARBALL" ]]; then echo 'Missing updater tarball (.app.tar.gz)'; exit 1; fi
           if [[ -z "$SIG_FILE" || ! -f "$SIG_FILE" ]]; then
             echo 'Missing updater signature (.app.tar.gz.sig)'; exit 1
           fi
-          
+
           echo "tarball=$TARBALL" >> $GITHUB_OUTPUT
           echo "signature=$SIG_FILE" >> $GITHUB_OUTPUT
 
@@ -196,27 +357,27 @@ jobs:
           TARBALL="${{ steps.locate.outputs.tarball }}"
           SIGNATURE="${{ steps.locate.outputs.signature }}"
           VERSION="${{ steps.extract_version.outputs.version }}"
-          
+
           # Create updates directory
           mkdir -p "../${{ env.UPDATES_DIR }}/macos"
-          
+
           # Copy artifacts with version-tagged names
           TARBALL_NAME="Rostoc-${VERSION}-darwin-aarch64.app.tar.gz"
           cp "$TARBALL" "../${{ env.UPDATES_DIR }}/macos/$TARBALL_NAME"
           cp "$SIGNATURE" "../${{ env.UPDATES_DIR }}/macos/${TARBALL_NAME}.sig"
-          
+
           # Also copy as latest for convenience
           cp "$TARBALL" "../${{ env.UPDATES_DIR }}/macos/Rostoc.app.tar.gz"
           cp "$SIGNATURE" "../${{ env.UPDATES_DIR }}/macos/Rostoc.app.tar.gz.sig"
-          
+
           # Stamp version file
           date -u +"%Y-%m-%dT%H:%M:%SZ" > "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
           echo "version=${VERSION}" >> "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
           echo "git_sha=$(git rev-parse --short HEAD)" >> "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
-          
+
           # Generate checksums
           (cd "../${{ env.UPDATES_DIR }}/macos" && shasum -a 256 *.tar.gz > checksums.txt)
-          
+
           echo "tarball_name=$TARBALL_NAME" >> $GITHUB_OUTPUT
 
       - name: Generate latest.json
@@ -226,13 +387,13 @@ jobs:
           TARBALL_NAME: ${{ steps.prepare_artifacts.outputs.tarball_name }}
         run: |
           set -euo pipefail
-          
+
           # Read signature
           SIG=$(cat "../${{ env.UPDATES_DIR }}/macos/${TARBALL_NAME}.sig")
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           NOTES="Release ${VERSION}"
           URL="https://alain1405.github.io/rostoc-updates/macos/${TARBALL_NAME}"
-          
+
           # Generate latest.json
           jq -n \
             --arg v "$VERSION" \
@@ -251,7 +412,7 @@ jobs:
                 }
               }
             }' > "../${{ env.UPDATES_DIR }}/latest.json"
-          
+
           echo 'Generated latest.json:'
           cat "../${{ env.UPDATES_DIR }}/latest.json"
 
@@ -260,6 +421,214 @@ jobs:
         with:
           name: rostoc-updates
           path: ${{ env.UPDATES_DIR }}/*
+
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Setup SSH agent for private repo
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+      - name: Add GitHub to known_hosts
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout private repo (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          ref: ${{ github.event.inputs.private_ref || github.event.client_payload.ref || 'main' }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          path: private-src
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Derive pnpm store path
+        id: windows-pnpm-store
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd private-src
+          echo "[INFO] pnpm version: $(pnpm --version || true)" >&2
+          STORE_PATH=$(pnpm store path 2>/dev/null | tr -d '\r' || true)
+          if [ -z "${STORE_PATH}" ]; then
+            echo "[WARN] pnpm store path empty; falling back to default ~/.pnpm-store" >&2
+            STORE_PATH="$HOME/.pnpm-store"
+          fi
+          mkdir -p "$STORE_PATH" || true
+          echo "Using STORE_PATH=$STORE_PATH" >&2
+          echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.windows-pnpm-store.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download embedded Python
+        working-directory: private-src
+        shell: pwsh
+        run: scripts/windows/download-py.ps1
+
+      - name: Assemble staged runtime
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/assemble_runtime.py
+          head -n 80 build/runtime_staging/runtime_manifest.json || true
+
+      - name: Install JS dependencies
+        working-directory: private-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Stamp build version
+        working-directory: private-src
+        shell: bash
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: scripts/ci/stamp_dev_version.sh
+
+      - name: Build application
+        working-directory: private-src
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          ALLOW_PARTIAL_BUNDLE: 1
+        run: |
+          set -euo pipefail
+          EMBED_PY="build/runtime_staging/pyembed/python/python.exe"
+          if [ ! -f "$EMBED_PY" ]; then
+            echo "[ERR] Embedded python exe missing at $EMBED_PY" >&2
+            exit 2
+          fi
+          export PYO3_PYTHON="$(pwd)/$EMBED_PY"
+          echo "[INFO] Using PYO3_PYTHON=$PYO3_PYTHON" >&2
+          find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
+          rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
+          pnpm tauri build
+
+      - name: Check Python DLL linkage
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE=$(find target -type f -name Rostoc.exe | head -n1 || true)
+          if [ -z "$EXE" ]; then
+            echo 'Rostoc.exe not found'
+            exit 1
+          fi
+          echo "[INFO] Scanning for python DLL references in $EXE" >&2
+          strings "$EXE" | grep -iE 'python3[0-9]+\.dll' | sort -u || echo '[WARN] No python3*.dll tokens found'
+          if command -v objdump >/dev/null 2>&1; then
+            objdump -p "$EXE" | grep -i 'DLL Name' | head -n 40 || true
+          fi
+
+      - name: Embed and verify runtime
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/embed_windows_runtime.py --verify
+
+      - name: Runtime smoke test
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYBIN=$(find target -type f -path '*resources/pyembed/python/python.exe' -print -quit || true)
+          if [ -z "$PYBIN" ]; then
+            echo 'Embedded python.exe not found'
+            exit 1
+          fi
+          echo "[INFO] Running embedded python smoke test: $PYBIN" >&2
+          RAW_JSON="$($PYBIN scripts/ci/windows_runtime_smoke.py)"
+          echo "[SMOKE]$RAW_JSON"
+          export RAW_JSON
+          python3 scripts/ci/validate_windows_smoke.py || echo "[WARN] Smoke validation non-strict failure (continuing)" >&2
+
+      - name: Launch executable smoke (non-fatal)
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host '[INFO] Starting exe launch smoke (non-fatal)'
+          scripts/ci/windows_run_exe_smoke.ps1 -TimeoutSeconds 6
+
+      - name: Upload exe launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe-launch
+          path: |
+            private-src/scripts/ci/windows_exe_launch.json
+          if-no-files-found: ignore
+
+      - name: Upload smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-debug
+          path: |
+            private-src/windows_runtime_smoke_debug.json
+          if-no-files-found: ignore
+
+      - name: Archive Windows artifacts
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Get-ChildItem -Path target -Recurse -Filter Rostoc.exe | Select-Object -First 1
+          if (-not $exe) { Write-Error 'No Rostoc.exe found for archiving'; exit 1 }
+          $bindir = Split-Path -Parent $exe.FullName
+          Write-Host "[INFO] Found exe at $($exe.FullName) (bindir=$bindir)"
+          $stage = "windows_bundle_stage"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item $exe.FullName (Join-Path $stage $exe.Name)
+          if (Test-Path (Join-Path $bindir 'resources')) {
+            Copy-Item (Join-Path $bindir 'resources') (Join-Path $stage 'resources') -Recurse
+          }
+          $dllPatterns = @('python3*.dll','vcruntime140.dll','vcruntime140_1.dll')
+          foreach ($pat in $dllPatterns) {
+            $matches = Get-ChildItem -Path $bindir -Filter $pat -ErrorAction SilentlyContinue
+            foreach ($m in $matches) {
+              Copy-Item $m.FullName (Join-Path $stage $m.Name) -Force
+              Write-Host "[INFO] Included DLL $($m.Name)"
+            }
+          }
+          if (Test-Path build/runtime_staging/runtime_manifest.json) {
+            Copy-Item build/runtime_staging/runtime_manifest.json windows_runtime_manifest.json -ErrorAction SilentlyContinue
+          }
+          $zipPath = 'coro-windows-bundle.zip'
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -Force
+          Write-Host "[INFO] Created $zipPath"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-preview
+          path: |
+            private-src/coro-windows-bundle.zip
+            private-src/windows_runtime_manifest.json
+          if-no-files-found: error
 
   publish-to-pages:
     needs: build-macos
@@ -287,7 +656,7 @@ jobs:
       #   run: |
       #     git config user.name "github-actions[bot]"
       #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+
       #     git add updates || true
       #     if ! git diff --cached --quiet; then
       #       git commit -m "chore: publish updates v${{ needs.build-macos.outputs.version }} ($(date -u +%F))"
