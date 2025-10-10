@@ -390,6 +390,22 @@ jobs:
 
           echo "tarball_name=$TARBALL_NAME" >> $GITHUB_OUTPUT
 
+      - name: Upload release assets to private repo
+        if: inputs.is_release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          owner: alain1405
+          repo: rostoc
+          tag: ${{ inputs.ref }}
+          draft: true
+          allowUpdates: true
+          artifacts: |
+            updates/macos/Rostoc.app.tar.gz
+            updates/macos/Rostoc.app.tar.gz.sig
+            updates/version.txt
+          artifactContentType: application/octet-stream
+
       - name: Generate latest.json
         if: inputs.is_release
         working-directory: updates-repo

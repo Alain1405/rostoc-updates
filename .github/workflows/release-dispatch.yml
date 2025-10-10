@@ -1,0 +1,32 @@
+name: Dispatch Release Build
+
+on:
+  repository_dispatch:
+    types: [trigger-release]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or branch to release"
+        required: false
+        default: "main"
+      commit_sha:
+        description: "Commit SHA for metadata stamping"
+        required: false
+      initiator:
+        description: "Triggering user or source context"
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  run-shared-build:
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      ref: ${{ inputs.ref || github.event.client_payload.ref || github.ref_name || 'main' }}
+      commit_sha: ${{ inputs.commit_sha || github.event.client_payload.sha || github.sha }}
+      initiator: ${{ inputs.initiator || github.event.client_payload.initiator || github.event.client_payload.sourceRepo || github.actor }}
+      is_release: true
+    secrets: inherit

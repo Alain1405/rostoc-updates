@@ -1,0 +1,32 @@
+name: Dispatch CI Build
+
+on:
+  repository_dispatch:
+    types: [trigger-ci]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to build"
+        required: false
+        default: "main"
+      commit_sha:
+        description: "Commit SHA for metadata stamping"
+        required: false
+      initiator:
+        description: "Who kicked off the run"
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  run-shared-build:
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      ref: ${{ inputs.ref || github.event.client_payload.ref || 'main' }}
+      commit_sha: ${{ inputs.commit_sha || github.event.client_payload.sha || '' }}
+      initiator: ${{ inputs.initiator || github.event.client_payload.initiator || github.actor }}
+      is_release: false
+    secrets: inherit
