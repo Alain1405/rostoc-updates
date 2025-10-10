@@ -619,7 +619,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Invoke-Expression ((Invoke-WebRequest -Uri 'https://astral.sh/uv/install.ps1' -UseBasicParsing).Content)
+          $script = Invoke-RestMethod -Uri 'https://astral.sh/uv/install.ps1'
+          Invoke-Expression $script
           "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           Add-Content -Path $env:GITHUB_ENV -Value "UV_BIN=$($env:USERPROFILE)\.local\bin"
 
