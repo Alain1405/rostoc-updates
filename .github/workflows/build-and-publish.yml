@@ -554,6 +554,11 @@ jobs:
     needs: set-status
     runs-on: windows-2022
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.extract_version_win.outputs.version }}
+      installer_name: ${{ steps.prepare_windows_updates.outputs.versioned_name }}
+      installer_latest: ${{ steps.prepare_windows_updates.outputs.latest_name }}
+      installer_checksum: ${{ steps.prepare_windows_updates.outputs.checksum }}
     steps:
       - name: Setup SSH agent for private repo
         uses: webfactory/ssh-agent@v0.9.0
@@ -702,6 +707,18 @@ jobs:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
         run: scripts/ci/stamp_dev_version.sh
 
+      - name: Extract version
+        id: extract_version_win
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $content = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if (-not $content.version) {
+            throw 'Version not found in src-tauri/tauri.conf.json'
+          }
+          "version=$($content.version)" >> $env:GITHUB_OUTPUT
+
       - name: Build application
         working-directory: private-src
         shell: bash
@@ -832,8 +849,107 @@ jobs:
             private-src/windows_runtime_manifest.json
           if-no-files-found: error
 
+      - name: Locate Windows updater artifacts
+        if: inputs.is_release
+        id: locate_windows_updater
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $patterns = @('*.msi', '*.msi.zip', '*setup*.exe', '*.exe', '*.zip')
+          $selected = $null
+          foreach ($pattern in $patterns) {
+            $found = Get-ChildItem -Path target -Recurse -File -Filter $pattern -ErrorAction SilentlyContinue | Where-Object {
+              $_.FullName -match 'bundle'
+            } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($found) {
+              $selected = $found
+              break
+            }
+          }
+          if (-not $selected) {
+            throw 'No Windows installer artifact found under target/'
+          }
+          $sigPath = "$($selected.FullName).sig"
+          if (-not (Test-Path $sigPath)) {
+            $sigCandidate = Get-ChildItem -Path $selected.DirectoryName -Filter "$($selected.BaseName)*.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($sigCandidate) {
+              $sigPath = $sigCandidate.FullName
+            } else {
+              throw "Signature file not found for $($selected.Name)"
+            }
+          }
+          "artifact=$($selected.FullName)" >> $env:GITHUB_OUTPUT
+          "artifact_name=$($selected.Name)" >> $env:GITHUB_OUTPUT
+          "signature=$sigPath" >> $env:GITHUB_OUTPUT
+
+      - name: Prepare Windows update bundle
+        if: inputs.is_release
+        id: prepare_windows_updates
+        working-directory: private-src
+        shell: pwsh
+        env:
+          UPDATES_DIR: ${{ env.UPDATES_DIR }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ steps.extract_version_win.outputs.version }}'
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw 'Version output missing from extract_version_win step'
+          }
+          $artifactPath = '${{ steps.locate_windows_updater.outputs.artifact }}'
+          $signaturePath = '${{ steps.locate_windows_updater.outputs.signature }}'
+          if ([string]::IsNullOrWhiteSpace($artifactPath) -or -not (Test-Path -LiteralPath $artifactPath)) {
+            throw "Installer artifact '$artifactPath' missing"
+          }
+          if ([string]::IsNullOrWhiteSpace($signaturePath) -or -not (Test-Path -LiteralPath $signaturePath)) {
+            throw "Signature file '$signaturePath' missing"
+          }
+          $artifact = Get-Item -LiteralPath $artifactPath
+          $signature = Get-Item -LiteralPath $signaturePath
+          $platform = 'windows-x86_64'
+          $parent = Split-Path -Parent $PWD
+          $updatesRoot = Join-Path $parent $env:UPDATES_DIR
+          if (-not (Test-Path -LiteralPath $updatesRoot)) {
+            New-Item -ItemType Directory -Path $updatesRoot | Out-Null
+          }
+          $windowsDir = Join-Path $updatesRoot 'windows'
+          if (-not (Test-Path -LiteralPath $windowsDir)) {
+            New-Item -ItemType Directory -Path $windowsDir | Out-Null
+          }
+          $extension = $artifact.Extension
+          if ($artifact.Name -like '*.msi.zip' -or $artifact.Name -like '*.exe.zip') {
+            $extension = '.zip'
+          }
+          if (-not $extension) {
+            $extension = [System.IO.Path]::GetExtension($artifact.Name)
+          }
+          $versionedName = "Rostoc-$version-$platform$extension"
+          $versionedPath = Join-Path $windowsDir $versionedName
+          Copy-Item -LiteralPath $artifact.FullName -Destination $versionedPath -Force
+          $sigTarget = "$versionedPath.sig"
+          Copy-Item -LiteralPath $signature.FullName -Destination $sigTarget -Force
+          $latestName = "Rostoc-$platform$extension"
+          $latestPath = Join-Path $windowsDir $latestName
+          Copy-Item -LiteralPath $artifact.FullName -Destination $latestPath -Force
+          Copy-Item -LiteralPath $signature.FullName -Destination "$latestPath.sig" -Force
+          $hash = Get-FileHash -Path $versionedPath -Algorithm SHA256
+          $checksumPath = Join-Path $windowsDir 'checksums.txt'
+          "$($hash.Hash)  $versionedName" | Out-File -FilePath $checksumPath -Encoding utf8
+          "versioned_name=$versionedName" >> $env:GITHUB_OUTPUT
+          "latest_name=$latestName" >> $env:GITHUB_OUTPUT
+          "checksum=$($hash.Hash)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifacts for Pages deployment (Windows)
+        if: inputs.is_release
+        uses: actions/upload-artifact@v4
+        with:
+          name: rostoc-updates-windows
+          path: updates/windows/*
+
   publish-to-pages:
-    needs: build-macos
+    needs:
+      - build-macos
+      - build-windows
     if: inputs.is_release
     runs-on: ubuntu-22.04
     permissions:
@@ -849,11 +965,50 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download build artifacts
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: rostoc-updates
           path: updates
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates-windows
+          path: updates
+
+      - name: Merge Windows entry into latest.json
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.build-macos.outputs.version }}'
+          if [[ ! -f updates/latest.json ]]; then
+            echo "::error::updates/latest.json not found prior to merge" >&2
+            exit 1
+          fi
+          shopt -s nullglob
+          files=(updates/windows/Rostoc-${VERSION}-windows-x86_64.*)
+          win_file=""
+          for f in "${files[@]}"; do
+            if [[ "$f" != *.sig ]]; then
+              win_file="$f"
+              break
+            fi
+          done
+          if [[ -z "$win_file" ]]; then
+            echo "::error::No Windows installer artifact found for version $VERSION under updates/windows" >&2
+            ls -al updates/windows || true
+            exit 1
+          fi
+          sig_file="${win_file}.sig"
+          if [[ ! -f "$sig_file" ]]; then
+            echo "::error::Missing signature for Windows artifact: $sig_file" >&2
+            exit 1
+          fi
+          signature=$(cat "$sig_file")
+          url="https://alain1405.github.io/rostoc-updates/windows/$(basename "$win_file")"
+          tmp=updates/latest.json.tmp
+          jq --arg url "$url" --arg sig "$signature" '.platforms["windows-x86_64"] = { url: $url, signature: $sig }' updates/latest.json > "$tmp"
+          mv "$tmp" updates/latest.json
 
       # - name: Commit & push updates (optional - for history)
       #   run: |
@@ -883,6 +1038,15 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ needs.build-macos.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ needs.build-macos.outputs.tarball }}" ]; then
+            echo "- macOS artifact: macos/${{ needs.build-macos.outputs.tarball }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- macOS artifact: macos/Rostoc.app.tar.gz" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ needs.build-windows.outputs.installer_name }}" ]; then
+            echo "- Windows artifact: windows/${{ needs.build-windows.outputs.installer_name }}" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "**Pages URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
 
   finalize-status:
