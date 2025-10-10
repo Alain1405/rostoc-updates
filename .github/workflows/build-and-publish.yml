@@ -730,9 +730,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXE=$(find target -type f -name Rostoc.exe | head -n1 || true)
+          EXE=$(find target -type f -iname 'rostoc.exe' | head -n1 || true)
           if [ -z "$EXE" ]; then
-            echo 'Rostoc.exe not found'
+            echo 'Rostoc.exe not found; available executables:' >&2
+            find target -maxdepth 4 -type f -print || true
             exit 1
           fi
           echo "[INFO] Scanning for python DLL references in $EXE" >&2
