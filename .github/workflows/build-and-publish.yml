@@ -39,7 +39,6 @@ jobs:
   set-status:
     runs-on: ubuntu-latest
     env:
-      PRIVATE_REPO: ${{ env.PRIVATE_REPO }}
       TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
       STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
       STATUS_DESCRIPTION: ${{ inputs.is_release && 'Public release build running' || 'Public CI build running' }}
@@ -789,7 +788,6 @@ jobs:
       - build-windows
     if: ${{ always() }}
     env:
-      PRIVATE_REPO: ${{ env.PRIVATE_REPO }}
       TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
       STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
     steps:
