@@ -20,6 +20,23 @@ on:
         description: "Whether to execute release publishing steps"
         required: true
         type: boolean
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to build from private repo"
+        required: false
+        default: "main"
+      commit_sha:
+        description: "Commit SHA of the private repo (for stamping)"
+        required: false
+      initiator:
+        description: "Who triggered the run (for logging/summaries)"
+        required: false
+      is_release:
+        description: "Whether to execute release publishing steps"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write # Push updates to this repo / checkout private repo
@@ -43,8 +60,21 @@ jobs:
       STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
       STATUS_DESCRIPTION: ${{ inputs.is_release && 'Public release build running' || 'Public CI build running' }}
     steps:
+      - name: Detect status token
+        id: detect-status-token
+        run: |
+          if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo '### ℹ️ Status updates skipped' >> "$GITHUB_STEP_SUMMARY"
+            echo '\`UPDATES_REPO_TOKEN\` not provided; omitting private repo commit status.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+
       - name: Set pending status in private repo
-        if: env.TARGET_SHA != ''
+        if: ${{ env.TARGET_SHA != '' && steps.detect-status-token.outputs.available == 'true' }}
         uses: actions/github-script@v7
         env:
           TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -791,8 +821,21 @@ jobs:
       TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
       STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
     steps:
+      - name: Detect status token
+        id: detect-finalize-token
+        run: |
+          if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo '### ℹ️ Final status skipped' >> "$GITHUB_STEP_SUMMARY"
+            echo '\`UPDATES_REPO_TOKEN\` not provided; final commit status omitted.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+
       - name: Update commit status with result
-        if: env.TARGET_SHA != ''
+        if: ${{ env.TARGET_SHA != '' && steps.detect-finalize-token.outputs.available == 'true' }}
         uses: actions/github-script@v7
         env:
           TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
