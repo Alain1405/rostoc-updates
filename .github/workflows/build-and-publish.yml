@@ -31,8 +31,9 @@ env:
   UPDATES_DIR: updates
   VERSION_FILE: version.txt
   PYTAURI_GEN_TS: 0
-  LC_ALL: C.UTF-8
-  LANG: C.UTF-8
+  LC_ALL: en_US.UTF-8
+  LANG: en_US.UTF-8
+  LC_CTYPE: en_US.UTF-8
 
 jobs:
   set-status:
@@ -149,12 +150,31 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
+      - name: Install uv (Python package manager)
+        working-directory: private-src
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "UV_BIN=$HOME/.local/bin" >> $GITHUB_ENV
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Python wheels
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/Library/Caches/pip
+            ~/.cache/uv
+            ~/Library/Caches/uv
+          key: python-wheel-${{ runner.os }}-${{ hashFiles('private-src/uv.lock') }}
+          restore-keys: |
+            python-wheel-${{ runner.os }}-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install sccache
         run: |
-          curl -L https://github.com/mozilla/sccache/releases/download/v0.7.7/sccache-v0.7.7-x86_64-apple-darwin.tar.gz -o sccache.tgz
+          curl -L https://github.com/mozilla/sccache/releases/download/v0.7.7/sccache-v0.7.7-aarch64-apple-darwin.tar.gz -o sccache.tgz
           tar -xzf sccache.tgz --strip-components=1
           sudo mv sccache /usr/local/bin/sccache
           export SCCACHE_DIR="$RUNNER_TEMP/sccache"
@@ -178,18 +198,13 @@ jobs:
 
       - name: Assemble staged runtime
         working-directory: private-src
+        env:
+          ENABLE_RUNTIME_CACHE: "1"
         run: bash scripts/assemble_runtime.sh
 
       - name: Install JS dependencies
         working-directory: private-src
         run: pnpm install --frozen-lockfile
-
-      - name: Install uv (Python package manager)
-        working-directory: private-src
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "UV_BIN=$HOME/.local/bin" >> $GITHUB_ENV
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Stamp build version
         working-directory: private-src
@@ -548,6 +563,17 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
+      - name: Cache Python wheels
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\.cache\pip
+            ~\AppData\Local\uv
+          key: python-wheel-${{ runner.os }}-${{ hashFiles('private-src/uv.lock') }}
+          restore-keys: |
+            python-wheel-${{ runner.os }}-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -559,6 +585,8 @@ jobs:
       - name: Assemble staged runtime
         working-directory: private-src
         shell: bash
+        env:
+          ENABLE_RUNTIME_CACHE: "1"
         run: |
           set -euo pipefail
           python scripts/assemble_runtime.py
