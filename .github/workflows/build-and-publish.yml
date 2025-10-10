@@ -35,7 +35,49 @@ env:
   LANG: C.UTF-8
 
 jobs:
+  set-status:
+    runs-on: ubuntu-latest
+    env:
+      PRIVATE_REPO: ${{ env.PRIVATE_REPO }}
+      TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
+      STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
+      STATUS_DESCRIPTION: ${{ inputs.is_release && 'Public release build running' || 'Public CI build running' }}
+    steps:
+      - name: Set pending status in private repo
+        if: env.TARGET_SHA != ''
+        uses: actions/github-script@v7
+        env:
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          github-token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          result-encoding: string
+          script: |
+            const [owner, repo] = process.env.PRIVATE_REPO.split('/');
+            const sha = process.env.TARGET_SHA;
+            const context = process.env.STATUS_CONTEXT;
+            const description = process.env.STATUS_DESCRIPTION;
+            const targetUrl = process.env.TARGET_URL;
+
+            if (!owner || !repo) {
+              core.warning(`Unable to parse PRIVATE_REPO env "${process.env.PRIVATE_REPO}"; skipping status update.`);
+              return 'skipped';
+            }
+
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state: 'pending',
+              context,
+              description,
+              target_url: targetUrl
+            });
+
+            core.info(`Set pending status (${context}) on ${owner}/${repo}@${sha}`);
+            return 'pending-set';
+
   build-macos:
+    needs: set-status
     runs-on: macos-14
     timeout-minutes: 50
     outputs:
@@ -451,6 +493,7 @@ jobs:
           path: ${{ env.UPDATES_DIR }}/*
 
   build-windows:
+    needs: set-status
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -710,3 +753,48 @@ jobs:
           echo "**Version:** ${{ needs.build-macos.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json" >> $GITHUB_STEP_SUMMARY
           echo "**Pages URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+
+  finalize-status:
+    runs-on: ubuntu-latest
+    needs:
+      - build-macos
+      - build-windows
+    if: ${{ always() }}
+    env:
+      PRIVATE_REPO: ${{ env.PRIVATE_REPO }}
+      TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
+      STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
+    steps:
+      - name: Update commit status with result
+        if: env.TARGET_SHA != ''
+        uses: actions/github-script@v7
+        env:
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MAC_RESULT: ${{ needs.build-macos.result }}
+          WIN_RESULT: ${{ needs.build-windows.result }}
+        with:
+          github-token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          script: |
+            const [owner, repo] = process.env.PRIVATE_REPO.split('/');
+            const sha = process.env.TARGET_SHA;
+            const context = process.env.STATUS_CONTEXT;
+            const targetUrl = process.env.TARGET_URL;
+            const results = [process.env.MAC_RESULT, process.env.WIN_RESULT];
+            const allSucceeded = results.every((r) => r === 'success' || r === 'skipped');
+
+            const state = allSucceeded ? 'success' : 'failure';
+            const description = allSucceeded
+              ? (context.endsWith('release') ? 'Public release build succeeded' : 'Public CI build succeeded')
+              : 'Public build failed — see logs in rostoc-updates repo';
+
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state,
+              context,
+              description,
+              target_url: targetUrl
+            });
+
+            core.info(`Set ${state} status (${context}) on ${owner}/${repo}@${sha}`);
