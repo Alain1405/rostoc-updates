@@ -415,6 +415,20 @@ jobs:
             private-src/coro-macos-build-preview.zip
           if-no-files-found: ignore
 
+      - name: Detect release upload token
+        if: inputs.is_release
+        id: detect-release-token
+        run: |
+          if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo '### ℹ️ Release asset upload skipped' >> "$GITHUB_STEP_SUMMARY"
+            echo '\`UPDATES_REPO_TOKEN\` not provided; skipping release artifact upload.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+
       - name: Locate updater artifacts
         id: locate
         working-directory: private-src
@@ -477,7 +491,7 @@ jobs:
           echo "tarball_name=$TARBALL_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload release assets to private repo
-        if: inputs.is_release
+        if: inputs.is_release && steps.detect-release-token.outputs.available == 'true'
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.UPDATES_REPO_TOKEN }}
