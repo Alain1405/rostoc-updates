@@ -603,8 +603,62 @@ jobs:
           restore-keys: |
             python-wheel-${{ runner.os }}-
 
+      - name: Cache embedded Python
+        uses: actions/cache@v4
+        with:
+          path: private-src/src-tauri/pyembed
+          key: pyembed-${{ runner.os }}-${{ hashFiles('private-src/scripts/windows/download-py.ps1') }}
+          restore-keys: |
+            pyembed-${{ runner.os }}-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv (Python helper)
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-Expression ((Invoke-WebRequest -Uri 'https://astral.sh/uv/install.ps1' -UseBasicParsing).Content)
+          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Add-Content -Path $env:GITHUB_ENV -Value "UV_BIN=$($env:USERPROFILE)\.local\bin"
+
+      - name: Install sccache
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = 'v0.7.7'
+          $zipPath = Join-Path $env:RUNNER_TEMP 'sccache.zip'
+          $extractDir = Join-Path $env:RUNNER_TEMP 'sccache'
+          Invoke-WebRequest -Uri "https://github.com/mozilla/sccache/releases/download/$version/sccache-$version-x86_64-pc-windows-msvc.zip" -OutFile $zipPath
+          if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+          Expand-Archive -Path $zipPath -DestinationPath $extractDir
+          $exe = Get-ChildItem -Path $extractDir -Recurse -Filter sccache.exe | Select-Object -First 1
+          if (-not $exe) { Write-Error 'sccache.exe not found in archive'; exit 1 }
+          $binDir = Join-Path $env:USERPROFILE 'bin'
+          if (-not (Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir | Out-Null }
+          Copy-Item $exe.FullName (Join-Path $binDir 'sccache.exe') -Force
+          "$binDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$($env:LOCALAPPDATA)\Mozilla\sccache"
+
+      - name: Cache Rust toolchain and sccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\.cargo\registry
+            ~\.cargo\git
+            ~\AppData\Local\Mozilla\sccache
+          key: rust-${{ runner.os }}-${{ hashFiles('private-src/**/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Configure Cargo environment
+        shell: bash
+        run: |
+          {
+            echo CARGO_INCREMENTAL=0
+            echo CARGO_TERM_COLOR=always
+          } >> "$GITHUB_ENV"
 
       - name: Download embedded Python
         working-directory: private-src
@@ -639,6 +693,9 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           ALLOW_PARTIAL_BUNDLE: 1
+          RUSTC_WRAPPER: sccache
+          SCCACHE_DIR: ${{ env.SCCACHE_DIR }}
+          SCCACHE_CACHE_SIZE: 2G
         run: |
           set -euo pipefail
           EMBED_PY="build/runtime_staging/pyembed/python/python.exe"
@@ -651,6 +708,7 @@ jobs:
           find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
           rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
           pnpm tauri build
+          sccache --show-stats || true
 
       - name: Check Python DLL linkage
         working-directory: private-src
