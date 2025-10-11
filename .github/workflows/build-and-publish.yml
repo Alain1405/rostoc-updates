@@ -809,7 +809,8 @@ jobs:
           echo "[INFO] Using PYO3_PYTHON=$PYO3_PYTHON" >&2
           find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
           rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
-          pnpm tauri build
+          # Forward --locked to Cargo to keep dependency versions stable across runs (improves sccache hits)
+          pnpm tauri build -- --locked
           sccache --show-stats || true
 
       - name: Save sccache statistics (Windows)
