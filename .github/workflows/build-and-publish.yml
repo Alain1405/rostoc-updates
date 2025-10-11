@@ -826,6 +826,8 @@ jobs:
             # Speed up compile/link for non-release CI builds
             echo CARGO_PROFILE_RELEASE_LTO=off
             echo CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+            # Strip symbols to shrink link work and binary size
+            echo CARGO_PROFILE_RELEASE_STRIP=symbols
             # Reduce debug info and normalize paths to improve sccache hits across runs
             # Use the correct rustc flag for path remapping (not a -C codegen option)
             echo RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$(pwd)=/workspace --remap-path-prefix=${CARGO_HOME:-$USERPROFILE/.cargo}=/cargo-home"
@@ -836,6 +838,8 @@ jobs:
             echo SCCACHE_IGNORE_ENV=GITHUB_SHA,GITHUB_RUN_NUMBER,DEV_DISPLAY_VERSION,DEV_WINDOWS_VERSION,PYO3_PYTHON,WORKSPACE_DRIVE
             # Prefer LLVM lld linker for faster links on MSVC
             echo CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=rust-lld
+            # Allow a larger local cache to reduce evictions
+            echo SCCACHE_CACHE_SIZE=10G
           } >> "$GITHUB_ENV"
 
       - name: Normalize workspace path for caching (Windows)
@@ -889,7 +893,7 @@ jobs:
           ALLOW_PARTIAL_BUNDLE: 1
           RUSTC_WRAPPER: sccache
           SCCACHE_DIR: ${{ env.SCCACHE_DIR }}
-          SCCACHE_CACHE_SIZE: 5G
+          SCCACHE_CACHE_SIZE: 10G
         run: |
           set -euo pipefail
           EMBED_PY="build/runtime_staging/pyembed/python/python.exe"
@@ -904,8 +908,11 @@ jobs:
             export PYO3_PYTHON="$(pwd)/$EMBED_PY"
           fi
           echo "[INFO] Using PYO3_PYTHON=$PYO3_PYTHON" >&2
-          find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
-          rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
+          # Only purge PyO3 build artifacts for release builds; for preview keep them to improve cache reuse
+          if [ "${{ inputs.is_release }}" = "true" ]; then
+            find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
+            rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
+          fi
           # Pre-build sccache stats for visibility
           sccache --show-stats || true
           # Forward --locked to Cargo to keep dependency versions stable across runs (improves sccache hits)
@@ -949,10 +956,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXE=$(find target -type f -iname 'rostoc.exe' | head -n1 || true)
+          # Support both tauri-bundled layout (target/...) and preview cargo build layout (src-tauri/target/...)
+          EXE=$( (find target -type f -iname 'rostoc.exe' 2>/dev/null; find src-tauri/target -type f -iname 'rostoc.exe' 2>/dev/null) | head -n1 || true)
           if [ -z "$EXE" ]; then
             echo 'Rostoc.exe not found; available executables:' >&2
-            find target -maxdepth 4 -type f -print || true
+            find target -maxdepth 5 -type f -print || true
+            find src-tauri/target -maxdepth 5 -type f -print || true
             exit 1
           fi
           echo "[INFO] Scanning for python DLL references in $EXE" >&2
@@ -1015,7 +1024,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Get-ChildItem -Path target -Recurse -Filter Rostoc.exe | Select-Object -First 1
+          # Support both tauri-bundled layout (target/...) and preview cargo build layout (src-tauri/target/...)
+          $exe = Get-ChildItem -Path @('target','src-tauri/target') -Recurse -File -Filter 'rostoc.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $exe) { Write-Error 'No Rostoc.exe found for archiving'; exit 1 }
           $bindir = Split-Path -Parent $exe.FullName
           Write-Host "[INFO] Found exe at $($exe.FullName) (bindir=$bindir)"
