@@ -147,6 +147,19 @@ jobs:
             !/references/
           sparse-checkout-cone-mode: false
 
+      - name: Capture release version
+        if: inputs.is_release
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          VERSION=${REF#v}
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Unable to derive release version from ref '$REF'" >&2
+            exit 1
+          fi
+          echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
       # --- Setup toolchains ---
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -240,7 +253,13 @@ jobs:
         env:
           GITHUB_SHA: ${{ inputs.commit_sha || github.sha }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
-        run: scripts/ci/stamp_dev_version.sh
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_VERSION:-}" ]]; then
+            scripts/ci/stamp_dev_version.sh --version "$RELEASE_VERSION"
+          else
+            scripts/ci/stamp_dev_version.sh
+          fi
 
       - name: Extract version
         id: extract_version
@@ -580,6 +599,19 @@ jobs:
           path: private-src
           fetch-depth: 0
 
+      - name: Capture release version
+        if: inputs.is_release
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          VERSION=${REF#v}
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Unable to derive release version from ref '$REF'" >&2
+            exit 1
+          fi
+          echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -705,7 +737,13 @@ jobs:
         env:
           GITHUB_SHA: ${{ inputs.commit_sha || github.sha }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
-        run: scripts/ci/stamp_dev_version.sh
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_VERSION:-}" ]]; then
+            scripts/ci/stamp_dev_version.sh --version "$RELEASE_VERSION"
+          else
+            scripts/ci/stamp_dev_version.sh
+          fi
 
       - name: Extract version
         id: extract_version_win
