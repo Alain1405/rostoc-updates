@@ -777,6 +777,57 @@ jobs:
             scripts/ci/stamp_dev_version.sh
           fi
 
+      - name: Optimize Rust build for preview (no-release)
+        if: ${{ !inputs.is_release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            # Speed up compile/link for non-release CI builds
+            echo CARGO_PROFILE_RELEASE_LTO=off
+            echo CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+            # Reduce debug info and normalize paths to improve sccache hits across runs
+            echo RUSTFLAGS="-C debuginfo=0 -C remap-path-prefix=$(pwd)=/workspace"
+            # Extra sccache diagnostics and direct mode
+            echo SCCACHE_LOG=info
+            echo SCCACHE_DIRECT=true
+            # Ignore volatile env vars in sccache key
+            echo SCCACHE_IGNORE_ENV=GITHUB_SHA,GITHUB_RUN_NUMBER,DEV_DISPLAY_VERSION,DEV_WINDOWS_VERSION
+            # Prefer LLVM lld linker for faster links on MSVC
+            echo CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=rust-lld
+          } >> "$GITHUB_ENV"
+
+      - name: Normalize workspace path for caching (Windows)
+        if: ${{ always() }}
+        shell: pwsh
+        working-directory: private-src
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $winPath = (Get-Location).Path
+          $drive = 'S:'
+          try {
+            # Remove existing mapping if any
+            if ((subst) -match "^$drive\\s+") { cmd /c "subst $drive /D" | Out-Null }
+          } catch {}
+          cmd /c "subst $drive $winPath" | Out-Null
+          Add-Content -Path $env:GITHUB_ENV -Value "WORKSPACE_DRIVE=$drive"
+
+      - name: Verify Cargo lockfile usage (Windows)
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Ensure Cargo.lock is honored; this prevents dependency churn and enables sccache reuse
+          if [ -f Cargo.lock ]; then
+            echo "[INFO] Verifying workspace lockfile with cargo fetch --locked"
+            cargo fetch --locked
+          elif [ -f src-tauri/Cargo.lock ]; then
+            echo "[INFO] Verifying src-tauri lockfile with cargo fetch --locked --manifest-path src-tauri/Cargo.toml"
+            cargo fetch --locked --manifest-path src-tauri/Cargo.toml
+          else
+            echo "::warning::No Cargo.lock found; builds may relock dependencies and hurt sccache effectiveness"
+          fi
+
       - name: Extract version
         id: extract_version_win
         working-directory: private-src
@@ -805,7 +856,12 @@ jobs:
             echo "[ERR] Embedded python exe missing at $EMBED_PY" >&2
             exit 2
           fi
-          export PYO3_PYTHON="$(pwd)/$EMBED_PY"
+          # Prefer stable drive mapping if available to reduce varying absolute paths in build artifacts
+          if [ -n "${WORKSPACE_DRIVE:-}" ]; then
+            export PYO3_PYTHON="${WORKSPACE_DRIVE}/$EMBED_PY"
+          else
+            export PYO3_PYTHON="$(pwd)/$EMBED_PY"
+          fi
           echo "[INFO] Using PYO3_PYTHON=$PYO3_PYTHON" >&2
           find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
           rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
