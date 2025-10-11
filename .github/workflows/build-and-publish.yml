@@ -944,7 +944,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rostoc-updates-windows
-          path: updates/windows/*
+          path: updates/windows
 
   publish-to-pages:
     needs:
