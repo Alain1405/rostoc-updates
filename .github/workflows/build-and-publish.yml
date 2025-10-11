@@ -787,7 +787,8 @@ jobs:
             echo CARGO_PROFILE_RELEASE_LTO=off
             echo CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
             # Reduce debug info and normalize paths to improve sccache hits across runs
-            echo RUSTFLAGS="-C debuginfo=0 -C remap-path-prefix=$(pwd)=/workspace"
+            # Use the correct rustc flag for path remapping (not a -C codegen option)
+            echo RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$(pwd)=/workspace"
             # Extra sccache diagnostics and direct mode
             echo SCCACHE_LOG=info
             echo SCCACHE_DIRECT=true
