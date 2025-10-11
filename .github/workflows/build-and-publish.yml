@@ -798,6 +798,25 @@ jobs:
             scripts/ci/stamp_dev_version.sh
           fi
 
+      - name: Refresh Cargo.lock offline after stamping
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The stamping step updates the workspace member version in Cargo.toml,
+          # which can require touching Cargo.lock even if deps didn't change.
+          # Refresh the lockfile OFFLINE to avoid any dependency churn.
+          if [ -f Cargo.lock ]; then
+            manifest="Cargo.toml"
+          elif [ -f src-tauri/Cargo.lock ]; then
+            manifest="src-tauri/Cargo.toml"
+          else
+            echo "::notice::No Cargo.lock found to refresh; skipping"
+            exit 0
+          fi
+          echo "[INFO] Regenerating lockfile offline for manifest: $manifest"
+          cargo generate-lockfile --offline --manifest-path "$manifest"
+
       - name: Optimize Rust build for preview (no-release)
         if: ${{ !inputs.is_release }}
         shell: bash
@@ -887,8 +906,15 @@ jobs:
           echo "[INFO] Using PYO3_PYTHON=$PYO3_PYTHON" >&2
           find target -maxdepth 7 -name pyo3-build-config.txt -print -delete 2>/dev/null || true
           rm -rf target/release/build/pyo3* target/debug/build/pyo3* 2>/dev/null || true
+          # Pre-build sccache stats for visibility
+          sccache --show-stats || true
           # Forward --locked to Cargo to keep dependency versions stable across runs (improves sccache hits)
-          pnpm tauri build -- --locked
+          if [ "${{ inputs.is_release }}" = "true" ]; then
+            pnpm tauri build -- --locked
+          else
+            # Preview builds: skip installers to save time
+            pnpm tauri build -b none -- --locked
+          fi
           sccache --show-stats || true
 
       - name: Save sccache statistics (Windows)
