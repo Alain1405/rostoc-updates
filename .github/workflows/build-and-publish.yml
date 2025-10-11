@@ -1078,7 +1078,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: rostoc-updates-windows
-          path: updates
+          path: updates/windows
 
       - name: Merge Windows entry into latest.json
         run: |
