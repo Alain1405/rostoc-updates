@@ -921,7 +921,9 @@ jobs:
           else
             # Preview builds: skip bundlers entirely. Build frontend then build Rust exe only.
             pnpm build
-            cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+            # The rostoc binary is gated behind required-features = ["pytauri/standalone"].
+            # Enable it explicitly so Cargo actually builds the bin target.
+            cargo build --release --locked --manifest-path src-tauri/Cargo.toml --bin rostoc --features "pytauri/standalone"
           fi
           sccache --show-stats || true
 
