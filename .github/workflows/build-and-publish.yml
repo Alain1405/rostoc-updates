@@ -912,8 +912,9 @@ jobs:
           if [ "${{ inputs.is_release }}" = "true" ]; then
             pnpm tauri build -- --locked
           else
-            # Preview builds: skip installers to save time
-            pnpm tauri build -b none -- --locked
+            # Preview builds: skip bundlers entirely. Build frontend then build Rust exe only.
+            pnpm build
+            cargo build --release --locked --manifest-path src-tauri/Cargo.toml
           fi
           sccache --show-stats || true
 
