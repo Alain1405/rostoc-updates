@@ -109,6 +109,13 @@ jobs:
   build-macos:
     needs: set-status
     runs-on: macos-14
+    env:
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_SEND_DEFAULT_PII: ${{ secrets.SENTRY_SEND_DEFAULT_PII }}
+      SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+      VITE_SENTRY_SEND_DEFAULT_PII: ${{ secrets.VITE_SENTRY_SEND_DEFAULT_PII }}
+      VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
     timeout-minutes: 50
     outputs:
       version: ${{ steps.extract_version.outputs.version }}
@@ -271,6 +278,9 @@ jobs:
           VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "[INFO] Building version: $VERSION"
+          echo "SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
+          echo "VITE_SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build application (with signing)
         working-directory: private-src
@@ -606,6 +616,13 @@ jobs:
   build-windows:
     needs: set-status
     runs-on: windows-2022
+    env:
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_SEND_DEFAULT_PII: ${{ secrets.SENTRY_SEND_DEFAULT_PII }}
+      SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+      VITE_SENTRY_SEND_DEFAULT_PII: ${{ secrets.VITE_SENTRY_SEND_DEFAULT_PII }}
+      VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
     timeout-minutes: 45
     outputs:
       version: ${{ steps.extract_version_win.outputs.version }}
@@ -888,6 +905,9 @@ jobs:
             throw 'Version not found in src-tauri/tauri.conf.json'
           }
           "version=$($content.version)" >> $env:GITHUB_OUTPUT
+          Add-Content -Path $env:GITHUB_ENV -Value "SENTRY_RELEASE=rostoc@$($content.version)"
+          Add-Content -Path $env:GITHUB_ENV -Value "VITE_SENTRY_RELEASE=rostoc@$($content.version)"
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$($content.version)"
 
       - name: Build application
         working-directory: private-src
