@@ -242,6 +242,8 @@ jobs:
         working-directory: private-src
         env:
           ENABLE_RUNTIME_CACHE: "1"
+          UV_DISABLE_WORKSPACE: "1"
+          UV_PROJECT_ENVIRONMENT: "shared"
         run: bash scripts/assemble_runtime.sh
 
       - name: Install JS dependencies
@@ -760,6 +762,8 @@ jobs:
         shell: bash
         env:
           ENABLE_RUNTIME_CACHE: "1"
+          UV_DISABLE_WORKSPACE: "1"
+          UV_PROJECT_ENVIRONMENT: "shared"
         run: |
           set -euo pipefail
           python scripts/assemble_runtime.py
