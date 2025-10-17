@@ -419,7 +419,8 @@ jobs:
             exit 1
           fi
           echo "[INFO] Running embedded python smoke test: $PYBIN"
-          "$PYBIN" -c "import sys, json, coro_profiles; print(json.dumps({'result':'OK','py':sys.version.split()[0]}))"
+          RAW_JSON=$("$PYBIN" scripts/ci/macos_runtime_smoke.py --app-bundle "$ABS_APP")
+          echo "[SMOKE]$RAW_JSON"
 
       - name: Archive macOS preview artifacts
         if: steps.locate_macos_bundle.outputs.app_path != ''
