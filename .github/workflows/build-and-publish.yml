@@ -497,30 +497,64 @@ jobs:
         working-directory: private-src
         run: |
           set -euo pipefail
-          # Prefer bundle-release profile artifacts
-          TARBALL=$(find target/bundle-release/bundle/macos -name 'Rostoc.app.tar.gz' -print -quit 2>/dev/null || true)
-          if [[ -z "$TARBALL" ]]; then
-            TARBALL=$(find target/bundle-release/bundle/macos -name 'Coro.app.tar.gz' -print -quit 2>/dev/null || true)
-          fi
-          if [[ -z "$TARBALL" ]]; then
-            TARBALL=$(find target/bundle-release/bundle/macos -name '*.app.tar.gz' -print -quit 2>/dev/null || true)
-          fi
+          # Prefer bundle-release profile artifacts, but search all known bundle directories.
+          SEARCH_DIRS=(
+            target/bundle-release/bundle/macos
+            src-tauri/target/bundle-release/bundle/macos
+            target/release/bundle/macos
+            src-tauri/target/release/bundle/macos
+          )
+
+          TARBALL=""
+          for dir in "${SEARCH_DIRS[@]}"; do
+            [[ -d "$dir" ]] || continue
+            cand=$(find "$dir" -maxdepth 1 -name 'Rostoc.app.tar.gz' -print -quit 2>/dev/null || true)
+            if [[ -z "$cand" ]]; then
+              cand=$(find "$dir" -maxdepth 1 -name 'Coro.app.tar.gz' -print -quit 2>/dev/null || true)
+            fi
+            if [[ -z "$cand" ]]; then
+              cand=$(find "$dir" -maxdepth 1 -name '*.app.tar.gz' -print -quit 2>/dev/null || true)
+            fi
+            if [[ -n "$cand" ]]; then
+              TARBALL="$cand"
+              break
+            fi
+          done
 
           SIG_FILE=""
           if [[ -n "$TARBALL" ]]; then
             SIG_FILE="${TARBALL}.sig"
+            if [[ ! -f "$SIG_FILE" ]]; then
+              # Some bundler versions emit the signature alongside the tarball but do not use the simple .sig suffix.
+              ALT_SIG=$(find "$(dirname "$TARBALL")" -maxdepth 1 -name "$(basename "$TARBALL").sig" -print -quit 2>/dev/null || true)
+              if [[ -n "$ALT_SIG" ]]; then
+                SIG_FILE="$ALT_SIG"
+              fi
+            fi
           fi
 
           echo "Tarball: $TARBALL" >&2
           echo "Signature: $SIG_FILE" >&2
 
-          if [[ -z "$TARBALL" ]]; then echo 'Missing updater tarball (.app.tar.gz)'; exit 1; fi
+          if [[ -z "$TARBALL" ]]; then
+            echo 'Missing updater tarball (.app.tar.gz)'
+            for dir in "${SEARCH_DIRS[@]}"; do
+              if [[ -d "$dir" ]]; then
+                echo "[INFO] Contents of $dir:" >&2
+                ls -al "$dir" >&2
+              else
+                echo "[INFO] Missing search dir: $dir" >&2
+              fi
+            done
+            exit 1
+          fi
           if [[ -z "$SIG_FILE" || ! -f "$SIG_FILE" ]]; then
-            echo 'Missing updater signature (.app.tar.gz.sig)'; exit 1
+            echo 'Missing updater signature (.app.tar.gz.sig)'
+            exit 1
           fi
 
-          echo "tarball=$TARBALL" >> $GITHUB_OUTPUT
-          echo "signature=$SIG_FILE" >> $GITHUB_OUTPUT
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "signature=$SIG_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Prepare update bundle
         id: prepare_artifacts
