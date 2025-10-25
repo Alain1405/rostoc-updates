@@ -1069,6 +1069,7 @@ jobs:
           name: windows-exe-launch
           path: |
             private-src/scripts/ci/windows_exe_launch.json
+            private-src/scripts/ci/windows_exe_logs/**
           if-no-files-found: ignore
 
       - name: Upload smoke diagnostics
