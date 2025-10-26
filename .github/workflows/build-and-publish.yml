@@ -288,8 +288,11 @@ jobs:
           UV_PROJECT_ENVIRONMENT: "shared"
         run: |
           set -euo pipefail
-          python scripts/build.py --locked
+          echo "[INFO] Starting build - output will be saved to build-macos.log"
+          python scripts/build.py --locked 2>&1 | tee build-macos.log
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
           sccache --show-stats || true
+          exit $BUILD_EXIT_CODE
 
       - name: Save sccache statistics (macOS)
         working-directory: private-src
@@ -422,6 +425,15 @@ jobs:
           path: |
             private-src/macos_runtime_smoke_debug.json
           if-no-files-found: ignore
+
+      - name: Upload macOS build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-logs
+          path: |
+            private-src/build-macos.log
+          if-no-files-found: warn
 
       - name: Archive macOS preview artifacts
         if: steps.locate_macos_bundle.outputs.app_path != ''
@@ -956,9 +968,12 @@ jobs:
           sccache --show-stats || true
 
           # Use consolidated build script (replaces assemble_runtime.py + pnpm tauri build + embed_windows_runtime.py)
-          python scripts/build.py --locked
+          echo "[INFO] Starting build - output will be saved to build-windows.log"
+          python scripts/build.py --locked 2>&1 | tee build-windows.log
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
 
           sccache --show-stats || true
+          exit $BUILD_EXIT_CODE
 
       - name: Save sccache statistics (Windows)
         working-directory: private-src
@@ -1047,6 +1062,15 @@ jobs:
           path: |
             private-src/windows_runtime_smoke_debug.json
           if-no-files-found: ignore
+
+      - name: Upload Windows build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-logs
+          path: |
+            private-src/build-windows.log
+          if-no-files-found: warn
 
       - name: Archive Windows artifacts
         working-directory: private-src
