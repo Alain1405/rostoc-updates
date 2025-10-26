@@ -1310,7 +1310,7 @@ jobs:
       - name: Merge Windows entry into latest.json
         run: |
           set -euo pipefail
-          VERSION='${{ needs.build-macos.outputs.version }}'
+          VERSION='${{ needs.build-windows.outputs.version }}'
           if [[ ! -f updates/latest.json ]]; then
             echo "::error::updates/latest.json not found prior to merge" >&2
             exit 1
