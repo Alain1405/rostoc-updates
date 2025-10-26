@@ -1094,12 +1094,16 @@ jobs:
             echo "[WARN] Embedded python.exe not found, skipping GUI smoke test" >&2
             exit 0
           fi
-          EXE=$(find target -type f -iname 'rostoc.exe' -path '*/release/*' -not -path '*/bundle/*' -print -quit || true)
-          if [ -z "$EXE" ]; then
-            echo "[WARN] rostoc.exe not found, skipping GUI smoke test" >&2
+          # Find the exe that's next to the resources directory (the properly bundled one)
+          RESOURCES_DIR=$(dirname "$PYBIN" | sed 's|/resources/pyembed/python||')
+          EXE="${RESOURCES_DIR}/rostoc.exe"
+          if [ ! -f "$EXE" ]; then
+            echo "[WARN] rostoc.exe not found at $EXE (next to resources dir), skipping GUI smoke test" >&2
             exit 0
           fi
           echo "[INFO] Running GUI smoke test with 10s timeout" >&2
+          echo "[INFO] EXE: $EXE" >&2
+          echo "[INFO] PYBIN: $PYBIN" >&2
           "$PYBIN" scripts/ci/unified_smoke_validator.py gui \
             --platform windows \
             --timeout 10 \
