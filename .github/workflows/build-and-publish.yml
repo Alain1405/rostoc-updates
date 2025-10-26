@@ -413,9 +413,51 @@ jobs:
             find "$ABS_APP/Contents/Resources" -maxdepth 5 -name 'python3' -print || true
             exit 1
           fi
-          echo "[INFO] Running embedded python smoke test: $PYBIN"
-          RAW_JSON=$("$PYBIN" scripts/ci/macos_runtime_smoke.py --app-bundle "$ABS_APP")
-          echo "[SMOKE]$RAW_JSON"
+          echo "[INFO] Running runtime smoke test: $PYBIN"
+          "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
+            --platform mac \
+            --comprehensive \
+            --require-manifest \
+            --debug-json macos_runtime_smoke_debug.json
+
+      - name: GUI smoke test (non-fatal)
+        if: always()
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          ABS_APP="${{ steps.locate_macos_bundle.outputs.app_path }}"
+          if [ -z "$ABS_APP" ]; then
+            echo "[WARN] No app bundle found, skipping GUI smoke test"
+            exit 0
+          fi
+          PYBIN_HINT="${{ steps.embed_runtime.outputs.embedded_python_bin }}"
+          PYBIN="${PYBIN_HINT}"
+          if [[ -n "$PYBIN" && "$PYBIN" != /* ]]; then
+            PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
+          fi
+          if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
+            CANDIDATES=(
+              "$ABS_APP/Contents/Resources/pyembed/python/bin/python3"
+              "$ABS_APP/Contents/Resources/bin/python3"
+            )
+            for cand in "${CANDIDATES[@]}"; do
+              if [ -x "$cand" ]; then
+                PYBIN="$cand"
+                break
+              fi
+            done
+          fi
+          if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
+            echo "[WARN] Embedded python3 not found, skipping GUI smoke test"
+            exit 0
+          fi
+          echo "[INFO] Running GUI smoke test with 10s timeout"
+          "$PYBIN" scripts/ci/unified_smoke_validator.py gui \
+            --platform mac \
+            --timeout 10 \
+            --exe-path "$ABS_APP" \
+            --debug-json macos_gui_smoke_debug.json || echo "[WARN] GUI smoke test failed (non-fatal)"
 
       - name: Upload macOS smoke diagnostics
         if: always()
@@ -424,6 +466,7 @@ jobs:
           name: macos-smoke-debug
           path: |
             private-src/macos_runtime_smoke_debug.json
+            private-src/macos_gui_smoke_debug.json
           if-no-files-found: ignore
 
       - name: Upload macOS build logs
@@ -1030,29 +1073,36 @@ jobs:
             echo 'Embedded python.exe not found'
             exit 1
           fi
-          echo "[INFO] Running embedded python smoke test: $PYBIN" >&2
-          RAW_JSON="$($PYBIN scripts/ci/windows_runtime_smoke.py)"
-          echo "[SMOKE]$RAW_JSON"
-          export RAW_JSON
-          python3 scripts/ci/validate_windows_smoke.py || echo "[WARN] Smoke validation non-strict failure (continuing)" >&2
+          echo "[INFO] Running runtime smoke test: $PYBIN" >&2
+          "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
+            --platform windows \
+            --comprehensive \
+            --require-manifest \
+            --debug-json windows_runtime_smoke_debug.json \
+            --strict
 
-      - name: Launch executable smoke (non-fatal)
-        working-directory: private-src
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Write-Host '[INFO] Starting exe launch smoke (non-fatal)'
-          scripts/ci/windows_run_exe_smoke.ps1 -TimeoutSeconds 6
-
-      - name: Upload exe launch diagnostics
+      - name: GUI smoke test (non-fatal)
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-exe-launch
-          path: |
-            private-src/scripts/ci/windows_exe_launch.json
-            private-src/scripts/ci/windows_exe_logs/**
-          if-no-files-found: ignore
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYBIN=$(find target -type f -path '*resources/pyembed/python/python.exe' -print -quit || true)
+          if [ -z "$PYBIN" ]; then
+            echo "[WARN] Embedded python.exe not found, skipping GUI smoke test" >&2
+            exit 0
+          fi
+          EXE=$(find target -type f -iname 'rostoc.exe' -path '*/release/*' -not -path '*/bundle/*' -print -quit || true)
+          if [ -z "$EXE" ]; then
+            echo "[WARN] rostoc.exe not found, skipping GUI smoke test" >&2
+            exit 0
+          fi
+          echo "[INFO] Running GUI smoke test with 10s timeout" >&2
+          "$PYBIN" scripts/ci/unified_smoke_validator.py gui \
+            --platform windows \
+            --timeout 10 \
+            --exe-path "$EXE" \
+            --debug-json windows_gui_smoke_debug.json || echo "[WARN] GUI smoke test failed (non-fatal)" >&2
 
       - name: Upload smoke diagnostics
         if: always()
@@ -1061,6 +1111,7 @@ jobs:
           name: windows-smoke-debug
           path: |
             private-src/windows_runtime_smoke_debug.json
+            private-src/windows_gui_smoke_debug.json
           if-no-files-found: ignore
 
       - name: Upload Windows build logs
