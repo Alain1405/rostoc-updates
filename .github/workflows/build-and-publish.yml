@@ -457,7 +457,8 @@ jobs:
             --platform mac \
             --timeout 10 \
             --exe-path "$ABS_APP" \
-            --debug-json macos_gui_smoke_debug.json || echo "[WARN] GUI smoke test failed (non-fatal)"
+            --debug-json macos_gui_smoke_debug.json \
+            --strict
 
       - name: Upload macOS smoke diagnostics
         if: always()
@@ -840,6 +841,7 @@ jobs:
         run: |
           set -euo pipefail
           echo RUSTC_WRAPPER=sccache >> "$GITHUB_ENV"
+          echo SCCACHE_CACHE_SIZE=5G >> "$GITHUB_ENV"
 
       - name: Cache Rust toolchain and sccache
         uses: actions/cache@v4
@@ -1081,7 +1083,7 @@ jobs:
             --debug-json windows_runtime_smoke_debug.json \
             --strict
 
-      - name: GUI smoke test (non-fatal)
+      - name: GUI smoke test
         if: always()
         working-directory: private-src
         shell: bash
@@ -1102,7 +1104,8 @@ jobs:
             --platform windows \
             --timeout 10 \
             --exe-path "$EXE" \
-            --debug-json windows_gui_smoke_debug.json || echo "[WARN] GUI smoke test failed (non-fatal)" >&2
+            --debug-json windows_gui_smoke_debug.json \
+            --strict
 
       - name: Upload smoke diagnostics
         if: always()
