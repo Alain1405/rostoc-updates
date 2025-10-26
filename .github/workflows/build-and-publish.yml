@@ -468,7 +468,7 @@ jobs:
           path: |
             private-src/macos_runtime_smoke_debug.json
             private-src/macos_gui_smoke_debug.json
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
       - name: Upload macOS build logs
         if: always()
@@ -1115,7 +1115,7 @@ jobs:
           path: |
             private-src/windows_runtime_smoke_debug.json
             private-src/windows_gui_smoke_debug.json
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
       - name: Upload Windows build logs
         if: always()
