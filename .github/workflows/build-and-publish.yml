@@ -778,6 +778,14 @@ jobs:
           restore-keys: |
             pyembed-${{ runner.os }}-
 
+      - name: Cache WiX Tools
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\tauri\WixTools
+          key: wix-tools-${{ runner.os }}-v314
+          restore-keys: |
+            wix-tools-${{ runner.os }}-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -987,8 +995,28 @@ jobs:
 
           # Use consolidated build script (replaces assemble_runtime.py + pnpm tauri build + embed_windows_runtime.py)
           echo "[INFO] Starting build - output will be saved to build-windows.log"
-          python scripts/build.py --locked 2>&1 | tee build-windows.log
-          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+
+          # Retry logic to handle transient WiX download failures
+          MAX_ATTEMPTS=3
+          ATTEMPT=1
+          BUILD_EXIT_CODE=1
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "[INFO] Build attempt $ATTEMPT of $MAX_ATTEMPTS"
+            if python scripts/build.py --locked 2>&1 | tee build-windows.log; then
+              BUILD_EXIT_CODE=0
+              break
+            else
+              BUILD_EXIT_CODE=${PIPESTATUS[0]}
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                echo "[WARN] Build failed with exit code $BUILD_EXIT_CODE, retrying in 10 seconds..."
+                sleep 10
+              else
+                echo "[ERROR] Build failed after $MAX_ATTEMPTS attempts"
+              fi
+              ATTEMPT=$((ATTEMPT + 1))
+            fi
+          done
 
           sccache --show-stats || true
           exit $BUILD_EXIT_CODE
