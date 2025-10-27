@@ -351,22 +351,17 @@ jobs:
             done
             exit 1
           fi
-          PY_CANDIDATES=("$APP_PATH/Contents/Resources/pyembed/python/bin/python3" "$APP_PATH/Contents/Resources/bin/python3")
-          PYBIN=""
-          for py in "${PY_CANDIDATES[@]}"; do
-            if [ -x "$py" ]; then
-              PYBIN="$py"
-              break
-            fi
-          done
+          # Use canonical path only - no fallbacks
+          PYBIN="$APP_PATH/Contents/Resources/pyembed/python/bin/python3"
           APP_PARENT=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
           echo "bundle_dir=$APP_PARENT" >> "$GITHUB_OUTPUT"
           echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
           echo "python_path=$PYBIN" >> "$GITHUB_OUTPUT"
-          if [ -z "$PYBIN" ]; then
-            echo "::warning::Embedded python binary not found inside bundle (expected pyembed/python/bin/python3 or Resources/bin/python3)"
+          if [ ! -x "$PYBIN" ]; then
+            echo "::error::Embedded python binary not found at canonical location: $PYBIN"
+            exit 1
           fi
 
       - name: Runtime smoke test (mac)
@@ -396,21 +391,7 @@ jobs:
             PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
           fi
           if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-            echo "[INFO] Falling back to bundle-local search for python3"
-            CANDIDATES=(
-              "$ABS_APP/Contents/Resources/pyembed/python/bin/python3"
-              "$ABS_APP/Contents/Resources/bin/python3"
-            )
-            for cand in "${CANDIDATES[@]}"; do
-              if [ -x "$cand" ]; then
-                PYBIN="$cand"
-                break
-              fi
-            done
-          fi
-          if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-            echo '::error::Embedded python3 not found in bundle'
-            find "$ABS_APP/Contents/Resources" -maxdepth 5 -name 'python3' -print || true
+            echo '::error::Embedded python3 not found at canonical location'
             exit 1
           fi
           echo "[INFO] Running runtime smoke test: $PYBIN"
@@ -437,19 +418,11 @@ jobs:
             PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
           fi
           if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-            CANDIDATES=(
-              "$ABS_APP/Contents/Resources/pyembed/python/bin/python3"
-              "$ABS_APP/Contents/Resources/bin/python3"
-            )
-            for cand in "${CANDIDATES[@]}"; do
-              if [ -x "$cand" ]; then
-                PYBIN="$cand"
-                break
-              fi
-            done
+            # Use canonical path - no fallbacks
+            PYBIN="$ABS_APP/Contents/Resources/pyembed/python/bin/python3"
           fi
           if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-            echo "[WARN] Embedded python3 not found, skipping GUI smoke test"
+            echo "[WARN] Embedded python3 not found at canonical location, skipping GUI smoke test"
             exit 0
           fi
           echo "[INFO] Running GUI smoke test with 10s timeout"
@@ -1070,9 +1043,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Use canonical path only - no fallbacks
           PYBIN=$(find target -type f -path '*resources/pyembed/python/python.exe' -print -quit || true)
           if [ -z "$PYBIN" ]; then
-            echo 'Embedded python.exe not found'
+            echo '::error::Embedded python.exe not found at canonical location: resources/pyembed/python/python.exe'
             exit 1
           fi
           echo "[INFO] Running runtime smoke test: $PYBIN" >&2
