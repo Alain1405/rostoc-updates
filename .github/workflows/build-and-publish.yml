@@ -823,6 +823,8 @@ jobs:
           set -euo pipefail
           echo RUSTC_WRAPPER=sccache >> "$GITHUB_ENV"
           echo SCCACHE_CACHE_SIZE=5G >> "$GITHUB_ENV"
+          echo SCCACHE_LOG=debug >> "$GITHUB_ENV"
+          echo RUST_LOG=sccache=debug >> "$GITHUB_ENV"
 
       - name: Cache Rust toolchain and sccache
         uses: actions/cache@v4
@@ -1033,14 +1035,27 @@ jobs:
           if sccache --show-stats 2>/dev/null | grep -q "Cache hits"; then
             CACHE_HITS=$(sccache --show-stats 2>/dev/null | grep "Cache hits" | head -1 | awk '{print $3}' || echo "0")
             CACHE_MISSES=$(sccache --show-stats 2>/dev/null | grep "Cache misses" | head -1 | awk '{print $3}' || echo "0")
+            NON_CACHEABLE=$(sccache --show-stats 2>/dev/null | grep "Non-cacheable calls" | head -1 | awk '{print $3}' || echo "0")
             TOTAL=$((CACHE_HITS + CACHE_MISSES))
             if [ "$TOTAL" -gt 0 ]; then
               HIT_RATE=$((CACHE_HITS * 100 / TOTAL))
               echo "" >> sccache-stats-windows.txt
               echo "=== Analysis ===" >> sccache-stats-windows.txt
               echo "Cache hit rate: ${HIT_RATE}% (${CACHE_HITS}/${TOTAL})" >> sccache-stats-windows.txt
+              echo "Non-cacheable calls: ${NON_CACHEABLE}" >> sccache-stats-windows.txt
               SAVED_TIME=$((CACHE_HITS * 20)) # Assume ~20s saved per cache hit on Windows
               echo "Estimated time saved: ~${SAVED_TIME} seconds" >> sccache-stats-windows.txt
+              
+              # Add interpretation of non-cacheable calls
+              if [ "$NON_CACHEABLE" -gt 100 ]; then
+                echo "" >> sccache-stats-windows.txt
+                echo "=== Non-Cacheable Analysis ===" >> sccache-stats-windows.txt
+                echo "High non-cacheable count detected. Common causes:" >> sccache-stats-windows.txt
+                echo "- Build scripts (build.rs) invoking rustc directly" >> sccache-stats-windows.txt
+                echo "- Proc macros with non-deterministic output" >> sccache-stats-windows.txt
+                echo "- System-specific or timestamp-based code generation" >> sccache-stats-windows.txt
+                echo "Enable SCCACHE_LOG=debug for detailed per-file analysis" >> sccache-stats-windows.txt
+              fi
             fi
           fi
 
