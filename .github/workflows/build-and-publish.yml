@@ -236,7 +236,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ~/.cache/sccache
+            ${{ env.SCCACHE_DIR }}
           key: rust-${{ runner.os }}-${{ hashFiles('private-src/**/Cargo.lock') }}
           restore-keys: rust-${{ runner.os }}-
 
@@ -830,7 +830,7 @@ jobs:
           path: |
             ~\.cargo\registry
             ~\.cargo\git
-            ~\AppData\Local\Mozilla\sccache
+            ${{ env.SCCACHE_DIR }}
           key: rust-${{ runner.os }}-${{ hashFiles('private-src/**/Cargo.lock') }}
           restore-keys: |
             rust-${{ runner.os }}-
