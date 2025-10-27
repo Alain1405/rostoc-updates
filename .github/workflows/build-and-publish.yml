@@ -1071,10 +1071,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Use canonical path only - no fallbacks
-          PYBIN=$(find target -type f -path '*resources/pyembed/python/python.exe' -print -quit || true)
+          # Use canonical path only - no fallbacks (Windows: pyembed/python, not resources/pyembed/python)
+          PYBIN=$(find target -type f -path '*pyembed/python/python.exe' -print -quit || true)
           if [ -z "$PYBIN" ]; then
-            echo '::error::Embedded python.exe not found at canonical location: resources/pyembed/python/python.exe'
+            echo '::error::Embedded python.exe not found at canonical location: pyembed/python/python.exe'
             exit 1
           fi
           echo "[INFO] Running runtime smoke test: $PYBIN" >&2
@@ -1091,16 +1091,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PYBIN=$(find target -type f -path '*resources/pyembed/python/python.exe' -print -quit || true)
+          PYBIN=$(find target -type f -path '*pyembed/python/python.exe' -print -quit || true)
           if [ -z "$PYBIN" ]; then
             echo "[WARN] Embedded python.exe not found, skipping GUI smoke test" >&2
             exit 0
           fi
-          # Find the exe that's next to the resources directory (the properly bundled one)
-          RESOURCES_DIR=$(dirname "$PYBIN" | sed 's|/resources/pyembed/python||')
-          EXE="${RESOURCES_DIR}/rostoc.exe"
+          # Find the exe that's in the same directory as pyembed (Windows: exe_parent/pyembed/python)
+          PYEMBED_DIR=$(dirname "$PYBIN" | sed 's|/pyembed/python||')
+          EXE="${PYEMBED_DIR}/rostoc.exe"
           if [ ! -f "$EXE" ]; then
-            echo "[WARN] rostoc.exe not found at $EXE (next to resources dir), skipping GUI smoke test" >&2
+            echo "[WARN] rostoc.exe not found at $EXE (same dir as pyembed), skipping GUI smoke test" >&2
             exit 0
           fi
           echo "[INFO] Running GUI smoke test with 10s timeout" >&2
