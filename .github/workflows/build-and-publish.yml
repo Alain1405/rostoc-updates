@@ -1149,6 +1149,139 @@ jobs:
             --debug-json windows_gui_smoke_debug.json \
             --strict
 
+      - name: Locate Windows MSI artifact (smoke)
+        id: locate_windows_msi
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $searchRoots = @('target', 'src-tauri/target')
+          $candidates = @()
+          foreach ($root in $searchRoots) {
+            if (-not (Test-Path -LiteralPath $root)) { continue }
+            $found = Get-ChildItem -Path $root -Recurse -File -Filter '*.msi' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+            if ($found) { $candidates += $found }
+          }
+          $msi = $candidates | Select-Object -First 1
+          if (-not $msi) {
+            throw 'MSI artifact not found under target/ or src-tauri/target/'
+          }
+          Write-Host "[INFO] Using MSI artifact: $($msi.FullName)"
+          "msi_path=$($msi.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Install MSI for smoke test
+        if: steps.locate_windows_msi.outcome == 'success'
+        id: install_windows_msi
+        working-directory: private-src
+        shell: pwsh
+        env:
+          MSI_PATH: ${{ steps.locate_windows_msi.outputs.msi_path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:MSI_PATH -or -not (Test-Path -LiteralPath $env:MSI_PATH)) {
+            throw "MSI artifact missing at path '$env:MSI_PATH'"
+          }
+          $logPath = Join-Path $PWD 'windows_msi_install.log'
+          $arguments = @('/i', $env:MSI_PATH, '/qn', '/norestart', '/log', $logPath)
+          Write-Host "[INFO] Installing MSI via msiexec (log: $logPath)"
+          $process = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "msiexec exited with code $($process.ExitCode)"
+          }
+          Write-Host "[INFO] MSI installation completed"
+          "install_log=$logPath" >> $env:GITHUB_OUTPUT
+
+      - name: Locate installed Rostoc (MSI)
+        if: steps.install_windows_msi.outcome == 'success'
+        id: locate_installed_windows_msi
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $programsRoot = Join-Path $env:LOCALAPPDATA 'Programs'
+          if (-not (Test-Path -LiteralPath $programsRoot)) {
+            throw "Programs directory not found at $programsRoot"
+          }
+          $exe = Get-ChildItem -Path $programsRoot -Recurse -File -Filter 'rostoc.exe' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $exe) {
+            throw "Installed rostoc.exe not found under $programsRoot"
+          }
+          $py = Get-ChildItem -Path $exe.Directory -Recurse -File -Filter 'python.exe' -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'pyembed' } |
+            Sort-Object FullName |
+            Select-Object -First 1
+          if (-not $py) {
+            throw "Embedded python.exe not found alongside installed Rostoc at $($exe.DirectoryName)"
+          }
+          Write-Host "[INFO] Installed exe: $($exe.FullName)"
+          Write-Host "[INFO] Installed pyembed python: $($py.FullName)"
+          "installed_exe=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+          "installed_py=$($py.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Runtime smoke test (MSI install)
+        if: steps.locate_installed_windows_msi.outcome == 'success'
+        working-directory: private-src
+        shell: pwsh
+        env:
+          INSTALLED_PY: ${{ steps.locate_installed_windows_msi.outputs.installed_py }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:INSTALLED_PY -or -not (Test-Path -LiteralPath $env:INSTALLED_PY)) {
+            throw "Installed embedded python not found at '$env:INSTALLED_PY'"
+          }
+          $script = Join-Path $PWD 'scripts\ci\unified_smoke_validator.py'
+          & $env:INSTALLED_PY $script runtime `
+            --platform windows `
+            --comprehensive `
+            --require-manifest `
+            --debug-json windows_msi_runtime_smoke_debug.json `
+            --strict
+
+      - name: GUI smoke test (MSI install)
+        if: always()
+        working-directory: private-src
+        shell: pwsh
+        env:
+          INSTALLED_EXE: ${{ steps.locate_installed_windows_msi.outputs.installed_exe }}
+          INSTALLED_PY: ${{ steps.locate_installed_windows_msi.outputs.installed_py }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if (-not $env:INSTALLED_PY -or -not (Test-Path -LiteralPath $env:INSTALLED_PY)) {
+            Write-Host '[WARN] Installed embedded python missing, skipping MSI GUI smoke test'
+            exit 0
+          }
+          if (-not $env:INSTALLED_EXE -or -not (Test-Path -LiteralPath $env:INSTALLED_EXE)) {
+            Write-Host '[WARN] Installed rostoc.exe missing, skipping MSI GUI smoke test'
+            exit 0
+          }
+          Write-Host "[INFO] Running MSI GUI smoke test against $env:INSTALLED_EXE"
+          $script = Join-Path $PWD 'scripts\ci\unified_smoke_validator.py'
+          & $env:INSTALLED_PY $script gui `
+            --platform windows `
+            --timeout 10 `
+            --exe-path $env:INSTALLED_EXE `
+            --debug-json windows_msi_gui_smoke_debug.json `
+            --strict
+
+      - name: Uninstall MSI (cleanup)
+        if: always()
+        shell: pwsh
+        env:
+          MSI_PATH: ${{ steps.locate_windows_msi.outputs.msi_path }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if ($env:MSI_PATH -and (Test-Path -LiteralPath $env:MSI_PATH)) {
+            Write-Host "[INFO] Uninstalling MSI package"
+            $arguments = @('/x', $env:MSI_PATH, '/qn', '/norestart')
+            $process = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              Write-Warning "msiexec uninstall exited with code $($process.ExitCode)"
+            }
+          } else {
+            Write-Host '[INFO] No MSI path available for uninstall; skipping'
+          }
+
       - name: Upload smoke diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -1157,6 +1290,9 @@ jobs:
           path: |
             private-src/windows_runtime_smoke_debug.json
             private-src/windows_gui_smoke_debug.json
+            private-src/windows_msi_runtime_smoke_debug.json
+            private-src/windows_msi_gui_smoke_debug.json
+            private-src/windows_msi_install.log
           if-no-files-found: warn
 
       - name: Upload Windows build logs
