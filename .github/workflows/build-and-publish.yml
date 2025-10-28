@@ -691,9 +691,9 @@ jobs:
     timeout-minutes: 45
     outputs:
       version: ${{ steps.extract_version_win.outputs.version }}
-      installer_name: ${{ steps.prepare_windows_updates.outputs.versioned_name }}
-      installer_latest: ${{ steps.prepare_windows_updates.outputs.latest_name }}
-      installer_checksum: ${{ steps.prepare_windows_updates.outputs.checksum }}
+      installer_name: ${{ inputs.is_release && steps.prepare_windows_updates.outputs.versioned_name || '' }}
+      installer_latest: ${{ inputs.is_release && steps.prepare_windows_updates.outputs.latest_name || '' }}
+      installer_checksum: ${{ inputs.is_release && steps.prepare_windows_updates.outputs.checksum || '' }}
     steps:
       - name: Setup SSH agent for private repo
         uses: webfactory/ssh-agent@v0.9.0
@@ -1327,7 +1327,14 @@ jobs:
       - name: Merge Windows entry into latest.json
         run: |
           set -euo pipefail
-          VERSION='${{ needs.build-windows.outputs.version }}'
+
+          VERSION=""
+          if [[ -f updates/version.txt ]]; then
+            VERSION=$(grep -E '^version=' updates/version.txt | head -n 1 | cut -d'=' -f2- || true)
+          fi
+          if [[ -z "$VERSION" ]]; then
+            VERSION='${{ needs.build-windows.outputs.version }}'
+          fi
           if [[ ! -f updates/latest.json ]]; then
             echo "::error::updates/latest.json not found prior to merge" >&2
             exit 1
@@ -1383,7 +1390,14 @@ jobs:
         run: |
           echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ needs.build-macos.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          VERSION=""
+          if [[ -f updates/version.txt ]]; then
+            VERSION=$(grep -E '^version=' updates/version.txt | head -n 1 | cut -d'=' -f2- || true)
+          fi
+          if [[ -z "$VERSION" ]]; then
+            VERSION='${{ needs.build-macos.outputs.version }}'
+          fi
+          echo "**Version:** ${VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json" >> $GITHUB_STEP_SUMMARY
           echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ needs.build-macos.outputs.tarball }}" ]; then
