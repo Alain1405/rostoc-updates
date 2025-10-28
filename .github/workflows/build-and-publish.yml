@@ -867,8 +867,7 @@ jobs:
           # For release builds, only create MSI (skip NSIS for faster builds)
           BUILD_ARGS="--locked"
           if [ "${{ inputs.is_release }}" != "true" ]; then
-            BUILD_ARGS="$BUILD_ARGS --bundles app"
-            echo "[INFO] Preview build: skipping installer creation"
+            echo "[INFO] Preview build: skipping installer creation (no --bundles flag)"
           else
             BUILD_ARGS="$BUILD_ARGS --bundles msi"
             echo "[INFO] Release build: creating MSI installer only (NSIS skipped for speed)"
