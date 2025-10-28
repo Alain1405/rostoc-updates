@@ -236,9 +236,11 @@ jobs:
           set -euo pipefail
           {
             echo RUSTC_WRAPPER=sccache
-            echo SCCACHE_CACHE_SIZE=5G
+            echo SCCACHE_CACHE_SIZE=10G
             echo SCCACHE_LOG=debug
             echo RUST_LOG=sccache=debug
+            echo CARGO_INCREMENTAL=0
+            echo 'SCCACHE_IGNORE_ENV=CI,GITHUB_ACTION,GITHUB_ACTIONS,GITHUB_RUN_NUMBER,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_ACTOR,GITHUB_WORKFLOW,GITHUB_HEAD_REF,GITHUB_BASE_REF,GITHUB_EVENT_NAME,GITHUB_SERVER_URL,GITHUB_API_URL,GITHUB_GRAPHQL_URL,GITHUB_WORKSPACE,GITHUB_ACTION_PATH,GITHUB_PATH,GITHUB_ENV,RUNNER_OS,RUNNER_ARCH,RUNNER_NAME,RUNNER_ENVIRONMENT,RUNNER_TOOL_CACHE,RUNNER_TEMP,RUNNER_WORKSPACE'
           } >> "$GITHUB_ENV"
 
       - name: Cache Rust (registry + git + sccache)
@@ -298,7 +300,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           RUSTC_WRAPPER: sccache
           SCCACHE_DIR: ${{ env.SCCACHE_DIR }}
-          SCCACHE_CACHE_SIZE: 5G
+          SCCACHE_CACHE_SIZE: 10G
           ALLOW_PARTIAL_BUNDLE: 1
           ENABLE_RUNTIME_CACHE: "1"
           UV_DISABLE_WORKSPACE: "1"
@@ -843,10 +845,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo RUSTC_WRAPPER=sccache >> "$GITHUB_ENV"
-          echo SCCACHE_CACHE_SIZE=5G >> "$GITHUB_ENV"
-          echo SCCACHE_LOG=debug >> "$GITHUB_ENV"
-          echo RUST_LOG=sccache=debug >> "$GITHUB_ENV"
+          {
+            echo RUSTC_WRAPPER=sccache
+            echo SCCACHE_CACHE_SIZE=10G
+            echo SCCACHE_LOG=debug
+            echo RUST_LOG=sccache=debug
+            echo CARGO_INCREMENTAL=0
+            echo 'SCCACHE_IGNORE_ENV=CI,GITHUB_ACTION,GITHUB_ACTIONS,GITHUB_RUN_NUMBER,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_ACTOR,GITHUB_WORKFLOW,GITHUB_HEAD_REF,GITHUB_BASE_REF,GITHUB_EVENT_NAME,GITHUB_SERVER_URL,GITHUB_API_URL,GITHUB_GRAPHQL_URL,GITHUB_WORKSPACE,GITHUB_ACTION_PATH,GITHUB_PATH,GITHUB_ENV,RUNNER_OS,RUNNER_ARCH,RUNNER_NAME,RUNNER_ENVIRONMENT,RUNNER_TOOL_CACHE,RUNNER_TEMP,RUNNER_WORKSPACE'
+          } >> "$GITHUB_ENV"
 
       - name: Cache Rust toolchain and sccache
         uses: actions/cache@v4
@@ -863,7 +869,6 @@ jobs:
         shell: bash
         run: |
           {
-            echo CARGO_INCREMENTAL=0
             echo CARGO_TERM_COLOR=always
           } >> "$GITHUB_ENV"
 
