@@ -860,14 +860,18 @@ jobs:
           # Use consolidated build script (replaces assemble_runtime.py + pnpm tauri build + embed_windows_runtime.py)
           echo "[INFO] Starting build - output will be saved to build-windows.log"
 
+          # Reduce WiX verbosity and skip some validation checks for faster builds
+          export WIX_SUPPRESS_ICE="ICE61;ICE69"
+
           # For preview builds, skip installer creation (saves 3-5 minutes)
-          # Only build app bundle - installers (MSI/NSIS) are only needed for releases
+          # For release builds, only create MSI (skip NSIS for faster builds)
           BUILD_ARGS="--locked"
           if [ "${{ inputs.is_release }}" != "true" ]; then
             BUILD_ARGS="$BUILD_ARGS --bundles app"
-            echo "[INFO] Preview build: skipping installer creation (MSI/NSIS)"
+            echo "[INFO] Preview build: skipping installer creation"
           else
-            echo "[INFO] Release build: creating full installers (MSI/NSIS)"
+            BUILD_ARGS="$BUILD_ARGS --bundles msi"
+            echo "[INFO] Release build: creating MSI installer only (NSIS skipped for speed)"
           fi
 
           # Retry logic to handle transient WiX download failures
