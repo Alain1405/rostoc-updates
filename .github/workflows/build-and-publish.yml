@@ -230,6 +230,17 @@ jobs:
           mkdir -p "$SCCACHE_DIR"
           echo "SCCACHE_DIR=$SCCACHE_DIR" >> $GITHUB_ENV
 
+      - name: Enable sccache globally
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo RUSTC_WRAPPER=sccache
+            echo SCCACHE_CACHE_SIZE=5G
+            echo SCCACHE_LOG=debug
+            echo RUST_LOG=sccache=debug
+          } >> "$GITHUB_ENV"
+
       - name: Cache Rust (registry + git + sccache)
         uses: actions/cache@v4
         with:
@@ -273,6 +284,12 @@ jobs:
           echo "SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
           echo "VITE_SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Apply preview build tuning (no-release)
+        if: ${{ !inputs.is_release }}
+        working-directory: private-src
+        shell: bash
+        run: scripts/ci/apply_preview_rust_env.sh
 
       - name: Build application (with signing)
         working-directory: private-src
@@ -902,30 +919,11 @@ jobs:
           echo "[INFO] Regenerating lockfile offline for manifest: $manifest"
           cargo generate-lockfile --offline --manifest-path "$manifest"
 
-      - name: Optimize Rust build for preview (no-release)
+      - name: Apply preview build tuning (no-release)
         if: ${{ !inputs.is_release }}
+        working-directory: private-src
         shell: bash
-        run: |
-          set -euo pipefail
-          {
-            # Speed up compile/link for non-release CI builds
-            echo CARGO_PROFILE_RELEASE_LTO=off
-            echo CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-            # Strip symbols to shrink link work and binary size
-            echo CARGO_PROFILE_RELEASE_STRIP=symbols
-            # Reduce debug info and normalize paths to improve sccache hits across runs
-            # Use the correct rustc flag for path remapping (not a -C codegen option)
-            echo RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$(pwd)=/workspace --remap-path-prefix=${CARGO_HOME:-$USERPROFILE/.cargo}=/cargo-home"
-            # Extra sccache diagnostics and direct mode
-            echo SCCACHE_LOG=info
-            echo SCCACHE_DIRECT=true
-            # Ignore volatile env vars in sccache key
-            echo SCCACHE_IGNORE_ENV=GITHUB_SHA,GITHUB_RUN_NUMBER,DEV_DISPLAY_VERSION,DEV_WINDOWS_VERSION,PYO3_PYTHON,WORKSPACE_DRIVE
-            # Prefer LLVM lld linker for faster links on MSVC
-            echo CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=rust-lld
-            # Allow a larger local cache to reduce evictions
-            echo SCCACHE_CACHE_SIZE=10G
-          } >> "$GITHUB_ENV"
+        run: scripts/ci/apply_preview_rust_env.sh
 
       - name: Normalize workspace path for caching (Windows)
         if: ${{ always() }}
