@@ -860,6 +860,16 @@ jobs:
           # Use consolidated build script (replaces assemble_runtime.py + pnpm tauri build + embed_windows_runtime.py)
           echo "[INFO] Starting build - output will be saved to build-windows.log"
 
+          # For preview builds, skip installer creation (saves 3-5 minutes)
+          # Only build app bundle - installers (MSI/NSIS) are only needed for releases
+          BUILD_ARGS="--locked"
+          if [ "${{ inputs.is_release }}" != "true" ]; then
+            BUILD_ARGS="$BUILD_ARGS --bundles app"
+            echo "[INFO] Preview build: skipping installer creation (MSI/NSIS)"
+          else
+            echo "[INFO] Release build: creating full installers (MSI/NSIS)"
+          fi
+
           # Retry logic to handle transient WiX download failures
           MAX_ATTEMPTS=3
           ATTEMPT=1
@@ -867,7 +877,7 @@ jobs:
 
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             echo "[INFO] Build attempt $ATTEMPT of $MAX_ATTEMPTS"
-            if python scripts/build.py --locked 2>&1 | tee build-windows.log; then
+            if python scripts/build.py $BUILD_ARGS 2>&1 | tee build-windows.log; then
               BUILD_EXIT_CODE=0
               break
             else
