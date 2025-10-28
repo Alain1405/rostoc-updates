@@ -224,7 +224,7 @@ jobs:
       - name: Cache Rust dependencies and build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: private-src/src-tauri
+          workspaces: private-src
           shared-key: macos
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -758,7 +758,7 @@ jobs:
       - name: Cache Rust dependencies and build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: private-src/src-tauri
+          workspaces: private-src
           shared-key: windows
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
