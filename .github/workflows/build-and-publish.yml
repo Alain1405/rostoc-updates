@@ -832,7 +832,12 @@ jobs:
           if (-not (Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir | Out-Null }
           Copy-Item $exe.FullName (Join-Path $binDir 'sccache.exe') -Force
           "$binDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$($env:LOCALAPPDATA)\Mozilla\sccache"
+          $cacheDir = Join-Path (Join-Path $env:LOCALAPPDATA 'Mozilla') 'sccache'
+          if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+          $logPath = Join-Path $cacheDir 'sccache.log'
+          if (Test-Path $logPath) { Remove-Item $logPath -Force }
+          Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_DIR=$cacheDir"
+          Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_ERROR_LOG=$logPath"
 
       - name: Enable sccache globally
         shell: bash
@@ -1060,6 +1065,24 @@ jobs:
           echo "Generated sccache statistics report"
           cat sccache-stats-windows.txt
 
+      - name: Collect sccache debug log (Windows)
+        if: always()
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SCCACHE_ERROR_LOG:-}" ]; then
+            echo "[WARN] SCCACHE_ERROR_LOG not set; skipping log collection"
+            exit 0
+          fi
+          LOG_PATH=$(cygpath -u "$SCCACHE_ERROR_LOG" 2>/dev/null || echo "")
+          if [ -z "$LOG_PATH" ] || [ ! -f "$LOG_PATH" ]; then
+            echo "[WARN] sccache error log not found at $LOG_PATH"
+            exit 0
+          fi
+          tail -n 500 "$LOG_PATH" > sccache-debug-windows.log || cp "$LOG_PATH" sccache-debug-windows.log
+          echo "[INFO] Collected sccache log tail from $LOG_PATH"
+
       - name: Check Python DLL linkage
         working-directory: private-src
         shell: bash
@@ -1191,7 +1214,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sccache-stats-windows
-          path: private-src/sccache-stats-windows.txt
+          path: |
+            private-src/sccache-stats-windows.txt
+            private-src/sccache-debug-windows.log
           if-no-files-found: warn
 
       - name: Locate Windows updater artifacts
