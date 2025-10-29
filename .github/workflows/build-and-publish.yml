@@ -314,8 +314,10 @@ jobs:
             done
             exit 1
           fi
-          # Use canonical path only - no fallbacks
-          PYBIN="$APP_PATH/Contents/Resources/pyembed/python/bin/python3"
+          # Use canonical path from runtime_config
+          PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path unix)
+          MACOS_RES=$(python3 scripts/ci/get_runtime_path.py macos_resources)
+          PYBIN="$APP_PATH/$MACOS_RES/$PYTHON_PATH"
           APP_PARENT=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
@@ -381,8 +383,10 @@ jobs:
             PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
           fi
           if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-            # Use canonical path - no fallbacks
-            PYBIN="$ABS_APP/Contents/Resources/pyembed/python/bin/python3"
+            # Use canonical path from runtime_config
+            PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path unix)
+            MACOS_RES=$(python3 scripts/ci/get_runtime_path.py macos_resources)
+            PYBIN="$ABS_APP/$MACOS_RES/$PYTHON_PATH"
           fi
           if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
             echo "[WARN] Embedded python3 not found at canonical location, skipping GUI smoke test"
@@ -921,10 +925,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Use canonical path only - no fallbacks (Windows: pyembed/python, not resources/pyembed/python)
-          PYBIN=$(find target -type f -path '*pyembed/python/python.exe' -print -quit || true)
+          # Use canonical path from runtime_config
+          PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path windows)
+          PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
           if [ -z "$PYBIN" ]; then
-            echo '::error::Embedded python.exe not found at canonical location: pyembed/python/python.exe'
+            echo "::error::Embedded python.exe not found at canonical location: $PYTHON_PATH"
             exit 1
           fi
           echo "[INFO] Running runtime smoke test: $PYBIN" >&2
@@ -941,7 +946,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PYBIN=$(find target -type f -path '*pyembed/python/python.exe' -print -quit || true)
+          # Use canonical path from runtime_config
+          PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path windows)
+          PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
           if [ -z "$PYBIN" ]; then
             echo "[WARN] Embedded python.exe not found, skipping GUI smoke test" >&2
             exit 0
@@ -1011,11 +1018,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # MSI installs to C:\Program Files\Rostoc (verified in previous build)
-          $exePath = 'C:\Program Files\Rostoc\rostoc.exe'
-          $expectedPyPath = 'C:\Program Files\Rostoc\pyembed\python\python.exe'
+          # Get canonical paths from runtime_config
+          $exePath = python3 scripts/ci/get_runtime_path.py msi_exe_path
+          $expectedPyPath = python3 scripts/ci/get_runtime_path.py msi_python_path
 
-          Write-Host "[INFO] Checking hardcoded MSI installation path: $exePath"
+          Write-Host "[INFO] Checking MSI installation path (from runtime_config): $exePath"
           if (-not (Test-Path -LiteralPath $exePath)) {
             throw "MSI-installed rostoc.exe not found at expected location: $exePath"
           }
