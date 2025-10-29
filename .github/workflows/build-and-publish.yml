@@ -1015,12 +1015,13 @@ jobs:
       - name: Locate installed Rostoc (MSI)
         if: steps.install_windows_msi.outcome == 'success'
         id: locate_installed_windows_msi
+        working-directory: private-src
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           # Get canonical paths from runtime_config
-          $exePath = python3 scripts/ci/get_runtime_path.py msi_exe_path
-          $expectedPyPath = python3 scripts/ci/get_runtime_path.py msi_python_path
+          $exePath = & python3 scripts/ci/get_runtime_path.py msi_exe_path
+          $expectedPyPath = & python3 scripts/ci/get_runtime_path.py msi_python_path
 
           Write-Host "[INFO] Checking MSI installation path (from runtime_config): $exePath"
           if (-not (Test-Path -LiteralPath $exePath)) {
