@@ -1003,33 +1003,6 @@ jobs:
             throw "msiexec exited with code $($process.ExitCode)"
           }
           Write-Host "[INFO] MSI installation completed"
-          
-          # Debug: Show where files were installed
-          Write-Host "`n=== POST-INSTALL DIRECTORY SCAN ==="
-          Write-Host "Scanning for rostoc.exe in common installation locations..."
-          
-          $debugRoots = @(
-            @{Path = (Join-Path $env:LOCALAPPDATA 'Programs'); Name = 'LOCALAPPDATA\Programs'},
-            @{Path = $env:LOCALAPPDATA; Name = 'LOCALAPPDATA'},
-            @{Path = (Join-Path $env:ProgramFiles 'Rostoc'); Name = 'ProgramFiles\Rostoc'},
-            @{Path = ${env:ProgramFiles(x86)}; Name = 'ProgramFiles(x86)'},
-            @{Path = $env:ProgramFiles; Name = 'ProgramFiles'}
-          )
-          
-          foreach ($item in $debugRoots) {
-            if (Test-Path -LiteralPath $item.Path) {
-              $found = Get-ChildItem -Path $item.Path -Recurse -File -Filter 'rostoc.exe' -ErrorAction SilentlyContinue -Depth 5 | Select-Object -First 1
-              if ($found) {
-                Write-Host "[FOUND] $($item.Name): $($found.FullName)"
-              } else {
-                Write-Host "[EMPTY] $($item.Name): exists but no rostoc.exe found"
-              }
-            } else {
-              Write-Host "[MISSING] $($item.Name): directory does not exist"
-            }
-          }
-          Write-Host "=== END DIRECTORY SCAN ===`n"
-          
           "install_log=$logPath" >> $env:GITHUB_OUTPUT
 
       - name: Locate installed Rostoc (MSI)
@@ -1038,52 +1011,25 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # MSI installers typically install to ProgramFiles or LOCALAPPDATA
-          $searchRoots = @(
-            (Join-Path $env:LOCALAPPDATA 'Programs'),
-            (Join-Path $env:ProgramFiles 'Rostoc'),
-            (Join-Path ${env:ProgramFiles(x86)} 'Rostoc'),
-            $env:LOCALAPPDATA,
-            $env:ProgramFiles
-          )
-          
-          Write-Host "[INFO] Searching for installed rostoc.exe in:"
-          foreach ($root in $searchRoots) {
-            if (Test-Path -LiteralPath $root) {
-              Write-Host "  - $root (exists)"
-            } else {
-              Write-Host "  - $root (not found)"
-            }
+          # MSI installs to C:\Program Files\Rostoc (verified in previous build)
+          $exePath = 'C:\Program Files\Rostoc\rostoc.exe'
+          $expectedPyPath = 'C:\Program Files\Rostoc\pyembed\python\python.exe'
+
+          Write-Host "[INFO] Checking hardcoded MSI installation path: $exePath"
+          if (-not (Test-Path -LiteralPath $exePath)) {
+            throw "MSI-installed rostoc.exe not found at expected location: $exePath"
           }
-          
-          $exe = $null
-          foreach ($root in $searchRoots) {
-            if (-not (Test-Path -LiteralPath $root)) { continue }
-            $found = Get-ChildItem -Path $root -Recurse -File -Filter 'rostoc.exe' -ErrorAction SilentlyContinue |
-              Sort-Object LastWriteTime -Descending |
-              Select-Object -First 1
-            if ($found) {
-              $exe = $found
-              Write-Host "[INFO] Found rostoc.exe at: $($exe.FullName)"
-              break
-            }
+          Write-Host "[INFO] Found installed exe: $exePath"
+
+          # Verify Python is at expected location (strict check - must be exactly here)
+          Write-Host "[INFO] Verifying Python at expected location: $expectedPyPath"
+          if (-not (Test-Path -LiteralPath $expectedPyPath)) {
+            throw "Embedded python.exe not found at expected location: $expectedPyPath"
           }
-          
-          if (-not $exe) {
-            throw "Installed rostoc.exe not found in any standard installation location"
-          }
-          
-          $py = Get-ChildItem -Path $exe.Directory -Recurse -File -Filter 'python.exe' -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match 'pyembed' } |
-            Sort-Object FullName |
-            Select-Object -First 1
-          if (-not $py) {
-            throw "Embedded python.exe not found alongside installed Rostoc at $($exe.DirectoryName)"
-          }
-          Write-Host "[INFO] Installed exe: $($exe.FullName)"
-          Write-Host "[INFO] Installed pyembed python: $($py.FullName)"
-          "installed_exe=$($exe.FullName)" >> $env:GITHUB_OUTPUT
-          "installed_py=$($py.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "[INFO] Found installed pyembed python at expected location: $expectedPyPath"
+
+          "installed_exe=$exePath" >> $env:GITHUB_OUTPUT
+          "installed_py=$expectedPyPath" >> $env:GITHUB_OUTPUT
 
       - name: Runtime smoke test (MSI install)
         if: steps.locate_installed_windows_msi.outcome == 'success'
