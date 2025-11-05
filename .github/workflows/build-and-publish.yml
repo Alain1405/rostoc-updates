@@ -106,8 +106,221 @@ jobs:
             core.info(`Set pending status (${context}) on ${owner}/${repo}@${sha}`);
             return 'pending-set';
 
-  build-macos:
+  lint-and-tests:
     needs: set-status
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Setup SSH agent for private repo
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+      - name: Add GitHub to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout private repo (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          path: private-src
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Derive pnpm store path
+        id: verify-pnpm-store
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd private-src
+          echo "[INFO] pnpm version: $(pnpm --version || true)" >&2
+          STORE_PATH=$(pnpm store path 2>/dev/null | tr -d '\r' || true)
+          if [ -z "${STORE_PATH}" ]; then
+            echo "[WARN] pnpm store path empty; falling back to default ~/.pnpm-store" >&2
+            STORE_PATH="$HOME/.pnpm-store"
+          fi
+          mkdir -p "$STORE_PATH" || true
+          echo "Using STORE_PATH=$STORE_PATH" >&2
+          echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.verify-pnpm-store.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install uv (Python package manager)
+        working-directory: private-src
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "UV_BIN=$HOME/.local/bin" >> $GITHUB_ENV
+
+      - name: Cache Python wheels
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: python-wheel-${{ runner.os }}-${{ hashFiles('private-src/uv.lock') }}
+          restore-keys: |
+            python-wheel-${{ runner.os }}-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: private-src
+          shared-key: lint
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install JS dependencies
+        working-directory: private-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint suite
+        working-directory: private-src
+        run: pnpm lint
+
+      - name: Run smoke tests
+        working-directory: private-src
+        env:
+          REQUIRE_ROSI: "0"
+          CORO_ROSI_DISABLED: "1"
+        run: pnpm smoke
+
+  e2e-web:
+    needs: lint-and-tests
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - name: Setup SSH agent for private repo
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+      - name: Add GitHub to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout private repo (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          path: private-src
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Derive pnpm store path
+        id: e2e-pnpm-store
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd private-src
+          echo "[INFO] pnpm version: $(pnpm --version || true)" >&2
+          STORE_PATH=$(pnpm store path 2>/dev/null | tr -d '\r' || true)
+          if [ -z "${STORE_PATH}" ]; then
+            echo "[WARN] pnpm store path empty; falling back to default ~/.pnpm-store" >&2
+            STORE_PATH="$HOME/.pnpm-store"
+          fi
+          mkdir -p "$STORE_PATH" || true
+          echo "Using STORE_PATH=$STORE_PATH" >&2
+          echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.e2e-pnpm-store.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install JS dependencies
+        working-directory: private-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: private-src
+        run: pnpm exec playwright install
+
+      - name: Start dev server
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUIRE_ROSI=0 CORO_ROSI_DISABLED=1 VITE_SENTRY_ENVIRONMENT=e2e SENTRY_ENVIRONMENT=e2e pnpm dev -- --host 127.0.0.1 --port 1420 > dev-server.log 2>&1 &
+          echo $! > dev-server.pid
+
+      - name: Wait for dev server
+        working-directory: private-src
+        run: |
+          pnpm dlx wait-on@7.2.0 http://127.0.0.1:1420
+
+      - name: Run Playwright E2E (web fallback)
+        working-directory: private-src
+        env:
+          REQUIRE_ROSI: "0"
+          CORO_ROSI_DISABLED: "1"
+          TAURI_E2E_BASE_URL: http://127.0.0.1:1420
+          VITE_SENTRY_ENVIRONMENT: e2e
+          SENTRY_ENVIRONMENT: e2e
+        run: make e2e-web
+
+      - name: Stop dev server
+        if: always()
+        working-directory: private-src
+        shell: bash
+        run: |
+          if [ -f dev-server.pid ]; then
+            DEV_PID=$(cat dev-server.pid)
+            if kill -0 "$DEV_PID" 2>/dev/null; then
+              kill "$DEV_PID" || true
+              wait "$DEV_PID" 2>/dev/null || true
+            fi
+            rm -f dev-server.pid
+          fi
+          if [ -f dev-server.log ]; then
+            tail -n 100 dev-server.log || true
+          fi
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            private-src/playwright-report
+            private-src/dev-server.log
+          if-no-files-found: warn
+
+  build-macos:
+    needs:
+      - set-status
+      - lint-and-tests
+      - e2e-web
     runs-on: macos-14
     env:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -639,7 +852,10 @@ jobs:
           path: ${{ env.UPDATES_DIR }}/*
 
   build-windows:
-    needs: set-status
+    needs:
+      - set-status
+      - lint-and-tests
+      - e2e-web
     runs-on: windows-2022
     env:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
