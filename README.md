@@ -1,5 +1,9 @@
 # rostoc-updates
 
+[![Dispatch CI Build](https://github.com/Alain1405/rostoc-updates/actions/workflows/ci-dispatch.yml/badge.svg)](https://github.com/Alain1405/rostoc-updates/actions/workflows/ci-dispatch.yml)
+
+[![Dispatch Release Build](https://github.com/Alain1405/rostoc-updates/actions/workflows/release-dispatch.yml/badge.svg)](https://github.com/Alain1405/rostoc-updates/actions/workflows/release-dispatch.yml)
+
 Public workflow runner for Rostoc desktop builds. The private `alain1405/rostoc` repository dispatches CI and tagged release events to this repo so we can execute macOS/Windows builds on public runners and host updater artifacts via GitHub Pages.
 
 ## 🔐 Required secrets
