@@ -317,6 +317,38 @@ jobs:
           restore-keys: |
             python-wheel-${{ runner.os }}-
 
+      - name: Install Apple signing certificate
+        working-directory: private-src
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          scripts/macos/install_signing_certificate.sh
+
+      - name: Debug signing keychain state
+        if: always()
+        working-directory: private-src
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          echo "[DEBUG] Listing configured keychains" >&2
+          security list-keychains || true
+          echo "[DEBUG] Available signing identities" >&2
+          security find-identity -v -p codesigning || true
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "[DEBUG] Matching certificate summary for ${APPLE_SIGNING_IDENTITY}" >&2
+            security find-certificate -Z -a -c "$APPLE_SIGNING_IDENTITY" 2>/dev/null | grep -E 'SHA-1|SHA-256|"' || true
+          else
+            echo "[DEBUG] APPLE_SIGNING_IDENTITY not provided" >&2
+          fi
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -372,6 +404,10 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           ALLOW_PARTIAL_BUNDLE: 1
           ENABLE_RUNTIME_CACHE: "1"
           UV_DISABLE_WORKSPACE: "1"
@@ -465,6 +501,32 @@ jobs:
             --require-manifest \
             --debug-json macos_runtime_smoke_debug.json
 
+      - name: Dump macOS codesign diagnostics
+        if: steps.locate_macos_bundle.outputs.app_path != ''
+        working-directory: private-src
+        shell: bash
+        env:
+          APP_BUNDLE: ${{ steps.locate_macos_bundle.outputs.app_path }}
+        run: |
+          set -euo pipefail
+          if [[ "${APP_BUNDLE}" == /* ]]; then
+            ABS_APP="${APP_BUNDLE}"
+          else
+            ABS_APP="$GITHUB_WORKSPACE/private-src/${APP_BUNDLE}"
+          fi
+          if [ ! -d "$ABS_APP" ]; then
+            echo "[DEBUG] App bundle not found for codesign diagnostics: $ABS_APP" >&2
+            exit 0
+          fi
+          echo "[DEBUG] codesign -dv --verbose=4 output" >&2
+          codesign -dv --verbose=4 "$ABS_APP" 2>&1 || true
+          echo "[DEBUG] codesign --verify --deep --strict output" >&2
+          codesign --verify --deep --strict "$ABS_APP" 2>&1 || true
+          if command -v spctl >/dev/null 2>&1; then
+            echo "[DEBUG] spctl assessment" >&2
+            spctl --assess --type exec "$ABS_APP" 2>&1 || true
+          fi
+
       - name: GUI smoke test (non-fatal)
         if: always()
         working-directory: private-src
@@ -527,6 +589,7 @@ jobs:
           APP_BUNDLE: ${{ steps.locate_macos_bundle.outputs.app_path }}
           BUNDLE_DIR: ${{ steps.locate_macos_bundle.outputs.bundle_dir }}
           APP_NAME: ${{ steps.locate_macos_bundle.outputs.app_name }}
+          IS_RELEASE: ${{ inputs.is_release }}
         run: |
           set -euo pipefail
           if [ -z "${APP_BUNDLE}" ] || [ -z "${BUNDLE_DIR}" ] || [ -z "${APP_NAME}" ]; then
@@ -555,7 +618,9 @@ jobs:
           if [ "${APP_NAME}" != "$(basename "$ABS_APP")" ]; then
             echo "::warning::App name output (${APP_NAME}) did not match bundle basename ($(basename "$ABS_APP"))"
           fi
-          codesign --force --deep -s - "$ABS_APP" || echo "Ad-hoc codesign failed (continuing)"
+          if [ "${IS_RELEASE}" != "true" ]; then
+            codesign --force --deep -s - "$ABS_APP" || echo "Ad-hoc codesign failed (continuing)"
+          fi
           tar -czf coro-macos-build-preview.tar.gz -C "$ABS_BUNDLE_DIR" "$APP_NAME"
           ditto -c -k --sequesterRsrc --keepParent "$ABS_APP" coro-macos-build-preview.zip || echo "ditto zip failed"
 
