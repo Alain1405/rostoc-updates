@@ -518,13 +518,20 @@ jobs:
             --progress \
             --output-format json > "${NOTARIZATION_LOG}" 2>&1
           NOTARY_STATUS=$?
-          if [[ ${NOTARY_STATUS} -ne 0 ]]; then
-            echo "::error::Notarization submission failed"
-            cat "${NOTARIZATION_LOG}" || true
-          else
-            echo "[INFO] Notarization complete. Log excerpt:"
-            tail -n 200 "${NOTARIZATION_LOG}"
+          
+          # Always rename log for artifact upload (before any exit paths)
+          if [[ -f "${NOTARIZATION_LOG}" ]]; then
+            mv "${NOTARIZATION_LOG}" "notarization-${GITHUB_RUN_ID}.log" || true
           fi
+
+          if [[ ${NOTARY_STATUS} -ne 0 ]]; then
+            echo "::error::Notarization submission failed with status ${NOTARY_STATUS}"
+            cat "notarization-${GITHUB_RUN_ID}.log" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "[INFO] Notarization complete. Log excerpt:"
+          tail -n 200 "notarization-${GITHUB_RUN_ID}.log" 2>/dev/null || true
 
           echo "[INFO] Stapling notarization ticket to app bundle"
           xcrun stapler staple -v "${ABS_APP}" || {
@@ -542,14 +549,6 @@ jobs:
           echo "[INFO] Verifying stapled ticket"
           spctl --assess --type exec --verbose "${ABS_APP}" || {
             echo "::error::Gatekeeper assessment failed after stapling"
-            exit 1
-          }
-
-          if [[ -f "${NOTARIZATION_LOG}" ]]; then
-            mv "${NOTARIZATION_LOG}" "notarization-${GITHUB_RUN_ID}.log" || true
-          fi
-
-          if [[ ${NOTARY_STATUS} -ne 0 ]]; then
             exit 1
           fi
 
