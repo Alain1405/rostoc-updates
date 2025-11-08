@@ -508,6 +508,7 @@ jobs:
           fi
 
           echo "[INFO] Submitting to Apple notarization service"
+          NOTARIZATION_LOG="notarization.log"
           xcrun notarytool submit "${NOTARIZE_PAYLOAD}" \
             --apple-id "${APPLE_ID}" \
             --team-id "${APPLE_TEAM_ID}" \
@@ -515,14 +516,15 @@ jobs:
             --wait \
             --timeout 15m \
             --progress \
-            --output-format json > notarization.log 2>&1 || {
-              echo "::error::Notarization submission failed"
-              cat notarization.log || true
-              exit 1
-            }
-
-          echo "[INFO] Notarization complete. Log excerpt:"
-          tail -n 200 notarization.log
+            --output-format json > "${NOTARIZATION_LOG}" 2>&1
+          NOTARY_STATUS=$?
+          if [[ ${NOTARY_STATUS} -ne 0 ]]; then
+            echo "::error::Notarization submission failed"
+            cat "${NOTARIZATION_LOG}" || true
+          else
+            echo "[INFO] Notarization complete. Log excerpt:"
+            tail -n 200 "${NOTARIZATION_LOG}"
+          fi
 
           echo "[INFO] Stapling notarization ticket to app bundle"
           xcrun stapler staple -v "${ABS_APP}" || {
@@ -543,8 +545,12 @@ jobs:
             exit 1
           }
 
-          if [[ -f notarization.log ]]; then
-            mv notarization.log notarization-${{ github.run_id }}.log || true
+          if [[ -f "${NOTARIZATION_LOG}" ]]; then
+            mv "${NOTARIZATION_LOG}" "notarization-${GITHUB_RUN_ID}.log" || true
+          fi
+
+          if [[ ${NOTARY_STATUS} -ne 0 ]]; then
+            exit 1
           fi
 
           if [[ "${NOTARIZE_TYPE}" == "bundle (zip)" && -n "${TMP_ZIP:-}" ]]; then
