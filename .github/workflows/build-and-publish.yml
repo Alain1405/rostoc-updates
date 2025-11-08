@@ -910,43 +910,6 @@ jobs:
             updates/version.txt
           artifactContentType: application/octet-stream
 
-      - name: Generate latest.json
-        if: inputs.is_release
-        working-directory: updates-repo
-        env:
-          VERSION: ${{ steps.extract_version.outputs.version }}
-          TARBALL_NAME: ${{ steps.prepare_artifacts.outputs.tarball_name }}
-        run: |
-          set -euo pipefail
-
-          # Read signature
-          SIG=$(cat "../${{ env.UPDATES_DIR }}/macos/${TARBALL_NAME}.sig")
-          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          NOTES="Release ${VERSION}"
-          URL="https://alain1405.github.io/rostoc-updates/macos/${TARBALL_NAME}"
-
-          # Generate latest.json
-          jq -n \
-            --arg v "$VERSION" \
-            --arg sig "$SIG" \
-            --arg date "$DATE" \
-            --arg notes "$NOTES" \
-            --arg url "$URL" \
-            '{
-              version: $v,
-              notes: $notes,
-              pub_date: $date,
-              platforms: {
-                "darwin-aarch64": {
-                  url: $url,
-                  signature: $sig
-                }
-              }
-            }' > "../${{ env.UPDATES_DIR }}/latest.json"
-
-          echo 'Generated latest.json:'
-          cat "../${{ env.UPDATES_DIR }}/latest.json"
-
       - name: Upload artifacts for Pages deployment
         if: inputs.is_release
         uses: actions/upload-artifact@v4
@@ -1581,10 +1544,66 @@ jobs:
           name: rostoc-updates-windows
           path: updates/windows
 
+  generate-releases-json:
+    needs:
+      - build-macos
+      - build-windows
+    if: inputs.is_release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout main source repository
+        uses: actions/checkout@v4
+        with:
+          repository: alain1405/rostoc
+          token: ${{ secrets.TAGGING_PAT }}
+          path: private-src
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates
+          path: macos-artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates-windows
+          path: windows-artifacts
+
+      - name: Generate unified JSON manifests
+        env:
+          VERSION: ${{ needs.build-macos.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "Generating releases.json and latest.json for version ${VERSION}"
+          
+          # Run the unified JSON generation script
+          bash private-src/scripts/ci/generate_releases_json.sh \
+            "${VERSION}" \
+            "macos-artifacts" \
+            "windows-artifacts" \
+            "json-output"
+          
+          echo "Generated JSON files:"
+          ls -lh json-output/
+          echo ""
+          echo "=== releases.json (first release entry) ==="
+          jq '.[0]' json-output/releases.json
+          echo ""
+          echo "=== latest.json ==="
+          cat json-output/latest.json
+
+      - name: Upload JSON artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: releases-json
+          path: json-output/*.json
+
   publish-to-pages:
     needs:
       - build-macos
       - build-windows
+      - generate-releases-json
     if: inputs.is_release
     runs-on: ubuntu-22.04
     permissions:
@@ -1612,58 +1631,24 @@ jobs:
           name: rostoc-updates-windows
           path: updates/windows
 
-      - name: Merge Windows entry into latest.json
+      - name: Download JSON manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: releases-json
+          path: updates
+
+      - name: Commit & push updates (with version history)
         run: |
-          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          VERSION=""
-          if [[ -f updates/version.txt ]]; then
-            VERSION=$(grep -E '^version=' updates/version.txt | head -n 1 | cut -d'=' -f2- || true)
+          git add updates || true
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: publish updates v${{ needs.build-macos.outputs.version }} ($(date -u +%F))"
+            git push
+          else
+            echo "No changes to commit"
           fi
-          if [[ -z "$VERSION" ]]; then
-            VERSION='${{ needs.build-windows.outputs.version }}'
-          fi
-          if [[ ! -f updates/latest.json ]]; then
-            echo "::error::updates/latest.json not found prior to merge" >&2
-            exit 1
-          fi
-          shopt -s nullglob
-          files=(updates/windows/Rostoc-${VERSION}-windows-x86_64.*)
-          win_file=""
-          for f in "${files[@]}"; do
-            if [[ "$f" != *.sig ]]; then
-              win_file="$f"
-              break
-            fi
-          done
-          if [[ -z "$win_file" ]]; then
-            echo "::error::No Windows installer artifact found for version $VERSION under updates/windows" >&2
-            ls -al updates/windows || true
-            exit 1
-          fi
-          sig_file="${win_file}.sig"
-          if [[ ! -f "$sig_file" ]]; then
-            echo "::error::Missing signature for Windows artifact: $sig_file" >&2
-            exit 1
-          fi
-          signature=$(cat "$sig_file")
-          url="https://alain1405.github.io/rostoc-updates/windows/$(basename "$win_file")"
-          tmp=updates/latest.json.tmp
-          jq --arg url "$url" --arg sig "$signature" '.platforms["windows-x86_64"] = { url: $url, signature: $sig }' updates/latest.json > "$tmp"
-          mv "$tmp" updates/latest.json
-
-      # - name: Commit & push updates (optional - for history)
-      #   run: |
-      #     git config user.name "github-actions[bot]"
-      #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      #     git add updates || true
-      #     if ! git diff --cached --quiet; then
-      #       git commit -m "chore: publish updates v${{ needs.build-macos.outputs.version }} ($(date -u +%F))"
-      #       git push
-      #     else
-      #       echo "No changes to commit"
-      #     fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
