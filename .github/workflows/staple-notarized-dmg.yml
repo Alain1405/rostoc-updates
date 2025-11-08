@@ -1,0 +1,51 @@
+name: Staple Notarized DMGs
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  staple-and-upload:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+        with:
+          repository: alain1405/rostoc
+          token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          path: updates-repo
+
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: alain1405/rostoc-private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private-src
+
+      - name: Download pending notarizations artifact
+        id: download-pending
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-and-publish.yml
+          name: pending-notarizations
+          path: pending
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Process pending notarizations
+        if: steps.download-pending.outcome == 'success'
+        working-directory: private-src
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+        run: |
+          bash scripts/macos/staple_and_upload_dmg.sh \
+            ../pending/pending-notarizations.csv \
+            ../pending
