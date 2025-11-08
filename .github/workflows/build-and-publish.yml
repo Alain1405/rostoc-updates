@@ -417,6 +417,139 @@ jobs:
           echo "[INFO] Starting build - output will be saved to build-macos.log"
           python scripts/build.py --locked 2>&1 | tee build-macos.log
 
+      - name: Notarize macOS bundle
+        working-directory: private-src
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if ! command -v xcrun >/dev/null 2>&1; then
+            echo "::error::xcrun not available on runner"
+            exit 1
+          fi
+          if [[ -z "${APPLE_ID:-}" || -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
+            echo "::error::Notarization credentials missing (APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID)"
+            exit 1
+          fi
+          SEARCH_DIRS=(
+            target/bundle-release/bundle/macos
+            src-tauri/target/bundle-release/bundle/macos
+            target/release/bundle/macos
+            src-tauri/target/release/bundle/macos
+          )
+          ABS_APP=""
+          for dir in "${SEARCH_DIRS[@]}"; do
+            if [[ -d "$dir" ]]; then
+              found=$(find "$dir" -maxdepth 1 -type d -name '*.app' -print -quit 2>/dev/null || true)
+              if [[ -n "$found" ]]; then
+                if [[ "$found" != /* ]]; then
+                  ABS_APP="$GITHUB_WORKSPACE/private-src/$found"
+                else
+                  ABS_APP="$found"
+                fi
+                break
+              fi
+            fi
+          done
+
+          if [[ -z "$ABS_APP" ]]; then
+            echo "::error::No app bundle located for notarization"
+            for dir in "${SEARCH_DIRS[@]}"; do
+              if [[ -d "$dir" ]]; then
+                echo "[DEBUG] Contents of $dir" >&2
+                ls -al "$dir" || true
+              else
+                echo "[DEBUG] Missing directory: $dir" >&2
+              fi
+            done
+            exit 1
+          fi
+          if [[ ! -d "$ABS_APP" ]]; then
+            echo "::error::Resolved app bundle path does not exist: $ABS_APP"
+            exit 1
+          fi
+
+          echo "[INFO] Preparing app for notarization: ${ABS_APP}"
+          DMG_PATH=$(find target -maxdepth 5 -type f -name '*.dmg' -print -quit || true)
+          if [[ -z "${DMG_PATH}" ]]; then
+            echo "[WARN] DMG not found, creating temporary zip for notarization"
+            TMP_ZIP="$(pwd)/notarize_app.zip"
+            rm -f "$TMP_ZIP"
+            ditto -c -k --keepParent "${ABS_APP}" "$TMP_ZIP"
+            NOTARIZE_PAYLOAD="$TMP_ZIP"
+            NOTARIZE_TYPE="bundle (zip)"
+          else
+            if [[ "${DMG_PATH}" != /* ]]; then
+              DMG_PATH="$GITHUB_WORKSPACE/private-src/${DMG_PATH}"
+            fi
+            NOTARIZE_PAYLOAD="$DMG_PATH"
+            NOTARIZE_TYPE="dmg"
+          fi
+
+          echo "[INFO] Notarizing ${NOTARIZE_TYPE}: ${NOTARIZE_PAYLOAD}"
+          echo "[DEBUG] Listing payload contents"
+          if [[ "${NOTARIZE_TYPE}" == "dmg" ]]; then
+            hdiutil imageinfo "${NOTARIZE_PAYLOAD}" || true
+          else
+            unzip -l "${NOTARIZE_PAYLOAD}" || true
+          fi
+
+          echo "[INFO] Submitting to Apple notarization service"
+          xcrun notarytool submit "${NOTARIZE_PAYLOAD}" \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --wait \
+            --timeout 15m \
+            --progress \
+            --log-format json > notarization.log 2>&1 || {
+              echo "::error::Notarization submission failed"
+              cat notarization.log || true
+              exit 1
+            }
+
+          echo "[INFO] Notarization complete. Log excerpt:"
+          tail -n 200 notarization.log
+
+          echo "[INFO] Stapling notarization ticket to app bundle"
+          xcrun stapler staple -v "${ABS_APP}" || {
+            echo "::error::Stapling failed for app bundle"
+            exit 1
+          }
+
+          if [[ "${NOTARIZE_TYPE}" == "dmg" ]]; then
+            echo "[INFO] Stapling notarization ticket to DMG"
+            xcrun stapler staple -v "${NOTARIZE_PAYLOAD}" || {
+              echo "::warning::Stapling failed for DMG"
+            }
+          fi
+
+          echo "[INFO] Verifying stapled ticket"
+          spctl --assess --type exec --verbose "${ABS_APP}" || {
+            echo "::error::Gatekeeper assessment failed after stapling"
+            exit 1
+          }
+
+          if [[ -f notarization.log ]]; then
+            mv notarization.log notarization-${{ github.run_id }}.log || true
+          fi
+
+          if [[ "${NOTARIZE_TYPE}" == "bundle (zip)" && -n "${TMP_ZIP:-}" ]]; then
+            echo "[DEBUG] Removing temporary notarization payload: ${TMP_ZIP}"
+            rm -f "${TMP_ZIP}" || true
+          fi
+
+      - name: Upload notarization logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-notarization-logs
+          path: private-src/notarization-*.log
+          if-no-files-found: ignore
+
       - name: Verify app bundle
         working-directory: private-src
         run: bash scripts/verify_app_bundle.sh
