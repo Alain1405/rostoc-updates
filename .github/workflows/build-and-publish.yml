@@ -430,6 +430,16 @@ jobs:
             echo "::error::xcrun not available on runner"
             exit 1
           fi
+
+          echo "[DEBUG] Notarization env availability summary:"
+          for var in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_SIGNING_IDENTITY; do
+            if [[ -n "${!var:-}" ]]; then
+              echo "  - ${var}: present"
+            else
+              echo "  - ${var}: MISSING"
+            fi
+          done
+
           if [[ -z "${APPLE_ID:-}" || -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
             echo "::error::Notarization credentials missing (APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID)"
             exit 1
