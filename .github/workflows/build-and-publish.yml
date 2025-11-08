@@ -515,7 +515,7 @@ jobs:
             --wait \
             --timeout 15m \
             --progress \
-            --log-format json > notarization.log 2>&1 || {
+            --output-format json > notarization.log 2>&1 || {
               echo "::error::Notarization submission failed"
               cat notarization.log || true
               exit 1
