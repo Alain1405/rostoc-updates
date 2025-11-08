@@ -539,10 +539,10 @@ jobs:
           DMG_FILENAME=$(basename "${DMG_PATH}")
           RELEASE_TAG="${{ steps.extract_version.outputs.version }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
+
           echo "submission_id,dmg_filename,release_tag,dmg_path,submitted_at" > "${PENDING_FILE}"
           echo "${SUBMISSION_ID},${DMG_FILENAME},${RELEASE_TAG},${DMG_PATH},${TIMESTAMP}" >> "${PENDING_FILE}"
-          
+
           echo "[INFO] Saved pending notarization metadata to ${PENDING_FILE}"
           cat "${PENDING_FILE}"
 
@@ -1576,14 +1576,14 @@ jobs:
         run: |
           set -euo pipefail
           echo "Generating releases.json and latest.json for version ${VERSION}"
-          
+
           # Run the unified JSON generation script
           bash private-src/scripts/ci/generate_releases_json.sh \
             "${VERSION}" \
             "macos-artifacts" \
             "windows-artifacts" \
             "json-output"
-          
+
           echo "Generated JSON files:"
           ls -lh json-output/
           echo ""
