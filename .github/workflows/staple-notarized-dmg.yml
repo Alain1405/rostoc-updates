@@ -12,19 +12,24 @@ permissions:
 jobs:
   staple-and-upload:
     runs-on: macos-latest
+    env:
+      PRIVATE_REPO: Alain1405/rostoc
     steps:
-      - name: Checkout updates repo
-        uses: actions/checkout@v4
+      - name: Setup SSH agent for private repo
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          repository: alain1405/rostoc
-          token: ${{ secrets.UPDATES_REPO_TOKEN }}
-          path: updates-repo
+          ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+      - name: Add GitHub to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
 
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: alain1405/rostoc-private
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          repository: ${{ env.PRIVATE_REPO }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           path: private-src
 
       - name: Download pending notarizations artifact
