@@ -1,341 +1,366 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rostoc Updates</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #f5f5f5;
-            padding: 20px;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background: #f5f5f5;
+        padding: 20px;
+      }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        padding: 40px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
 
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
+      h1 {
+        color: #2c3e50;
+        margin-bottom: 10px;
+        font-size: 2.5em;
+      }
 
-        .subtitle {
-            color: #7f8c8d;
-            margin-bottom: 30px;
-            font-size: 1.1em;
-        }
+      .subtitle {
+        color: #7f8c8d;
+        margin-bottom: 30px;
+        font-size: 1.1em;
+      }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #7f8c8d;
-        }
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #7f8c8d;
+      }
 
-        .error {
-            background: #fee;
-            border: 1px solid #fcc;
-            color: #c33;
-            padding: 20px;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
+      .error {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c33;
+        padding: 20px;
+        border-radius: 4px;
+        margin: 20px 0;
+      }
 
-        .release {
-            border: 1px solid #e1e8ed;
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 20px;
-            transition: box-shadow 0.2s;
-        }
+      .release {
+        border: 1px solid #e1e8ed;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 20px;
+        transition: box-shadow 0.2s;
+      }
 
-        .release:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
+      .release:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
 
-        .release.latest {
-            border-color: #3498db;
-            background: #f8fbff;
-        }
+      .release.latest {
+        border-color: #3498db;
+        background: #f8fbff;
+      }
 
-        .release-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
+      .release-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
 
-        .release-version {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #2c3e50;
-        }
+      .release-version {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #2c3e50;
+      }
 
-        .badge {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85em;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
+      .badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85em;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
 
-        .badge.latest {
-            background: #3498db;
-            color: white;
-        }
+      .badge.latest {
+        background: #3498db;
+        color: white;
+      }
 
-        .release-date {
-            color: #7f8c8d;
-            font-size: 0.9em;
-            margin-bottom: 12px;
-        }
+      .release-date {
+        color: #7f8c8d;
+        font-size: 0.9em;
+        margin-bottom: 12px;
+      }
 
-        .release-notes {
-            color: #555;
-            margin-bottom: 20px;
-            white-space: pre-line;
-        }
+      .release-notes {
+        color: #555;
+        margin-bottom: 20px;
+        white-space: pre-line;
+      }
 
-        .platforms {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 16px;
-            margin-top: 16px;
-        }
+      .platforms {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+      }
 
-        .platform {
-            background: #f8f9fa;
-            border: 1px solid #e1e8ed;
-            border-radius: 6px;
-            padding: 16px;
-        }
+      .platform {
+        background: #f8f9fa;
+        border: 1px solid #e1e8ed;
+        border-radius: 6px;
+        padding: 16px;
+      }
 
-        .platform-name {
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+      .platform-name {
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-        .platform-icon {
-            font-size: 1.2em;
-        }
+      .platform-icon {
+        font-size: 1.2em;
+      }
 
-        .download-links {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
+      .download-links {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
 
-        .download-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            background: #3498db;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 0.9em;
-            transition: background 0.2s;
-        }
+      .download-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #3498db;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 0.9em;
+        transition: background 0.2s;
+      }
 
-        .download-btn:hover {
-            background: #2980b9;
-        }
+      .download-btn:hover {
+        background: #2980b9;
+      }
 
-        .download-btn.signature {
-            background: #95a5a6;
-        }
+      .download-btn.signature {
+        background: #95a5a6;
+      }
 
-        .download-btn.signature:hover {
-            background: #7f8c8d;
-        }
+      .download-btn.signature:hover {
+        background: #7f8c8d;
+      }
 
-        .stats {
-            display: flex;
-            gap: 20px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e1e8ed;
-            font-size: 0.85em;
-            color: #7f8c8d;
-        }
+      .stats {
+        display: flex;
+        gap: 20px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e1e8ed;
+        font-size: 0.85em;
+        color: #7f8c8d;
+      }
 
-        .stat {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
+      .stat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>Rostoc Updates</h1>
-        <p class="subtitle">Official release downloads and update manifests</p>
-        
-        <div id="content">
-            <div class="loading">Loading releases...</div>
-        </div>
+      <h1>Rostoc Updates</h1>
+      <p class="subtitle">Official release downloads and update manifests</p>
+
+      <div id="content">
+        <div class="loading">Loading releases...</div>
+      </div>
     </div>
 
     <script>
-        async function loadReleases() {
-            const content = document.getElementById('content');
-            
-            try {
-                const response = await fetch('./releases.json');
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                
-                if (!data.releases || data.releases.length === 0) {
-                    content.innerHTML = '<p class="error">No releases available yet.</p>';
-                    return;
-                }
-                
-                content.innerHTML = data.releases.map(release => renderRelease(release)).join('');
-            } catch (error) {
-                console.error('Failed to load releases:', error);
-                content.innerHTML = `
+      async function loadReleases() {
+        const content = document.getElementById('content');
+
+        try {
+          const response = await fetch('./releases.json');
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+
+          if (!data.releases || data.releases.length === 0) {
+            content.innerHTML =
+              '<p class="error">No releases available yet.</p>';
+            return;
+          }
+
+          content.innerHTML = data.releases
+            .map((release) => renderRelease(release))
+            .join('');
+        } catch (error) {
+          console.error('Failed to load releases:', error);
+          content.innerHTML = `
                     <div class="error">
                         <strong>Failed to load releases</strong><br>
                         ${error.message}
                     </div>
                 `;
-            }
         }
+      }
 
-        function renderRelease(release) {
-            const date = new Date(release.pub_date);
-            const formattedDate = date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+      function renderRelease(release) {
+        const date = new Date(release.pub_date);
+        const formattedDate = date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
 
-            const latestBadge = release.latest 
-                ? '<span class="badge latest">Latest</span>' 
-                : '';
+        const latestBadge = release.latest
+          ? '<span class="badge latest">Latest</span>'
+          : '';
 
-            const platforms = release.platforms || {};
-            const platformsHtml = Object.entries(platforms).map(([name, platform]) => {
-                return renderPlatform(name, platform);
-            }).join('');
+        const platforms = release.platforms || {};
+        const platformsHtml = Object.entries(platforms)
+          .map(([name, platform]) => {
+            return renderPlatform(name, platform);
+          })
+          .join('');
 
-            return `
+        return `
                 <div class="release ${release.latest ? 'latest' : ''}">
                     <div class="release-header">
                         <div class="release-version">${release.version}</div>
                         ${latestBadge}
                     </div>
                     <div class="release-date">Released ${formattedDate}</div>
-                    ${release.notes ? `<div class="release-notes">${escapeHtml(release.notes)}</div>` : ''}
+                    ${
+                      release.notes
+                        ? `<div class="release-notes">${escapeHtml(
+                            release.notes
+                          )}</div>`
+                        : ''
+                    }
                     <div class="platforms">
                         ${platformsHtml}
                     </div>
                 </div>
             `;
-        }
+      }
 
-        function renderPlatform(name, platform) {
-            const icon = {
-                'darwin-aarch64': '🍎',
-                'darwin-x86_64': '🍎',
-                'windows-x86_64': '🪟',
-                'linux-x86_64': '🐧'
-            }[name] || '💾';
+      function renderPlatform(name, platform) {
+        const icon =
+          {
+            'darwin-aarch64': '🍎',
+            'darwin-x86_64': '🍎',
+            'windows-x86_64': '🪟',
+            'linux-x86_64': '🐧',
+          }[name] || '💾';
 
-            const displayName = {
-                'darwin-aarch64': 'macOS (Apple Silicon)',
-                'darwin-x86_64': 'macOS (Intel)',
-                'windows-x86_64': 'Windows',
-                'linux-x86_64': 'Linux'
-            }[name] || name;
+        const displayName =
+          {
+            'darwin-aarch64': 'macOS (Apple Silicon)',
+            'darwin-x86_64': 'macOS (Intel)',
+            'windows-x86_64': 'Windows',
+            'linux-x86_64': 'Linux',
+          }[name] || name;
 
-            // Build download links
-            const downloadLinks = [];
-            
-            // Updater (app bundle/tarball for auto-updates)
-            if (platform.updater && platform.updater.available && platform.updater.url) {
-                const label = name.startsWith('darwin') ? 'App Bundle' : 
-                              name.startsWith('windows') ? 'MSI (Auto-Update)' : 'Installer';
-                downloadLinks.push(`
+        // Build download links
+        const downloadLinks = [];
+
+        // Updater (app bundle/tarball for auto-updates)
+        if (
+          platform.updater &&
+          platform.updater.available &&
+          platform.updater.url
+        ) {
+          const label = name.startsWith('darwin')
+            ? 'App Bundle'
+            : name.startsWith('windows')
+            ? 'MSI (Auto-Update)'
+            : 'Installer';
+          downloadLinks.push(`
                     <a href="${platform.updater.url}" class="download-btn">
                         ⬇️ ${label}
                     </a>
                 `);
-                
-                if (platform.updater.signature) {
-                    downloadLinks.push(`
+
+          if (platform.updater.signature) {
+            downloadLinks.push(`
                         <a href="data:text/plain;base64,${platform.updater.signature}" 
                            download="signature.txt" 
                            class="download-btn signature">
                             🔐 Signature
                         </a>
                     `);
-                }
-            }
-            
-            // DMG installer (macOS only)
-            if (platform.installer) {
-                if (platform.installer.available && platform.installer.dmg_url) {
-                    // Notarized and ready
-                    downloadLinks.push(`
+          }
+        }
+
+        // DMG installer (macOS only)
+        if (platform.installer) {
+          if (platform.installer.available && platform.installer.dmg_url) {
+            // Notarized and ready
+            downloadLinks.push(`
                         <a href="${platform.installer.dmg_url}" class="download-btn">
                             💿 DMG Installer
                         </a>
                     `);
-                } else if (platform.installer.notarization_status === 'pending') {
-                    // Show pending DMG with disabled appearance
-                    downloadLinks.push(`
+          } else if (platform.installer.notarization_status === 'pending') {
+            // Show pending DMG with disabled appearance
+            downloadLinks.push(`
                         <div style="padding: 8px 16px; background: #e8e8e8; color: #999; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                             <span>💿 DMG Installer</span>
                             <span style="font-size: 0.85em;">(⏳ pending notarization)</span>
                         </div>
                     `);
-                }
-            }
-            
-            // MSI installer (Windows only, manual installation)
-            if (platform.installer && platform.installer.available && platform.installer.msi_url) {
-                downloadLinks.push(`
+          }
+        }
+
+        // MSI installer (Windows only, manual installation)
+        if (
+          platform.installer &&
+          platform.installer.available &&
+          platform.installer.msi_url
+        ) {
+          downloadLinks.push(`
                     <a href="${platform.installer.msi_url}" class="download-btn">
                         💿 MSI Installer
                     </a>
                 `);
-            }
+        }
 
-            // If no downloads available, show message
-            if (downloadLinks.length === 0) {
-                downloadLinks.push(`
+        // If no downloads available, show message
+        if (downloadLinks.length === 0) {
+          downloadLinks.push(`
                     <div style="color: #7f8c8d; font-size: 0.85em;">
                         No downloads available yet
                     </div>
                 `);
-            }
+        }
 
-            return `
+        return `
                 <div class="platform">
                     <div class="platform-name">
                         <span class="platform-icon">${icon}</span>
@@ -347,29 +372,29 @@
                     ${renderPlatformStats(platform)}
                 </div>
             `;
+      }
+
+      function renderPlatformStats(platform) {
+        const stats = [];
+
+        if (platform.size) {
+          const sizeMB = (platform.size / (1024 * 1024)).toFixed(1);
+          stats.push(`<span class="stat">📦 ${sizeMB} MB</span>`);
         }
 
-        function renderPlatformStats(platform) {
-            const stats = [];
-            
-            if (platform.size) {
-                const sizeMB = (platform.size / (1024 * 1024)).toFixed(1);
-                stats.push(`<span class="stat">📦 ${sizeMB} MB</span>`);
-            }
+        return stats.length > 0
+          ? `<div class="stats">${stats.join('')}</div>`
+          : '';
+      }
 
-            return stats.length > 0 
-                ? `<div class="stats">${stats.join('')}</div>` 
-                : '';
-        }
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Load releases on page load
-        loadReleases();
+      // Load releases on page load
+      loadReleases();
     </script>
-</body>
+  </body>
 </html>

@@ -400,7 +400,7 @@ jobs:
           set -euo pipefail
           VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
           REF="${{ inputs.ref }}"
-          
+
           # Extract version from tag (e.g., v0.2.81 -> 0.2.81)
           if [[ "$REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
             TAG_VERSION="${BASH_REMATCH[1]}"
@@ -1630,7 +1630,7 @@ jobs:
       - name: Generate unified JSON manifests
         run: |
           set -euo pipefail
-          
+
           # Extract version directly from the checked-out source
           VERSION=$(jq -r '.version' private-src/src-tauri/tauri.conf.json)
           echo "Generating releases.json and latest.json for version ${VERSION}"
