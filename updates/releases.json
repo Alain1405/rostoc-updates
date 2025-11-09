@@ -1,0 +1,32 @@
+{
+  "releases": [
+    {
+      "version": "0.2.78",
+      "pub_date": "2025-11-09T08:13:23Z",
+      "notes": "Release 0.2.78",
+      "latest": true,
+      "platforms": {
+        "darwin-aarch64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.78-darwin-aarch64.app.tar.gz",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTE0b2loR29wcWdJRTllcVhNdnI2ditnRytiUUhrYUFCc3pRVXAvWFVoaDFxNlRzRElUVTNqQldwcGZuclVvaWV5ZVRZMlpoeEFBNGRPaVJHQnRuckFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNjc1NDkyCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKSFBOTDBHWHR5SFI0N3h3Smp0a0c1enl5U1djVFJOaTR4bUNZL2VNYWM4dlFuYlN1ZUVzVFNMWkNGQ2N3aGZQak9jaTc3K2hFTHMvbVE1WWMvRHBoQ1E9PQo=",
+            "available": true
+          },
+          "installer": {
+            "dmg_url": "",
+            "available": false,
+            "notarization_status": "pending",
+            "submitted_at": "2025-11-09T08:13:23Z"
+          }
+        },
+        "windows-x86_64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.78-windows-x86_64.msi",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQS82cS92QzJwQnhteE9Ra1o5ZGdTd2ZkVGlEbVRqNWNVemtPeTFDQmU2ZTFaN21OQzF2Y3p6OTFwNlo5bEdqTGcvOHRaenp0OVdLR1hVUEs2UlQxV0FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNjc1ODIwCWZpbGU6Um9zdG9jXzAuMi43OF94NjRfZW4tVVMubXNpCkVmeVEwZm1YZnZIU2R6SWJsQ29QWmRldHdWelUyTUo4b2gzMy95RGFPR1pFUjE4dkpsbUI4emNnYkZiS0hBa3NhM0ZjNVJpTXMySjk4ZGErR2cwYUNBPT0K",
+            "available": true
+          }
+        }
+      }
+    }
+  ]
+}
