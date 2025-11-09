@@ -368,6 +368,14 @@ jobs:
         working-directory: private-src
         run: pnpm install --frozen-lockfile
 
+      - name: Stage Python runtime (before Tauri build/sign)
+        working-directory: private-src
+        run: |
+          set -euo pipefail
+          echo "[INFO] Pre-staging Python runtime to ensure stable file attributes before signing"
+          python3 scripts/bundle_runtime.py --target=release --stage-only
+          echo "[INFO] Runtime staging complete - files are now stable for Tauri's signing"
+
       - name: Stamp build version
         working-directory: private-src
         env:
