@@ -1675,7 +1675,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add updates || true
+          # Only add JSON manifests and metadata files, not the large binaries
+          git add updates/*.json updates/version.txt updates/macos/checksums.txt updates/windows/checksums.txt || true
           if ! git diff --cached --quiet; then
             git commit -m "chore: publish updates v${{ needs.build-macos.outputs.version }} ($(date -u +%F))"
             git push
