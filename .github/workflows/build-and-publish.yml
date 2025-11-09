@@ -1586,8 +1586,9 @@ jobs:
       - name: Checkout main source repository
         uses: actions/checkout@v4
         with:
-          repository: alain1405/rostoc
-          token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          repository: ${{ env.PRIVATE_REPO }}
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           path: private-src
 
       - name: Download macOS artifacts
