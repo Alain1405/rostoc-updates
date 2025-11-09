@@ -1627,6 +1627,13 @@ jobs:
           name: rostoc-updates-windows
           path: windows-artifacts
 
+      - name: Download pending notarizations metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: pending-notarizations
+          path: private-src
+        continue-on-error: true
+
       - name: Generate unified JSON manifests
         run: |
           set -euo pipefail
