@@ -417,6 +417,38 @@ jobs:
           echo "[INFO] Starting build - output will be saved to build-macos.log"
           python scripts/build.py --locked 2>&1 | tee build-macos.log
 
+      - name: Sign DMG
+        working-directory: private-src
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          
+          # Find the DMG file
+          DMG_PATH=$(find target/release/bundle/dmg -name "*.dmg" -type f | head -n 1)
+          
+          if [ -z "$DMG_PATH" ]; then
+            echo "::error::No DMG file found in target/release/bundle/dmg"
+            exit 1
+          fi
+          
+          echo "[INFO] Found DMG: $DMG_PATH"
+          echo "[INFO] Signing DMG with identity: $APPLE_SIGNING_IDENTITY"
+          
+          # Sign the DMG
+          codesign --sign "$APPLE_SIGNING_IDENTITY" \
+                   --force \
+                   --verbose \
+                   --timestamp \
+                   --options runtime \
+                   "$DMG_PATH"
+          
+          # Verify the signature
+          echo "[INFO] Verifying DMG signature"
+          codesign --verify --deep --strict --verbose=2 "$DMG_PATH"
+          
+          echo "[INFO] DMG signed successfully"
+
       - name: Notarize macOS bundle
         working-directory: private-src
         env:
