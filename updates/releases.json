@@ -1,10 +1,43 @@
 {
   "releases": [
     {
+      "version": "0.2.82",
+      "pub_date": "2025-11-09T11:11:36Z",
+      "notes": "Release 0.2.82",
+      "latest": true,
+      "platforms": {
+        "darwin-aarch64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.82-darwin-aarch64.app.tar.gz",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTRsTjZsYmdnZ3pBeEdWVEdBUnQ4TnRZY3FjSmZOQUtYT1l1YzdpN2FhVnBkNkI4L28xSTZLeFRpb2pPOFI2ZnA1ZW4xM0NRaW9iWnFzS1ZESCt0K3d3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNjg2MzEwCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKckd2NlRreXcveEV6c2UwNXB1eEtmRitHeGVkbTl5bjdEaW4vUExmeTh5VUNreXdFcXE5c3l0T3hwODJKb0l4emtqZDFYZXY2cnhYU0tuTUp1KzdEQ1E9PQo=",
+            "available": true
+          },
+          "installer": {
+            "dmg_url": "",
+            "available": false,
+            "notarization_status": "pending",
+            "submission_id": "",
+            "submitted_at": "2025-11-09T11:11:36Z"
+          }
+        },
+        "windows-x86_64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.82-windows-x86_64.msi",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTk2UnMzOWFsdW8wb3VReElxdnNkOFVjVVl6ZEl6M2tnaVhyRGc3UGZ6azUrL2dHcnljc2FFQ2N2ejNCVVpCUGFEV0xpa1pkeUdNZGUxcjUvelpmQkFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNjg2NTAzCWZpbGU6Um9zdG9jXzAuMi44Ml94NjRfZW4tVVMubXNpCnlEOHo5dlhUalBxQ05FWUFlM1pnK3ovcGplWGpGVUdQM0hGM1N0YU5kVzc2bWwyei9hakRheUhQQ2JwelVtVGhUNnUyWkR4V3picFZhWHpYQ1UyY0FnPT0K",
+            "available": true
+          },
+          "installer": {
+            "msi_url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.82-windows-x86_64.msi",
+            "available": true
+          }
+        }
+      }
+    },
+    {
       "version": "0.2.79",
       "pub_date": "2025-11-09T09:02:12Z",
       "notes": "Release 0.2.79",
-      "latest": true,
+      "latest": false,
       "platforms": {
         "darwin-aarch64": {
           "updater": {
