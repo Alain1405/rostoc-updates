@@ -393,6 +393,30 @@ jobs:
           echo "VITE_SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      - name: Validate version matches tag (release builds only)
+        if: inputs.is_release
+        working-directory: private-src
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          REF="${{ inputs.ref }}"
+          
+          # Extract version from tag (e.g., v0.2.81 -> 0.2.81)
+          if [[ "$REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            TAG_VERSION="${BASH_REMATCH[1]}"
+            echo "[INFO] Tag version: $TAG_VERSION"
+            echo "[INFO] Code version: $VERSION"
+            
+            if [[ "$TAG_VERSION" != "$VERSION" ]]; then
+              echo "::error::Version mismatch! Tag is $REF (version $TAG_VERSION) but tauri.conf.json has version $VERSION"
+              exit 1
+            fi
+            
+            echo "✅ Version validation passed: $VERSION matches tag $REF"
+          else
+            echo "[WARN] Not building from a version tag (ref: $REF), skipping version validation"
+          fi
+
       - name: Apply preview build tuning (no-release)
         if: ${{ !inputs.is_release }}
         working-directory: private-src
