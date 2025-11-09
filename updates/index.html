@@ -273,6 +273,68 @@
                 'linux-x86_64': 'Linux'
             }[name] || name;
 
+            // Build download links
+            const downloadLinks = [];
+            
+            // Updater (app bundle/tarball for auto-updates)
+            if (platform.updater && platform.updater.available && platform.updater.url) {
+                const label = name.startsWith('darwin') ? 'App Bundle' : 
+                              name.startsWith('windows') ? 'MSI (Auto-Update)' : 'Installer';
+                downloadLinks.push(`
+                    <a href="${platform.updater.url}" class="download-btn">
+                        ⬇️ ${label}
+                    </a>
+                `);
+                
+                if (platform.updater.signature) {
+                    downloadLinks.push(`
+                        <a href="data:text/plain;base64,${platform.updater.signature}" 
+                           download="signature.txt" 
+                           class="download-btn signature">
+                            🔐 Signature
+                        </a>
+                    `);
+                }
+            }
+            
+            // DMG installer (macOS only)
+            if (platform.installer) {
+                if (platform.installer.available && platform.installer.dmg_url) {
+                    // Notarized and ready
+                    downloadLinks.push(`
+                        <a href="${platform.installer.dmg_url}" class="download-btn">
+                            💿 DMG Installer
+                        </a>
+                    `);
+                } else if (platform.installer.notarization_status === 'pending') {
+                    // Show pending DMG with disabled appearance
+                    downloadLinks.push(`
+                        <div style="padding: 8px 16px; background: #e8e8e8; color: #999; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                            <span>💿 DMG Installer</span>
+                            <span style="font-size: 0.85em;">(⏳ pending notarization)</span>
+                        </div>
+                    `);
+                }
+            }
+            
+            // MSI installer (Windows only, manual installation)
+            if (platform.installer && platform.installer.available && platform.installer.msi_url) {
+                downloadLinks.push(`
+                    <a href="${platform.installer.msi_url}" class="download-btn">
+                        💿 MSI Installer
+                    </a>
+                `);
+            }
+
+            // If no downloads available, show message
+            if (downloadLinks.length === 0) {
+                downloadLinks.push(`
+                    <div style="color: #7f8c8d; font-size: 0.85em;">
+                        No downloads available yet
+                    </div>
+                `);
+            }
+
             return `
                 <div class="platform">
                     <div class="platform-name">
@@ -280,14 +342,7 @@
                         ${displayName}
                     </div>
                     <div class="download-links">
-                        <a href="${platform.url}" class="download-btn">
-                            ⬇️ Download
-                        </a>
-                        ${platform.signature ? `
-                            <a href="${platform.signature}" class="download-btn signature">
-                                🔐 Signature
-                            </a>
-                        ` : ''}
+                        ${downloadLinks.join('')}
                     </div>
                     ${renderPlatformStats(platform)}
                 </div>
