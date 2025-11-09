@@ -474,6 +474,7 @@ jobs:
           echo "[INFO] DMG signed successfully"
 
       - name: Notarize macOS bundle
+        if: inputs.is_release
         working-directory: private-src
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
