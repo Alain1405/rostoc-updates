@@ -1587,7 +1587,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: alain1405/rostoc
-          token: ${{ secrets.TAGGING_PAT }}
+          token: ${{ secrets.UPDATES_REPO_TOKEN }}
           path: private-src
 
       - name: Download macOS artifacts
