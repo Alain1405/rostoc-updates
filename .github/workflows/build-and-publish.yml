@@ -1604,10 +1604,11 @@ jobs:
           path: windows-artifacts
 
       - name: Generate unified JSON manifests
-        env:
-          VERSION: ${{ needs.build-macos.outputs.version }}
         run: |
           set -euo pipefail
+          
+          # Extract version directly from the checked-out source
+          VERSION=$(jq -r '.version' private-src/src-tauri/tauri.conf.json)
           echo "Generating releases.json and latest.json for version ${VERSION}"
 
           # Get submission ID from the build-macos job output or pending file
