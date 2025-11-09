@@ -84,7 +84,7 @@ jobs:
           script: |
             const [owner, repo] = process.env.PRIVATE_REPO.split('/');
             const sha = process.env.TARGET_SHA;
-            const context = process.env.STATUS_CONTEXT;
+            const statusContext = process.env.STATUS_CONTEXT;
             const description = process.env.STATUS_DESCRIPTION;
             const targetUrl = process.env.TARGET_URL;
 
@@ -98,7 +98,7 @@ jobs:
               repo,
               sha,
               state: 'pending',
-              context,
+              context: statusContext,
               description,
               target_url: targetUrl
             });
@@ -1754,14 +1754,14 @@ jobs:
           script: |
             const [owner, repo] = process.env.PRIVATE_REPO.split('/');
             const sha = process.env.TARGET_SHA;
-            const context = process.env.STATUS_CONTEXT;
+            const statusContext = process.env.STATUS_CONTEXT;
             const targetUrl = process.env.TARGET_URL;
             const results = [process.env.MAC_RESULT, process.env.WIN_RESULT];
             const allSucceeded = results.every((r) => r === 'success' || r === 'skipped');
 
             const state = allSucceeded ? 'success' : 'failure';
             const description = allSucceeded
-              ? (context.endsWith('release') ? 'Public release build succeeded' : 'Public CI build succeeded')
+              ? (statusContext.endsWith('release') ? 'Public release build succeeded' : 'Public CI build succeeded')
               : 'Public build failed — see logs in rostoc-updates repo';
 
             await github.rest.repos.createCommitStatus({
@@ -1769,9 +1769,9 @@ jobs:
               repo,
               sha,
               state,
-              context,
+              context: statusContext,
               description,
               target_url: targetUrl
             });
 
-            core.info(`Set ${state} status (${context}) on ${owner}/${repo}@${sha}`);
+            core.info(`Set ${state} status (${statusContext}) on ${owner}/${repo}@${sha}`);
