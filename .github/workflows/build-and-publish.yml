@@ -423,18 +423,18 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
-          
+
           # Find the DMG file
           DMG_PATH=$(find target/release/bundle/dmg -name "*.dmg" -type f | head -n 1)
-          
+
           if [ -z "$DMG_PATH" ]; then
             echo "::error::No DMG file found in target/release/bundle/dmg"
             exit 1
           fi
-          
+
           echo "[INFO] Found DMG: $DMG_PATH"
           echo "[INFO] Signing DMG with identity: $APPLE_SIGNING_IDENTITY"
-          
+
           # Sign the DMG
           codesign --sign "$APPLE_SIGNING_IDENTITY" \
                    --force \
@@ -442,11 +442,11 @@ jobs:
                    --timestamp \
                    --options runtime \
                    "$DMG_PATH"
-          
+
           # Verify the signature
           echo "[INFO] Verifying DMG signature"
           codesign --verify --deep --strict --verbose=2 "$DMG_PATH"
-          
+
           echo "[INFO] DMG signed successfully"
 
       - name: Notarize macOS bundle
@@ -1679,6 +1679,8 @@ jobs:
           git add updates/*.json updates/version.txt updates/macos/checksums.txt updates/windows/checksums.txt || true
           if ! git diff --cached --quiet; then
             git commit -m "chore: publish updates v${{ needs.build-macos.outputs.version }} ($(date -u +%F))"
+            # Pull any changes that happened while workflow was running, then push
+            git pull --rebase origin main
             git push
           else
             echo "No changes to commit"
