@@ -1621,7 +1621,7 @@ jobs:
           ls -lh json-output/
           echo ""
           echo "=== releases.json (first release entry) ==="
-          jq '.[0]' json-output/releases.json
+          jq '.releases[0]' json-output/releases.json
           echo ""
           echo "=== latest.json ==="
           cat json-output/latest.json
