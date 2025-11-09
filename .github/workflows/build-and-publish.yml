@@ -1610,12 +1610,20 @@ jobs:
           set -euo pipefail
           echo "Generating releases.json and latest.json for version ${VERSION}"
 
+          # Get submission ID from the build-macos job output or pending file
+          SUBMISSION_ID=""
+          if [[ -f "private-src/pending-notarizations.csv" ]]; then
+            SUBMISSION_ID=$(tail -n 1 private-src/pending-notarizations.csv | cut -d',' -f1)
+            echo "[INFO] Found notarization submission ID: ${SUBMISSION_ID}"
+          fi
+
           # Run the unified JSON generation script
           bash private-src/scripts/ci/generate_releases_json.sh \
             "${VERSION}" \
             "macos-artifacts" \
             "windows-artifacts" \
-            "json-output"
+            "json-output" \
+            "${SUBMISSION_ID}"
 
           echo "Generated JSON files:"
           ls -lh json-output/

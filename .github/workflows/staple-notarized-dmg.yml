@@ -32,18 +32,7 @@ jobs:
                   ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
                   path: private-src
 
-            - name: Download pending notarizations artifact
-              id: download-pending
-              uses: dawidd6/action-download-artifact@v3
-              with:
-                  workflow: build-and-publish.yml
-                  name: pending-notarizations
-                  path: pending
-                  if_no_artifact_found: warn
-              continue-on-error: true
-
             - name: Process pending notarizations
-              if: steps.download-pending.outcome == 'success'
               working-directory: private-src
               env:
                   APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -51,6 +40,6 @@ jobs:
                   APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
                   GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
               run: |
-                  bash scripts/macos/staple_and_upload_dmg.sh \
-                    ../pending/pending-notarizations.csv \
-                    ../pending
+                  # Script now reads from releases.json on GitHub Pages
+                  # No artifact download needed!
+                  bash scripts/macos/staple_and_upload_dmg.sh
