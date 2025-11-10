@@ -1,10 +1,44 @@
 {
   "releases": [
     {
+      "version": "0.2.86",
+      "pub_date": "2025-11-10T03:07:56Z",
+      "notes": "Release 0.2.86",
+      "latest": true,
+      "platforms": {
+        "darwin-aarch64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.86-darwin-aarch64.app.tar.gz",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXlCQ1RqMW5iQ09vVUFwQW9hOVRhalZJUU16YmRwNm1OcW11dFpyb29ra0RHbmdHTzc4ZDJSaXRtMFhwOURFaFlaSGpWTlEyN0UwWTBnajU2aHhDSUFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNzQzODI5CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKYnNyVmdWNHdaRkxaMGNKZkdTQndIVUlhR2pWOXFoZE8wRFNSSjhQdnQraEZOQnNwRjRQRTZXd05Rcy8zOFdoUGxzWDIzRHRLZEZhd0IwQkFjSlorQXc9PQo=",
+            "available": true
+          },
+          "installer": {
+            "dmg_url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc_0.2.86_aarch64.dmg",
+            "available": true,
+            "notarization_status": "accepted",
+            "submission_id": "dc10af91-789f-445f-abcd-7968c8df0aff",
+            "submitted_at": "2025-11-10T03:07:56Z",
+            "notarized_at": "2025-11-10T07:59:53Z"
+          }
+        },
+        "windows-x86_64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.86-windows-x86_64.msi",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTY4bXhJUVVWdzBvbmFrdnRzVllNNStDY3N5b29lYUZqaGhET0YybU5FUGVXaUMrVkNxa2VGNmlzaDJuamJkZE1zWEJzR2t1ZzZEYVBFYkx5N014b1FvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNzQzODk3CWZpbGU6Um9zdG9jXzAuMi44Nl94NjRfZW4tVVMubXNpClhqVzRsY2xVQTRnK1N5UkhwWGZFSmxLR1gxdTNGSTBzTzdyVFBLcUFaVUZQV2lrTlBib053bGd6aWlKV2E5ek1sRFVreTBTWEFVdWI2bEFLZk9SSENRPT0K",
+            "available": true
+          },
+          "installer": {
+            "msi_url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.86-windows-x86_64.msi",
+            "available": true
+          }
+        }
+      }
+    },
+    {
       "version": "0.2.84",
       "pub_date": "2025-11-09T16:18:48Z",
       "notes": "Release 0.2.84",
-      "latest": true,
+      "latest": false,
       "platforms": {
         "darwin-aarch64": {
           "updater": {
@@ -15,9 +49,11 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
+            "notarization_status": "failed",
             "submission_id": "3673297d-50b9-45c3-8856-ffa16ad6ae44",
-            "submitted_at": "2025-11-09T16:18:48Z"
+            "submitted_at": "2025-11-09T16:18:48Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T08:00:04Z"
           }
         },
         "windows-x86_64": {
