@@ -1,2 +1,2 @@
-14a695c968da55a1d0856f9911121ab2ae16934297b1c92e0e9d02811e266df4  Rostoc-0.2.86-darwin-aarch64.app.tar.gz
-14a695c968da55a1d0856f9911121ab2ae16934297b1c92e0e9d02811e266df4  Rostoc.app.tar.gz
+7a07a1cfd8081f11e4c39c81b3ddb81cbe41caf2a29db07a63df51ad02719fb6  Rostoc-0.2.87-darwin-aarch64.app.tar.gz
+7a07a1cfd8081f11e4c39c81b3ddb81cbe41caf2a29db07a63df51ad02719fb6  Rostoc.app.tar.gz
