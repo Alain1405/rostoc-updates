@@ -13,11 +13,12 @@
             "available": true
           },
           "installer": {
-            "dmg_url": "",
-            "available": false,
-            "notarization_status": "pending",
+            "dmg_url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc_0.2.87_aarch64.dmg",
+            "available": true,
+            "notarization_status": "accepted",
             "submission_id": "628a894d-614f-45af-82b3-080e6bcf2d54",
-            "submitted_at": "2025-11-10T10:13:24Z"
+            "submitted_at": "2025-11-10T10:13:24Z",
+            "notarized_at": "2025-11-10T10:41:33Z"
           }
         },
         "windows-x86_64": {
@@ -117,9 +118,11 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
+            "notarization_status": "failed",
             "submission_id": "",
-            "submitted_at": "2025-11-09T15:10:10Z"
+            "submitted_at": "2025-11-09T15:10:10Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T10:41:40Z"
           }
         },
         "windows-x86_64": {
@@ -150,9 +153,11 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
+            "notarization_status": "failed",
             "submission_id": "",
-            "submitted_at": "2025-11-09T11:11:36Z"
+            "submitted_at": "2025-11-09T11:11:36Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T10:41:41Z"
           }
         },
         "windows-x86_64": {
@@ -183,8 +188,10 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
-            "submitted_at": "2025-11-09T09:02:12Z"
+            "notarization_status": "failed",
+            "submitted_at": "2025-11-09T09:02:12Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T10:41:42Z"
           }
         },
         "windows-x86_64": {
@@ -215,8 +222,10 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
-            "submitted_at": "2025-11-09T08:13:23Z"
+            "notarization_status": "failed",
+            "submitted_at": "2025-11-09T08:13:23Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T10:41:43Z"
           }
         },
         "windows-x86_64": {
