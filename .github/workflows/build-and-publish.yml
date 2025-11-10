@@ -1277,7 +1277,8 @@ jobs:
 
           while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
             echo "[INFO] Build attempt $ATTEMPT of $MAX_ATTEMPTS"
-            if python scripts/build.py "$BUILD_ARGS" 2>&1 | tee build-windows.log; then
+            # shellcheck disable=SC2086
+            if python scripts/build.py $BUILD_ARGS 2>&1 | tee build-windows.log; then
               BUILD_EXIT_CODE=0
               break
             else
