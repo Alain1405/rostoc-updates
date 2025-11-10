@@ -49,9 +49,11 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
+            "notarization_status": "failed",
             "submission_id": "3673297d-50b9-45c3-8856-ffa16ad6ae44",
-            "submitted_at": "2025-11-09T16:18:48Z"
+            "submitted_at": "2025-11-09T16:18:48Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T08:00:04Z"
           }
         },
         "windows-x86_64": {
