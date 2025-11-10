@@ -72,23 +72,32 @@ jobs:
 
       - name: Disable stapler when queue empty
         if: always()
+        working-directory: private-src
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          RESPONSE=$(curl -sf "https://alain1405.github.io/rostoc-updates/releases.json" || true)
-          if [[ -z "$RESPONSE" ]]; then
-              echo "No releases.json found; leaving workflow enabled"
+
+          # Clone the updates repo to check the latest committed state
+          TEMP_DIR=$(mktemp -d)
+          trap 'rm -rf "$TEMP_DIR"' EXIT
+
+          git clone "https://x-access-token:${{ secrets.UPDATES_REPO_TOKEN }}@github.com/Alain1405/rostoc-updates.git" "$TEMP_DIR" >/dev/null 2>&1
+
+          if [[ ! -f "$TEMP_DIR/updates/releases.json" ]]; then
+              echo "No releases.json found in repo; leaving workflow enabled"
               exit 0
           fi
 
-          PENDING=$(echo "$RESPONSE" | jq '[.releases[] | select(.platforms["darwin-aarch64"].installer.notarization_status == "pending")] | length')
+          PENDING=$(jq '[.releases[] | select(.platforms["darwin-aarch64"].installer.notarization_status == "pending")] | length' "$TEMP_DIR/updates/releases.json")
+
           if [[ "$PENDING" -eq 0 ]]; then
               echo "No pending notarizations remain; disabling workflow schedule"
               curl -s -X PUT \
                 -H "Authorization: Bearer ${GITHUB_TOKEN}" \
                 -H "Accept: application/vnd.github+json" \
                 https://api.github.com/repos/Alain1405/rostoc-updates/actions/workflows/staple-notarized-dmg.yml/disable >/dev/null
+              echo "Workflow disabled"
           else
               echo "Pending notarizations remaining: ${PENDING}; keeping workflow enabled"
           fi
