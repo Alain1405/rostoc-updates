@@ -203,7 +203,7 @@ jobs:
         working-directory: private-src
         env:
           REQUIRE_ROSI: '0'
-          CORO_ROSI_DISABLED: '1'
+          ROSTOC_ROSI_DISABLED: '1'
         run: pnpm smoke
 
   build-macos:
@@ -881,8 +881,8 @@ jobs:
           if [ "${IS_RELEASE}" != "true" ]; then
             codesign --force --deep -s - "$ABS_APP" || echo "Ad-hoc codesign failed (continuing)"
           fi
-          tar -czf coro-macos-build-preview.tar.gz -C "$ABS_BUNDLE_DIR" "$APP_NAME"
-          ditto -c -k --sequesterRsrc --keepParent "$ABS_APP" coro-macos-build-preview.zip || echo "ditto zip failed"
+          tar -czf rostoc-macos-build-preview.tar.gz -C "$ABS_BUNDLE_DIR" "$APP_NAME"
+          ditto -c -k --sequesterRsrc --keepParent "$ABS_APP" rostoc-macos-build-preview.zip || echo "ditto zip failed"
 
       - name: Upload macOS preview artifacts
         if: steps.archive_macos_preview.outcome == 'success'
@@ -890,8 +890,8 @@ jobs:
         with:
           name: macos-preview
           path: |
-            private-src/coro-macos-build-preview.tar.gz
-            private-src/coro-macos-build-preview.zip
+            private-src/rostoc-macos-build-preview.tar.gz
+            private-src/rostoc-macos-build-preview.zip
           if-no-files-found: ignore
 
       - name: Detect release upload token
@@ -928,7 +928,7 @@ jobs:
             [[ -d "$dir" ]] || continue
             cand=$(find "$dir" -maxdepth 1 -name 'Rostoc.app.tar.gz' -print -quit 2>/dev/null || true)
             if [[ -z "$cand" ]]; then
-              cand=$(find "$dir" -maxdepth 1 -name 'Coro.app.tar.gz' -print -quit 2>/dev/null || true)
+              cand=$(find "$dir" -maxdepth 1 -name 'Rostoc.app.tar.gz' -print -quit 2>/dev/null || true)
             fi
             if [[ -z "$cand" ]]; then
               cand=$(find "$dir" -maxdepth 1 -name '*.app.tar.gz' -print -quit 2>/dev/null || true)
@@ -1545,7 +1545,7 @@ jobs:
           if (Test-Path build/runtime_staging/runtime_manifest.json) {
             Copy-Item build/runtime_staging/runtime_manifest.json windows_runtime_manifest.json -ErrorAction SilentlyContinue
           }
-          $zipPath = 'coro-windows-bundle.zip'
+          $zipPath = 'rostoc-windows-bundle.zip'
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -Force
           Write-Host "[INFO] Created $zipPath"
@@ -1555,7 +1555,7 @@ jobs:
         with:
           name: windows-preview
           path: |
-            private-src/coro-windows-bundle.zip
+            private-src/rostoc-windows-bundle.zip
             private-src/windows_runtime_manifest.json
           if-no-files-found: error
 
