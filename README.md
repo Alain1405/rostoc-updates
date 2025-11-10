@@ -25,3 +25,9 @@ If either side is missing the shared secrets, the dispatch/workflows will fail f
 - Require commit status **`rostoc-updates/ci`** on the main branch (and any long-lived release branches) so merges only pass after the public CI workflow succeeds.
 - Optionally require **`rostoc-updates/release`** for tag protection to ensure signed builds finish before the release is published.
 - (Optional) Add a README badge pointing at the public workflow if you want a visible signal; the protected status already does the heavy lifting.
+
+## 🛠 Local tooling
+
+- Install workflow linters: `brew install actionlint`
+- Format workflow YAML: `make format`
+- Lint workflow logic: `make lint`

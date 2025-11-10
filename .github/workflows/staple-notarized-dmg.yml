@@ -1,94 +1,94 @@
 name: Staple Notarized DMGs
 
 on:
-    schedule:
-        # Run every 30 minutes
-        - cron: "*/30 * * * *"
-    workflow_dispatch:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
 permissions:
-    contents: write
-    actions: write
+  contents: write
+  actions: write
 
 jobs:
-    check-pending:
-        runs-on: ubuntu-latest
-        outputs:
-            pending-count: ${{ steps.pending.outputs.count }}
-        steps:
-            - id: pending
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  RESPONSE=$(curl -sf "https://alain1405.github.io/rostoc-updates/releases.json" || true)
-                  if [[ -z "$RESPONSE" ]]; then
-                      echo "count=0" >> "$GITHUB_OUTPUT"
-                      echo "No releases.json detected; skipping stapler run"
-                      exit 0
-                  fi
+  check-pending:
+    runs-on: ubuntu-latest
+    outputs:
+      pending-count: ${{ steps.pending.outputs.count }}
+    steps:
+      - id: pending
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -sf "https://alain1405.github.io/rostoc-updates/releases.json" || true)
+          if [[ -z "$RESPONSE" ]]; then
+              echo "count=0" >> "$GITHUB_OUTPUT"
+              echo "No releases.json detected; skipping stapler run"
+              exit 0
+          fi
 
-                  COUNT=$(echo "$RESPONSE" | jq '[.releases[] | select(.platforms["darwin-aarch64"].installer.notarization_status == "pending")] | length')
-                  echo "Pending notarizations: ${COUNT}"
-                  echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+          COUNT=$(echo "$RESPONSE" | jq '[.releases[] | select(.platforms["darwin-aarch64"].installer.notarization_status == "pending")] | length')
+          echo "Pending notarizations: ${COUNT}"
+          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
 
-    staple-and-upload:
-        runs-on: macos-latest
-        needs: check-pending
-        if: needs.check-pending.outputs.pending-count != '0'
-        permissions:
-            contents: write
-            actions: write
+  staple-and-upload:
+    runs-on: macos-latest
+    needs: check-pending
+    if: needs.check-pending.outputs.pending-count != '0'
+    permissions:
+      contents: write
+      actions: write
+    env:
+      PRIVATE_REPO: Alain1405/rostoc
+    steps:
+      - name: Setup SSH agent for private repo
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+      - name: Add GitHub to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          path: private-src
+
+      - name: Process pending notarizations
+        working-directory: private-src
         env:
-            PRIVATE_REPO: Alain1405/rostoc
-        steps:
-            - name: Setup SSH agent for private repo
-              uses: webfactory/ssh-agent@v0.9.0
-              with:
-                  ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+        run: |
+          # Script now reads from releases.json on GitHub Pages
+          # No artifact download needed!
+          bash scripts/macos/staple_and_upload_dmg.sh
 
-            - name: Add GitHub to known_hosts
-              run: |
-                  mkdir -p ~/.ssh
-                  ssh-keyscan github.com >> ~/.ssh/known_hosts
+      - name: Disable stapler when queue empty
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -sf "https://alain1405.github.io/rostoc-updates/releases.json" || true)
+          if [[ -z "$RESPONSE" ]]; then
+              echo "No releases.json found; leaving workflow enabled"
+              exit 0
+          fi
 
-            - name: Checkout private repo
-              uses: actions/checkout@v4
-              with:
-                  repository: ${{ env.PRIVATE_REPO }}
-                  ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
-                  path: private-src
-
-            - name: Process pending notarizations
-              working-directory: private-src
-              env:
-                  APPLE_ID: ${{ secrets.APPLE_ID }}
-                  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-                  APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-                  GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
-              run: |
-                  # Script now reads from releases.json on GitHub Pages
-                  # No artifact download needed!
-                  bash scripts/macos/staple_and_upload_dmg.sh
-
-            - name: Disable stapler when queue empty
-              if: always()
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
-              run: |
-                  set -euo pipefail
-                  RESPONSE=$(curl -sf "https://alain1405.github.io/rostoc-updates/releases.json" || true)
-                  if [[ -z "$RESPONSE" ]]; then
-                      echo "No releases.json found; leaving workflow enabled"
-                      exit 0
-                  fi
-
-                  PENDING=$(echo "$RESPONSE" | jq '[.releases[] | select(.platforms["darwin-aarch64"].installer.notarization_status == "pending")] | length')
-                  if [[ "$PENDING" -eq 0 ]]; then
-                      echo "No pending notarizations remain; disabling workflow schedule"
-                      curl -s -X PUT \
-                        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-                        -H "Accept: application/vnd.github+json" \
-                        https://api.github.com/repos/Alain1405/rostoc-updates/actions/workflows/staple-notarized-dmg.yml/disable >/dev/null
-                  else
-                      echo "Pending notarizations remaining: ${PENDING}; keeping workflow enabled"
-                  fi
+          PENDING=$(echo "$RESPONSE" | jq '[.releases[] | select(.platforms["darwin-aarch64"].installer.notarization_status == "pending")] | length')
+          if [[ "$PENDING" -eq 0 ]]; then
+              echo "No pending notarizations remain; disabling workflow schedule"
+              curl -s -X PUT \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                https://api.github.com/repos/Alain1405/rostoc-updates/actions/workflows/staple-notarized-dmg.yml/disable >/dev/null
+          else
+              echo "Pending notarizations remaining: ${PENDING}; keeping workflow enabled"
+          fi

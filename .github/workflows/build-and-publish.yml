@@ -4,36 +4,36 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to build from private repo"
+        description: 'Branch, tag, or SHA to build from private repo'
         required: false
         type: string
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA of the private repo (for stamping)"
+        description: 'Commit SHA of the private repo (for stamping)'
         required: false
         type: string
       initiator:
-        description: "Who triggered the run (for logging/summaries)"
+        description: 'Who triggered the run (for logging/summaries)'
         required: false
         type: string
       is_release:
-        description: "Whether to execute release publishing steps"
+        description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to build from private repo"
+        description: 'Branch, tag, or SHA to build from private repo'
         required: false
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA of the private repo (for stamping)"
+        description: 'Commit SHA of the private repo (for stamping)'
         required: false
       initiator:
-        description: "Who triggered the run (for logging/summaries)"
+        description: 'Who triggered the run (for logging/summaries)'
         required: false
       is_release:
-        description: "Whether to execute release publishing steps"
+        description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
         default: false
@@ -68,7 +68,9 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
             echo '### ℹ️ Status updates skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
             echo '\`UPDATES_REPO_TOKEN\` not provided; omitting private repo commit status.' >> "$GITHUB_STEP_SUMMARY"
           fi
         env:
@@ -134,7 +136,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -166,8 +168,8 @@ jobs:
         working-directory: private-src
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "UV_BIN=$HOME/.local/bin" >> $GITHUB_ENV
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "UV_BIN=$HOME/.local/bin" >> "$GITHUB_ENV"
 
       - name: Cache Python wheels
         uses: actions/cache@v4
@@ -200,8 +202,8 @@ jobs:
       - name: Run smoke tests
         working-directory: private-src
         env:
-          REQUIRE_ROSI: "0"
-          CORO_ROSI_DISABLED: "1"
+          REQUIRE_ROSI: '0'
+          CORO_ROSI_DISABLED: '1'
         run: pnpm smoke
 
   build-macos:
@@ -271,7 +273,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -303,8 +305,8 @@ jobs:
         working-directory: private-src
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "UV_BIN=$HOME/.local/bin" >> $GITHUB_ENV
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "UV_BIN=$HOME/.local/bin" >> "$GITHUB_ENV"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Cache Python wheels
         uses: actions/cache@v4
@@ -434,9 +436,11 @@ jobs:
           VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "[INFO] Building version: $VERSION"
-          echo "SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
-          echo "VITE_SENTRY_RELEASE=rostoc@$VERSION" >> "$GITHUB_ENV"
-          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          {
+            echo "SENTRY_RELEASE=rostoc@$VERSION"
+            echo "VITE_SENTRY_RELEASE=rostoc@$VERSION"
+            echo "APP_VERSION=$VERSION"
+          } >> "$GITHUB_ENV"
 
       - name: Validate version matches tag (release builds only)
         if: inputs.is_release
@@ -477,9 +481,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          ENABLE_RUNTIME_CACHE: "1"
-          UV_DISABLE_WORKSPACE: "1"
-          UV_PROJECT_ENVIRONMENT: "shared"
+          ENABLE_RUNTIME_CACHE: '1'
+          UV_DISABLE_WORKSPACE: '1'
+          UV_PROJECT_ENVIRONMENT: 'shared'
         run: |
           set -euo pipefail
           echo "[INFO] Starting build - output will be saved to build-macos.log"
@@ -641,8 +645,10 @@ jobs:
           RELEASE_TAG="${{ steps.extract_version.outputs.version }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          echo "submission_id,dmg_filename,release_tag,dmg_path,submitted_at" > "${PENDING_FILE}"
-          echo "${SUBMISSION_ID},${DMG_FILENAME},${RELEASE_TAG},${DMG_PATH},${TIMESTAMP}" >> "${PENDING_FILE}"
+          {
+            echo "submission_id,dmg_filename,release_tag,dmg_path,submitted_at"
+            echo "${SUBMISSION_ID},${DMG_FILENAME},${RELEASE_TAG},${DMG_PATH},${TIMESTAMP}"
+          } > "${PENDING_FILE}"
 
           echo "[INFO] Saved pending notarization metadata to ${PENDING_FILE}"
           cat "${PENDING_FILE}"
@@ -707,10 +713,12 @@ jobs:
           PYBIN="$APP_PATH/$MACOS_RES/$PYTHON_PATH"
           APP_PARENT=$(dirname "$APP_PATH")
           APP_NAME=$(basename "$APP_PATH")
-          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
-          echo "bundle_dir=$APP_PARENT" >> "$GITHUB_OUTPUT"
-          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
-          echo "python_path=$PYBIN" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_path=$APP_PATH"
+            echo "bundle_dir=$APP_PARENT"
+            echo "app_name=$APP_NAME"
+            echo "python_path=$PYBIN"
+          } >> "$GITHUB_OUTPUT"
           if [ ! -x "$PYBIN" ]; then
             echo "::error::Embedded python binary not found at canonical location: $PYBIN"
             exit 1
@@ -894,7 +902,9 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
             echo '### ℹ️ Release asset upload skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
             echo '\`UPDATES_REPO_TOKEN\` not provided; skipping release artifact upload.' >> "$GITHUB_STEP_SUMMARY"
           fi
         env:
@@ -986,14 +996,16 @@ jobs:
           cp "$SIGNATURE" "../${{ env.UPDATES_DIR }}/macos/Rostoc.app.tar.gz.sig"
 
           # Stamp version file
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
-          echo "version=${VERSION}" >> "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
-          echo "git_sha=$(git rev-parse --short HEAD)" >> "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
+          {
+            date -u +"%Y-%m-%dT%H:%M:%SZ"
+            echo "version=${VERSION}"
+            echo "git_sha=$(git rev-parse --short HEAD)"
+          } > "../${{ env.UPDATES_DIR }}/${{ env.VERSION_FILE }}"
 
           # Generate checksums
-          (cd "../${{ env.UPDATES_DIR }}/macos" && shasum -a 256 *.tar.gz > checksums.txt)
+          (cd "../${{ env.UPDATES_DIR }}/macos" && shasum -a 256 ./*.tar.gz > checksums.txt)
 
-          echo "tarball_name=$TARBALL_NAME" >> $GITHUB_OUTPUT
+          echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Upload release assets to private repo
         if: inputs.is_release && steps.detect-release-token.outputs.available == 'true'
@@ -1073,7 +1085,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -1231,9 +1243,9 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          ENABLE_RUNTIME_CACHE: "1"
-          UV_DISABLE_WORKSPACE: "1"
-          UV_PROJECT_ENVIRONMENT: "shared"
+          ENABLE_RUNTIME_CACHE: '1'
+          UV_DISABLE_WORKSPACE: '1'
+          UV_PROJECT_ENVIRONMENT: 'shared'
         run: |
           set -euo pipefail
           # Only purge PyO3 build artifacts for release builds; for preview keep them to improve cache reuse
@@ -1263,9 +1275,9 @@ jobs:
           ATTEMPT=1
           BUILD_EXIT_CODE=1
 
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
             echo "[INFO] Build attempt $ATTEMPT of $MAX_ATTEMPTS"
-            if python scripts/build.py $BUILD_ARGS 2>&1 | tee build-windows.log; then
+            if python scripts/build.py "$BUILD_ARGS" 2>&1 | tee build-windows.log; then
               BUILD_EXIT_CODE=0
               break
             else
@@ -1280,7 +1292,7 @@ jobs:
             fi
           done
 
-          exit $BUILD_EXIT_CODE
+          exit "$BUILD_EXIT_CODE"
 
       - name: Check Python DLL linkage
         working-directory: private-src
@@ -1796,8 +1808,10 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🚀 Deployment Complete"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
           VERSION=""
           if [[ -f updates/version.txt ]]; then
             VERSION=$(grep -E '^version=' updates/version.txt | head -n 1 | cut -d'=' -f2- || true)
@@ -1805,18 +1819,20 @@ jobs:
           if [[ -z "$VERSION" ]]; then
             VERSION='${{ needs.build-macos.outputs.version }}'
           fi
-          echo "**Version:** ${VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json" >> $GITHUB_STEP_SUMMARY
-          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "**Version:** ${VERSION}"
+            echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json"
+            echo "**Artifacts:**"
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ -n "${{ needs.build-macos.outputs.tarball }}" ]; then
-            echo "- macOS artifact: macos/${{ needs.build-macos.outputs.tarball }}" >> $GITHUB_STEP_SUMMARY
+            echo "- macOS artifact: macos/${{ needs.build-macos.outputs.tarball }}" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- macOS artifact: macos/Rostoc.app.tar.gz" >> $GITHUB_STEP_SUMMARY
+            echo "- macOS artifact: macos/Rostoc.app.tar.gz" >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -n "${{ needs.build-windows.outputs.installer_name }}" ]; then
-            echo "- Windows artifact: windows/${{ needs.build-windows.outputs.installer_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Windows artifact: windows/${{ needs.build-windows.outputs.installer_name }}" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "**Pages URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Pages URL:** ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enable stapler workflow schedule
         env:
@@ -1847,7 +1863,9 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
             echo '### ℹ️ Final status skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
             echo '\`UPDATES_REPO_TOKEN\` not provided; final commit status omitted.' >> "$GITHUB_STEP_SUMMARY"
           fi
         env:

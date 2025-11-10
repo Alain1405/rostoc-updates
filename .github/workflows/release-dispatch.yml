@@ -6,14 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag or branch to release"
+        description: 'Tag or branch to release'
         required: false
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA for metadata stamping"
+        description: 'Commit SHA for metadata stamping'
         required: false
       initiator:
-        description: "Triggering user or source context"
+        description: 'Triggering user or source context'
         required: false
 
 permissions:
