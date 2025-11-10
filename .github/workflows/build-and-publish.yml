@@ -368,6 +368,19 @@ jobs:
         working-directory: private-src
         run: pnpm install --frozen-lockfile
 
+      - name: Stamp build version
+        working-directory: private-src
+        env:
+          GITHUB_SHA: ${{ inputs.commit_sha || github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_VERSION:-}" ]]; then
+            scripts/ci/stamp_dev_version.sh --version "$RELEASE_VERSION"
+          else
+            scripts/ci/stamp_dev_version.sh
+          fi
+
       - name: Stage Python runtime (before Tauri build/sign)
         working-directory: private-src
         run: |
@@ -384,7 +397,7 @@ jobs:
           set -euo pipefail
           echo "[INFO] Signing Python binaries and libraries in build/runtime_staging/pyembed/python"
           echo "[INFO] These will be synced to src-tauri/ by build.py, preserving signatures"
-          
+
           # Sign all executables in bin/
           if [ -d "build/runtime_staging/pyembed/python/bin" ]; then
             find build/runtime_staging/pyembed/python/bin -type f \( -perm +111 -o -name "python*" \) | while read -r binary; do
@@ -398,7 +411,7 @@ jobs:
               fi
             done
           fi
-          
+
           # Sign all dylibs and .so files in lib/
           if [ -d "build/runtime_staging/pyembed/python/lib" ]; then
             find build/runtime_staging/pyembed/python/lib -type f \( -name "*.dylib" -o -name "*.so" \) | while read -r lib; do
@@ -409,21 +422,8 @@ jobs:
                 "$lib" || echo "    Warning: failed to sign $lib"
             done
           fi
-          
-          echo "[INFO] Python runtime signing complete in staging area"
 
-      - name: Stamp build version
-        working-directory: private-src
-        env:
-          GITHUB_SHA: ${{ inputs.commit_sha || github.sha }}
-          GITHUB_RUN_NUMBER: ${{ github.run_number }}
-        run: |
-          set -euo pipefail
-          if [[ -n "${RELEASE_VERSION:-}" ]]; then
-            scripts/ci/stamp_dev_version.sh --version "$RELEASE_VERSION"
-          else
-            scripts/ci/stamp_dev_version.sh
-          fi
+          echo "[INFO] Python runtime signing complete in staging area"
 
       - name: Extract version
         id: extract_version
