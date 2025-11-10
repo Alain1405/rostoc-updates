@@ -222,8 +222,10 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
-            "submitted_at": "2025-11-09T08:13:23Z"
+            "notarization_status": "failed",
+            "submitted_at": "2025-11-09T08:13:23Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T10:41:43Z"
           }
         },
         "windows-x86_64": {
