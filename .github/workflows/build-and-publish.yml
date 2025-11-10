@@ -1820,7 +1820,7 @@ jobs:
 
       - name: Enable stapler workflow schedule
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           echo "Ensuring stapler workflow is enabled for notarization follow-up"
