@@ -188,8 +188,10 @@
           "installer": {
             "dmg_url": "",
             "available": false,
-            "notarization_status": "pending",
-            "submitted_at": "2025-11-09T09:02:12Z"
+            "notarization_status": "failed",
+            "submitted_at": "2025-11-09T09:02:12Z",
+            "notarized_at": null,
+            "failed_at": "2025-11-10T10:41:42Z"
           }
         },
         "windows-x86_64": {
