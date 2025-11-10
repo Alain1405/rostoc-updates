@@ -42,6 +42,7 @@ permissions:
   contents: write # Push updates to this repo / checkout private repo
   pages: write # Deploy Pages when releasing
   id-token: write # OIDC for Pages when releasing
+  actions: write # Enable stapler workflow after release
 
 env:
   PRIVATE_REPO: alain1405/rostoc
@@ -476,7 +477,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          ALLOW_PARTIAL_BUNDLE: 1
           ENABLE_RUNTIME_CACHE: "1"
           UV_DISABLE_WORKSPACE: "1"
           UV_PROJECT_ENVIRONMENT: "shared"
@@ -1231,7 +1231,6 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          ALLOW_PARTIAL_BUNDLE: 1
           ENABLE_RUNTIME_CACHE: "1"
           UV_DISABLE_WORKSPACE: "1"
           UV_PROJECT_ENVIRONMENT: "shared"
@@ -1728,6 +1727,7 @@ jobs:
       contents: write
       pages: write
       id-token: write
+      actions: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -1817,6 +1817,18 @@ jobs:
             echo "- Windows artifact: windows/${{ needs.build-windows.outputs.installer_name }}" >> $GITHUB_STEP_SUMMARY
           fi
           echo "**Pages URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Enable stapler workflow schedule
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Ensuring stapler workflow is enabled for notarization follow-up"
+          curl -s -X PUT \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/Alain1405/rostoc-updates/actions/workflows/staple-notarized-dmg.yml/enable >/dev/null
+          echo "Stapler workflow enabled"
 
   finalize-status:
     runs-on: ubuntu-latest
