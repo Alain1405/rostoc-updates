@@ -1,10 +1,43 @@
 {
   "releases": [
     {
+      "version": "0.2.91",
+      "pub_date": "2025-11-14T20:28:13Z",
+      "notes": "Release 0.2.91",
+      "latest": true,
+      "platforms": {
+        "darwin-aarch64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.91-darwin-aarch64.app.tar.gz",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTA1QmdkWEk3ZmpPT0E1c1BvdSszMmswbGpsaWFpODRyVXJMUEFaVnpvZVorQUJXYW51QjVFT1p3bEJUK2F6RGx6Mlg3YXFHVkZUTUpmV0JEQXdONHdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMTUxNjI0CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKMHpvUk5OM1FGTlNwVU5FYkQ5VWJlWExQQVVYS251b25VQWhzd3BmVXZLUER6U3paZVVHZjNtOWtwMG5uaDNGUjJhek8yU3Y3ajBVSHRrS0J4MngyQWc9PQo=",
+            "available": true
+          },
+          "installer": {
+            "dmg_url": "",
+            "available": false,
+            "notarization_status": "pending",
+            "submission_id": "db71e54f-bb23-4d4e-b6e6-05fe6d15f594",
+            "submitted_at": "2025-11-14T20:28:13Z"
+          }
+        },
+        "windows-x86_64": {
+          "updater": {
+            "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.91-windows-x86_64.msi",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXhtZC9lN3lLNDFhU1BtaURtOGdwVUFUZkV3cnFWRnNWeTVuK3Jkd2U2OGJEeEU2OFJwR0xYUXpUQUQrY2dJd3JBMm52VXBzQ1N1L2RidTV0Z2FCVmdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMTUxODcyCWZpbGU6Um9zdG9jXzAuMi45MV94NjRfZW4tVVMubXNpCnNjaXdFMkRlL0pVdVlUSUJwRkR5SDA2MW56Z296cDIvNHpvOXZyQUxQbm9aSnF0R3hmQ0NlVDExcXB3OEUxWEFVbGZORExsOEdWbGFraXY2cHFyNENRPT0K",
+            "available": true
+          },
+          "installer": {
+            "msi_url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.91-windows-x86_64.msi",
+            "available": true
+          }
+        }
+      }
+    },
+    {
       "version": "0.2.90",
       "pub_date": "2025-11-10T18:58:12Z",
       "notes": "Release 0.2.90",
-      "latest": true,
+      "latest": false,
       "platforms": {
         "darwin-aarch64": {
           "updater": {
