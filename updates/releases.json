@@ -13,11 +13,12 @@
             "available": true
           },
           "installer": {
-            "dmg_url": "",
-            "available": false,
-            "notarization_status": "pending",
+            "dmg_url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc_0.2.92_aarch64.dmg",
+            "available": true,
+            "notarization_status": "accepted",
             "submission_id": "a435032d-d7cb-425d-b8e8-98407ee3c6b9",
-            "submitted_at": "2025-11-15T19:02:36Z"
+            "submitted_at": "2025-11-15T19:02:36Z",
+            "notarized_at": "2025-11-15T19:35:17Z"
           }
         },
         "windows-x86_64": {
