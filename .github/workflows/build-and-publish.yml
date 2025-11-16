@@ -1007,28 +1007,32 @@ jobs:
 
           echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release assets to private repo
+      - name: Upload release assets to GitHub Releases
         if: inputs.is_release && steps.detect-release-token.outputs.available == 'true'
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.UPDATES_REPO_TOKEN }}
-          owner: alain1405
-          repo: rostoc
-          tag: ${{ inputs.ref }}
-          draft: true
-          allowUpdates: true
-          artifacts: |
-            updates/macos/Rostoc.app.tar.gz
-            updates/macos/Rostoc.app.tar.gz.sig
-            updates/version.txt
-          artifactContentType: application/octet-stream
+          tag_name: ${{ inputs.ref }}
+          draft: false
+          prerelease: false
+          files: |
+            ${{ env.UPDATES_DIR }}/macos/Rostoc-${{ steps.extract_version.outputs.version }}-darwin-aarch64.app.tar.gz
+            ${{ env.UPDATES_DIR }}/macos/Rostoc-${{ steps.extract_version.outputs.version }}-darwin-aarch64.app.tar.gz.sig
+            ${{ env.UPDATES_DIR }}/macos/Rostoc_${{ steps.extract_version.outputs.version }}_aarch64.dmg
+          fail_on_unmatched_files: false
+          body: |
+            ## Rostoc ${{ steps.extract_version.outputs.version }}
+            
+            Release notes coming soon.
 
-      - name: Upload artifacts for Pages deployment
+      - name: Upload artifacts for Pages deployment (manifests only)
         if: inputs.is_release
         uses: actions/upload-artifact@v4
         with:
           name: rostoc-updates
-          path: ${{ env.UPDATES_DIR }}/*
+          path: |
+            ${{ env.UPDATES_DIR }}/version.txt
+            ${{ env.UPDATES_DIR }}/macos/checksums.txt
 
   build-windows:
     needs:
@@ -1650,12 +1654,25 @@ jobs:
           "latest_name=$latestName" >> $env:GITHUB_OUTPUT
           "checksum=$($hash.Hash)" >> $env:GITHUB_OUTPUT
 
-      - name: Upload artifacts for Pages deployment (Windows)
+      - name: Upload Windows release assets to GitHub Releases
+        if: inputs.is_release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          tag_name: ${{ inputs.ref }}
+          draft: false
+          prerelease: false
+          files: |
+            updates/windows/Rostoc-${{ steps.extract_version_win.outputs.version }}-windows-x86_64.msi
+            updates/windows/Rostoc-${{ steps.extract_version_win.outputs.version }}-windows-x86_64.msi.sig
+          fail_on_unmatched_files: false
+
+      - name: Upload artifacts for Pages deployment (Windows checksums only)
         if: inputs.is_release
         uses: actions/upload-artifact@v4
         with:
           name: rostoc-updates-windows
-          path: updates/windows
+          path: updates/windows/checksums.txt
 
   generate-releases-json:
     needs:
