@@ -74,6 +74,35 @@ jobs:
                   
                   # Copy updates directory contents to root level (preserves releases.json, latest.json, etc.)
                   cp -r rostoc-updates/updates/* ./site/
+                  
+                  # Download existing binary artifacts from GitHub Pages to preserve them
+                  echo "Downloading existing binaries from GitHub Pages..."
+                  
+                  # Download macOS binaries if they exist
+                  mkdir -p ./site/macos
+                  for file in $(curl -s https://alain1405.github.io/rostoc-updates/releases.json | jq -r '.releases[].platforms."darwin-aarch64".updater.url' | grep -o '[^/]*$'); do
+                    echo "Downloading $file..."
+                    curl -f -s -o "./site/macos/$file" "https://alain1405.github.io/rostoc-updates/macos/$file" || echo "File $file not found, skipping"
+                  done
+                  
+                  # Download macOS signatures
+                  for file in ./site/macos/*.tar.gz; do
+                    if [ -f "$file" ]; then
+                      sigfile="${file}.sig"
+                      remotefile="$(basename "$file").sig"
+                      echo "Downloading $remotefile..."
+                      curl -f -s -o "$sigfile" "https://alain1405.github.io/rostoc-updates/macos/$remotefile" || echo "Signature $remotefile not found, skipping"
+                    fi
+                  done
+                  
+                  # Download Windows binaries if they exist
+                  mkdir -p ./site/windows
+                  for file in $(curl -s https://alain1405.github.io/rostoc-updates/releases.json | jq -r '.releases[].platforms."windows-x86_64".updater.url' | grep -o '[^/]*$'); do
+                    echo "Downloading $file..."
+                    curl -f -s -o "./site/windows/$file" "https://alain1405.github.io/rostoc-updates/windows/$file" || echo "File $file not found, skipping"
+                  done
+                  
+                  echo "Binary preservation complete"
 
             - name: Upload artifact
               uses: actions/upload-pages-artifact@v3
