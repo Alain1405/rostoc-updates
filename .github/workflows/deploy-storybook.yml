@@ -66,13 +66,19 @@ jobs:
 
             - name: Prepare deployment directory
               run: |
-                  mkdir -p ./deploy/storybook
-                  cp -r rostoc/storybook-static/* ./deploy/storybook/
+                  # Create site directory structure
+                  mkdir -p ./site/storybook
+                  
+                  # Copy storybook to /storybook subdirectory
+                  cp -r rostoc/storybook-static/* ./site/storybook/
+                  
+                  # Copy updates directory contents to root level (preserves releases.json, latest.json, etc.)
+                  cp -r rostoc-updates/updates/* ./site/
 
             - name: Upload artifact
               uses: actions/upload-pages-artifact@v3
               with:
-                  path: "./deploy"
+                  path: "./site"
 
             - name: Deploy to GitHub Pages
               id: deployment
