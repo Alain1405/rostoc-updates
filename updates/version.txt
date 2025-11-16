@@ -1,3 +1,3 @@
-2025-11-16T17:07:38Z
-version=0.2.93
-git_sha=723dfc0
+2025-11-16T18:54:36Z
+version=0.2.94
+git_sha=76a12ef

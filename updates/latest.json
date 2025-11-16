@@ -1,15 +1,15 @@
 {
-  "version": "0.2.93",
-  "notes": "Release 0.2.93",
-  "pub_date": "2025-11-16T17:15:14Z",
+  "version": "0.2.94",
+  "notes": "Release 0.2.94",
+  "pub_date": "2025-11-16T19:04:57Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.93-darwin-aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTRhbGpoS2VLOHJHRytjS3d6aXhFZ3hqTGtyaWhnWVlYRTVLWERKcEZKL29JS1M3blVkMjE1ZGpqV0tVSkxFNDFJZldNaTRTWEtVNUE5aDI1SW9URmcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMzEyODEyCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKODMrSVR1UmVxNlZYK0h3MWlPaERiMXJPajF4QjVDaFFIVFcrZkVJZ3ViSzlRUVprWDlzUEZYSXlMVjMwd0dhR0h3c0tndTM2M3c5b29ScGhMUDAyREE9PQo="
+      "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.94-darwin-aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXlwM3BZOERNNTZGcE5aWDZYd29EbEdaYTBXNXBicGVjc1NWQVM5ckErc1FTZGNLc09oMmZjSUczSjhQZjZGN2lMWXhDbjBZcUtoWHZwNXprVERDMEFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMzE5MjMwCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKM1lkQXorTXFvY1NOTnRyV3JQckpDMUZXRDdYeUdBeHNNSnhLWDlTZXdhdWw1bnVDbkZEV3JGZzVCR04wU0RlaFY2ZXJ2REdOK2ZnVFJuUE1rZHJJQXc9PQo="
     },
     "windows-x86_64": {
-      "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.93-windows-x86_64.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTkzdHFVQ0Y2VmVYNE1RVHB0dU11S0ZaZmpTL04xTkJzbytteDJETnJmUEJIdW85R09mVDhaRTJxWDRWb2FRb0dlbGFISHlSYlZ5WmUyck4zL0Y2V0FjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMzEzMTMwCWZpbGU6Um9zdG9jXzAuMi45M194NjRfZW4tVVMubXNpCmJkZHNQY3lzYTRFR3MraHZQaWdSaGdBaHlncGlQeHE0Wk5PRmZheEM3ZjlqZk40bnY3OWpUL25URGoyZXd5YWdyQ0lGU0pzS2xBak9qMTVJYWtZa0JRPT0K"
+      "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.94-windows-x86_64.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXhGMy9kSW03SnBzUWp5MlBYblRJOE53L212WWVmTXpQU2t6Umc4enV2NUNxcmdhWUJ3Ny9ENUxWNHFxTktSUUNtMWpFV0VSajI0RXZYZTEzZm54Q2djPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMzE5Njg3CWZpbGU6Um9zdG9jXzAuMi45NF94NjRfZW4tVVMubXNpCmNIRjFOejVTdUJpdWpBRlZYVTBTeVNXMENoU3k3ZFdJNGNnZGNGcVlIMTlMTFY3QXVVdDFJK3pIWnhlb2dOS1VZcHIxTkxCbG9VTmlmM3oydlJ2WkFRPT0K"
     }
   }
 }
