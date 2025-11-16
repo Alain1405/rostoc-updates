@@ -1,79 +1,79 @@
 name: Deploy Storybook
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/deploy-storybook.yml'
-  repository_dispatch:
-    types:
-      - storybook-update
-  workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - ".github/workflows/deploy-storybook.yml"
+    repository_dispatch:
+        types:
+            - storybook-update
+    workflow_dispatch:
 
 # Permissions for GitHub Pages deployment
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+    contents: read
+    pages: write
+    id-token: write
 
 # Separate concurrency group for Storybook - won't block main Pages deployment
 concurrency:
-  group: 'pages-storybook'
-  cancel-in-progress: false
+    group: "pages-storybook"
+    cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}storybook/
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout rostoc-updates (this repo)
-        uses: actions/checkout@v4
-        with:
-          path: rostoc-updates
+    build-and-deploy:
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}storybook/
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout rostoc-updates (this repo)
+              uses: actions/checkout@v4
+              with:
+                  path: rostoc-updates
 
-      - name: Checkout private rostoc repo
-        uses: actions/checkout@v4
-        with:
-          repository: Alain1405/rostoc
-          token: ${{ secrets.UPDATES_REPO_TOKEN }}
-          path: rostoc
-          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+            - name: Checkout private rostoc repo
+              uses: actions/checkout@v4
+              with:
+                  repository: Alain1405/rostoc
+                  token: ${{ secrets.UPDATES_REPO_TOKEN }}
+                  path: rostoc
+                  ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v2
+              with:
+                  version: 9
 
-      - name: Install dependencies
-        run: |
-          cd rostoc
-          pnpm install --frozen-lockfile
+            - name: Install dependencies
+              run: |
+                  cd rostoc
+                  pnpm install --frozen-lockfile
 
-      - name: Build Storybook
-        run: |
-          cd rostoc
-          STORYBOOK_BASE_PATH=/storybook/ pnpm build-storybook
-        env:
-          NODE_ENV: production
+            - name: Build Storybook
+              run: |
+                  cd rostoc
+                  STORYBOOK_BASE_PATH=/storybook/ pnpm build-storybook
+              env:
+                  NODE_ENV: production
 
-      - name: Prepare deployment directory
-        run: |
-          mkdir -p ./deploy/storybook
-          cp -r rostoc/storybook-static/* ./deploy/storybook/
+            - name: Prepare deployment directory
+              run: |
+                  mkdir -p ./deploy/storybook
+                  cp -r rostoc/storybook-static/* ./deploy/storybook/
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './deploy'
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: "./deploy"
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
