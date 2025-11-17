@@ -1,11 +1,6 @@
 name: Deploy Storybook
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/deploy-storybook.yml'
   repository_dispatch:
     types:
       - storybook-update
@@ -13,9 +8,7 @@ on:
 
 # Permissions for GitHub Pages deployment
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # Separate concurrency group for Storybook - won't block main Pages deployment
 concurrency:
@@ -26,20 +19,15 @@ jobs:
   build-and-deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}storybook/
+      url: https://alain1405.github.io/rostoc-updates/storybook/
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout rostoc-updates (this repo)
-        uses: actions/checkout@v4
-        with:
-          path: rostoc-updates
-
       - name: Checkout private rostoc repo
         uses: actions/checkout@v4
         with:
           repository: Alain1405/rostoc
-          token: ${{ secrets.UPDATES_REPO_TOKEN }}
           path: rostoc
+# actionlint: disable-next-line expr
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
 
       - name: Setup Node.js
@@ -64,22 +52,14 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Prepare deployment directory
-        run: |
-          # Create site directory structure
-          mkdir -p ./site/storybook
-
-          # Copy storybook to /storybook subdirectory
-          cp -r rostoc/storybook-static/* ./site/storybook/
-
-          # Copy updates directory contents to root level (preserves releases.json, latest.json, etc.)
-          cp -r rostoc-updates/updates/* ./site/
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish Storybook to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: './site'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: rostoc/storybook-static
+          destination_dir: storybook
+          keep_files: true
+          full_commit_message: "docs(storybook): update from ${{ github.sha }}"
+          user_name: 'github-actions[bot]'
+          user_email: '41898282+github-actions[bot]@users.noreply.github.com'

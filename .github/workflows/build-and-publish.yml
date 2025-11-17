@@ -40,8 +40,6 @@ on:
 
 permissions:
   contents: write # Push updates to this repo / checkout private repo
-  pages: write # Deploy Pages when releasing
-  id-token: write # OIDC for Pages when releasing
   actions: write # Enable stapler workflow after release
 
 env:
@@ -1804,12 +1802,10 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      pages: write
-      id-token: write
       actions: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: https://alain1405.github.io/rostoc-updates/
     steps:
       - name: Checkout updates repo
         uses: actions/checkout@v4
@@ -1864,31 +1860,7 @@ jobs:
             echo "No changes to commit"
           fi
 
-      - name: Download existing Pages content
-        continue-on-error: true
-        run: |
-          # Try to download existing Pages deployment to preserve Storybook
-          echo "[INFO] Attempting to download existing GitHub Pages content..."
-
-          # Use GitHub API to get the latest Pages deployment artifact
-          # This preserves the Storybook that was deployed separately
-          curl -H "Authorization: token ${{ github.token }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pages/builds/latest" \
-            -o pages-build-info.json || true
-
-          # For simplicity, we'll use wget to mirror the live site
-          # Download the storybook subdirectory if it exists
-          if curl -fsSL -I https://alain1405.github.io/rostoc-updates/storybook/ | grep -q "200 OK"; then
-            echo "[INFO] Storybook found on live site, downloading..."
-            mkdir -p pages-temp/storybook
-            wget -r -np -nH -P pages-temp -A "*.html,*.js,*.css,*.json,*.svg,*.png,*.jpg,*.ico" \
-              "https://alain1405.github.io/rostoc-updates/storybook/" 2>/dev/null || true
-          else
-            echo "[INFO] No Storybook found on live site"
-          fi
-
-      - name: Prepare Pages deployment (preserve Storybook)
+      - name: Prepare Pages deployment
         run: |
           # Create deployment directory with only JSON manifests
           # Binaries are served from DigitalOcean Spaces
@@ -1901,22 +1873,19 @@ jobs:
           cp updates/macos/checksums.txt pages-deploy/macos/ 2>/dev/null || true
           cp updates/windows/checksums.txt pages-deploy/windows/ 2>/dev/null || true
 
-          # Copy preserved Storybook if it was downloaded
-          if [ -d "pages-temp/storybook" ]; then
-            echo "[INFO] Restoring Storybook to deployment..."
-            cp -r pages-temp/storybook pages-deploy/
-          else
-            echo "[INFO] No Storybook to preserve"
-          fi
+          # Ensure GitHub Pages keeps running without Jekyll
+          touch pages-deploy/.nojekyll
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish updates to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: pages-deploy
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: pages-deploy
+          keep_files: true
+          full_commit_message: "${{ format('docs(pages): publish updates v{0}', needs.build-macos.outputs.version) }}"
+          user_name: 'github-actions[bot]'
+          user_email: '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: Summary
         run: |
@@ -1944,7 +1913,7 @@ jobs:
           if [ -n "${{ needs.build-windows.outputs.installer_name }}" ]; then
             echo "- Windows artifact: windows/${{ needs.build-windows.outputs.installer_name }}" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "**Pages URL:** ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Pages URL:** https://alain1405.github.io/rostoc-updates/" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enable stapler workflow schedule
         env:
