@@ -60,7 +60,7 @@ jobs:
       - name: Build Storybook
         run: |
           cd rostoc
-          STORYBOOK_BASE_PATH=/storybook/ pnpm build-storybook
+          STORYBOOK_BASE_PATH=/rostoc-updates/storybook/ pnpm build-storybook
         env:
           NODE_ENV: production
 
@@ -73,7 +73,6 @@ jobs:
           cp -r rostoc/storybook-static/* ./site/storybook/
 
           # Copy updates directory contents to root level (preserves releases.json, latest.json, etc.)
-          # Binaries are now served from GitHub Releases, not Pages
           cp -r rostoc-updates/updates/* ./site/
 
       - name: Upload artifact

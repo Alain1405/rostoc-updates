@@ -1869,14 +1869,14 @@ jobs:
         run: |
           # Try to download existing Pages deployment to preserve Storybook
           echo "[INFO] Attempting to download existing GitHub Pages content..."
-          
+
           # Use GitHub API to get the latest Pages deployment artifact
           # This preserves the Storybook that was deployed separately
           curl -H "Authorization: token ${{ github.token }}" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/pages/builds/latest" \
             -o pages-build-info.json || true
-          
+
           # For simplicity, we'll use wget to mirror the live site
           # Download the storybook subdirectory if it exists
           if curl -fsSL -I https://alain1405.github.io/rostoc-updates/storybook/ | grep -q "200 OK"; then
