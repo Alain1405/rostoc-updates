@@ -1,15 +1,15 @@
 {
   "version": "0.2.97",
   "notes": "Release 0.2.97",
-  "pub_date": "2025-11-17T16:12:38Z",
+  "pub_date": "2025-11-17T17:56:49Z",
   "platforms": {
     "darwin-aarch64": {
       "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.97/Rostoc-0.2.97-darwin-aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQThtZHA4RUh5ZFNDZFcwS3h2ekRTUktHdWtOc2Z3bis5RkhUVkZ0MkdKNEZTM2g1citMYzF6M2svc0Q0WXBwZmtISUlSVW0zOXlJNjZKbWx1bDNRbmdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMzk1MzczCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKUWxHVUdGbXVtMFNpbUcraWxnQzFLUC85aE93ZzFBS0xWQmlBSkZkNmhBdDR1Q2d6VzlKcDBRUURhRjNweTB1ekNFbEVyaHFaR1ZhazZOeWNjdVNiQVE9PQo="
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTdoQ0J3cDlVNWFlbUVnMHU4NTkyNzZxdUtwYmRkeXBEdllyS2FoM2lRMDVrcE9ZY3FzVFFhaXhFQ0RaOGd1dGc1N3R0RENQRzF2UjIyWXVYaVY0TlFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDAxODkyCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKRWJ0aERheTVxbkthQWdnVTYvNEtrV2tOQWQ3SndQYWpQblhKcFRoTytpeCticXI4VDJMeHBlOXUxR2lkd0hDVEdjRlpEbFFvbXZSSjVaSGRJL0VQQ2c9PQo="
     },
     "windows-x86_64": {
       "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.97/Rostoc-0.2.97-windows-x86_64.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTBsN0pWTDlUcHo4WC8wRmdFZk1adHR0RnRXY0RUV3B0aUhRQWt6OXRLMG5wZ3ZHMm1hQUNtT3M0Z2RCdjRSYjRUM2hlOS83c0tyczVIazNZRGliTndvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzMzk1Njg0CWZpbGU6Um9zdG9jXzAuMi45N194NjRfZW4tVVMubXNpClRaUU5CSjhKZUswemlHT1l5RFAvYm4wQ2pIcWk5WXhBd2Y5cm50enRrK1lkdVZPbDZBNDlyTnRkOVR1cFdlcHdqRjJtNUErbmFodEZxMjBHRWUvTURRPT0K"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTNKbHNUaVFVd3pkRjRmbUkrOS9VWFVKdW9nTG9jLzQ2bUgwS0hjZStMMUE5dFpSSExDTGFNbi9WZWVRMkhzWHZoS3p0UzZORHBsWFhOdDY2WmFTQ0FRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDAyMDAwCWZpbGU6Um9zdG9jXzAuMi45N194NjRfZW4tVVMubXNpCkNZUlRmWUJZWXVVR1dCOTYrdXJLSDFtbm9hQ01XNXhoYlJYOEhnYVZpeElSZ1FhcUo3eGUvUUgrVTNwYUFkM2ZQVWtDejJNR00yZGovdy9vdDgvU0NBPT0K"
     }
   }
 }
