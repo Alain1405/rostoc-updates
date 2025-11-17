@@ -1025,14 +1025,12 @@ jobs:
             
             Release notes coming soon.
 
-      - name: Upload artifacts for Pages deployment (manifests only)
+      - name: Upload artifacts for manifest generation
         if: inputs.is_release
         uses: actions/upload-artifact@v4
         with:
           name: rostoc-updates
-          path: |
-            ${{ env.UPDATES_DIR }}/version.txt
-            ${{ env.UPDATES_DIR }}/macos/checksums.txt
+          path: ${{ env.UPDATES_DIR }}/*
 
   build-windows:
     needs:
@@ -1667,12 +1665,12 @@ jobs:
             updates/windows/Rostoc-${{ steps.extract_version_win.outputs.version }}-windows-x86_64.msi.sig
           fail_on_unmatched_files: false
 
-      - name: Upload artifacts for Pages deployment (Windows checksums only)
+      - name: Upload artifacts for manifest generation
         if: inputs.is_release
         uses: actions/upload-artifact@v4
         with:
           name: rostoc-updates-windows
-          path: updates/windows/checksums.txt
+          path: updates/windows
 
   generate-releases-json:
     needs:
@@ -1815,10 +1813,23 @@ jobs:
             echo "No changes to commit"
           fi
 
+      - name: Prepare Pages deployment (manifests only)
+        run: |
+          # Create deployment directory with only JSON manifests
+          # Binaries are served from GitHub Releases
+          mkdir -p pages-deploy
+          cp updates/*.json pages-deploy/ 2>/dev/null || true
+          cp updates/version.txt pages-deploy/ 2>/dev/null || true
+          
+          # Keep directory structure for backward compatibility but no binaries
+          mkdir -p pages-deploy/macos pages-deploy/windows
+          cp updates/macos/checksums.txt pages-deploy/macos/ 2>/dev/null || true
+          cp updates/windows/checksums.txt pages-deploy/windows/ 2>/dev/null || true
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: updates
+          path: pages-deploy
 
       - name: Deploy to GitHub Pages
         id: deployment
