@@ -1009,6 +1009,7 @@ jobs:
 
       - name: Upload binaries to DigitalOcean Spaces
         if: inputs.is_release && steps.detect-release-token.outputs.available == 'true'
+        working-directory: private-src
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
