@@ -1,0 +1,11 @@
+{
+    "version": "0.1.0",
+    "notes": "Dev stub endpoint to keep updater checks happy before a signed release exists.",
+    "pub_date": "2025-01-01T00:00:00Z",
+    "platforms": {
+        "darwin-aarch64": {
+            "signature": "ZGV2LXN0dWItc2lnbmF0dXJlLW5vdC11c2Vk",
+            "url": "https://example.com/dev/Rostoc.app.tar.gz"
+        }
+    }
+}

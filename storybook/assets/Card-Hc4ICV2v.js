@@ -1,0 +1,1 @@
+import{j as d}from"./iframe-BXD7fudD.js";function e({children:r,className:a=""}){return d.jsx("div",{className:`border border-border rounded-lg p-6 bg-card ${a}`,children:r})}try{e.displayName="Card",e.__docgenInfo={description:"",displayName:"Card",props:{className:{defaultValue:{value:""},description:"",name:"className",required:!1,type:{name:"string"}}}}}catch{}export{e as C};
