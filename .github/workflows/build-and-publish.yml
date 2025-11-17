@@ -4,36 +4,36 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to build from private repo"
+        description: 'Branch, tag, or SHA to build from private repo'
         required: false
         type: string
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA of the private repo (for stamping)"
+        description: 'Commit SHA of the private repo (for stamping)'
         required: false
         type: string
       initiator:
-        description: "Who triggered the run (for logging/summaries)"
+        description: 'Who triggered the run (for logging/summaries)'
         required: false
         type: string
       is_release:
-        description: "Whether to execute release publishing steps"
+        description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to build from private repo"
+        description: 'Branch, tag, or SHA to build from private repo'
         required: false
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA of the private repo (for stamping)"
+        description: 'Commit SHA of the private repo (for stamping)'
         required: false
       initiator:
-        description: "Who triggered the run (for logging/summaries)"
+        description: 'Who triggered the run (for logging/summaries)'
         required: false
       is_release:
-        description: "Whether to execute release publishing steps"
+        description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
         default: false
@@ -136,7 +136,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -202,8 +202,8 @@ jobs:
       - name: Run smoke tests
         working-directory: private-src
         env:
-          REQUIRE_ROSI: "0"
-          ROSTOC_ROSI_DISABLED: "1"
+          REQUIRE_ROSI: '0'
+          ROSTOC_ROSI_DISABLED: '1'
         run: pnpm smoke
 
   build-macos:
@@ -273,7 +273,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -481,9 +481,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          ENABLE_RUNTIME_CACHE: "1"
-          UV_DISABLE_WORKSPACE: "1"
-          UV_PROJECT_ENVIRONMENT: "shared"
+          ENABLE_RUNTIME_CACHE: '1'
+          UV_DISABLE_WORKSPACE: '1'
+          UV_PROJECT_ENVIRONMENT: 'shared'
         run: |
           set -euo pipefail
           echo "[INFO] Starting build - output will be saved to build-macos.log"
@@ -1114,7 +1114,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -1272,9 +1272,9 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          ENABLE_RUNTIME_CACHE: "1"
-          UV_DISABLE_WORKSPACE: "1"
-          UV_PROJECT_ENVIRONMENT: "shared"
+          ENABLE_RUNTIME_CACHE: '1'
+          UV_DISABLE_WORKSPACE: '1'
+          UV_PROJECT_ENVIRONMENT: 'shared'
         run: |
           set -euo pipefail
           # Only purge PyO3 build artifacts for release builds; for preview keep them to improve cache reuse
@@ -1681,6 +1681,7 @@ jobs:
 
       - name: Upload Windows binaries to DigitalOcean Spaces
         if: inputs.is_release
+        shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
