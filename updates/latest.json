@@ -1,15 +1,15 @@
 {
-  "version": "0.2.97",
-  "notes": "Release 0.2.97",
-  "pub_date": "2025-11-17T17:56:49Z",
+  "version": "0.2.98",
+  "notes": "Release 0.2.98",
+  "pub_date": "2025-11-17T18:59:03Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.97/Rostoc-0.2.97-darwin-aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTdoQ0J3cDlVNWFlbUVnMHU4NTkyNzZxdUtwYmRkeXBEdllyS2FoM2lRMDVrcE9ZY3FzVFFhaXhFQ0RaOGd1dGc1N3R0RENQRzF2UjIyWXVYaVY0TlFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDAxODkyCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKRWJ0aERheTVxbkthQWdnVTYvNEtrV2tOQWQ3SndQYWpQblhKcFRoTytpeCticXI4VDJMeHBlOXUxR2lkd0hDVEdjRlpEbFFvbXZSSjVaSGRJL0VQQ2c9PQo="
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.98/Rostoc-0.2.98-darwin-aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTZ6R25OT3JoY0tETzV1OXdhN0YrUnFINithMXVKZGROeUJqdlBZb0pJVHNvQ1V2a3gvamdnOHRnMCs4UXNOb2xWbGtoWWFyaHIrcnB5ajdzTXo1MUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDA1NjY1CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKeUp2a011bzBPYUFTem5nb2U1RDUrQUxrSEFONVJpQngyYkovZ0VtZUpud3YwR0JHVlFjZWxZSGRCQWZIaDJObW0xOWdsUG9oYzNaMldibmhEZ3ZlQ2c9PQo="
     },
     "windows-x86_64": {
-      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.97/Rostoc-0.2.97-windows-x86_64.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTNKbHNUaVFVd3pkRjRmbUkrOS9VWFVKdW9nTG9jLzQ2bUgwS0hjZStMMUE5dFpSSExDTGFNbi9WZWVRMkhzWHZoS3p0UzZORHBsWFhOdDY2WmFTQ0FRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDAyMDAwCWZpbGU6Um9zdG9jXzAuMi45N194NjRfZW4tVVMubXNpCkNZUlRmWUJZWXVVR1dCOTYrdXJLSDFtbm9hQ01XNXhoYlJYOEhnYVZpeElSZ1FhcUo3eGUvUUgrVTNwYUFkM2ZQVWtDejJNR00yZGovdy9vdDgvU0NBPT0K"
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.98/Rostoc-0.2.98-windows-x86_64.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQS8zZmJ2S2dkd3lBSi82N0UvV2dkVDJzbHpBUW0vZWpZa201ZUlTaTNqV0huSTBIWEhxVjJLRGtDY2RxYTR2WE5zdkpUa285MWZFTDNaT2NOa2ovdXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDA1NzM2CWZpbGU6Um9zdG9jXzAuMi45OF94NjRfZW4tVVMubXNpCjBSTmczUFpXWTRPVzVRWkZVMTJpYmpaUEk2bk01Vm9zUTJRMWRnTzNZYzQzTzZZUC9YcnRXZExSYjRzZnJtTTlUNE1yUHEwT0hvUk9JM3V6bVJ4OUN3PT0K"
     }
   }
 }
