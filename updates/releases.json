@@ -1,10 +1,43 @@
 {
   "releases": [
     {
+      "version": "0.2.98",
+      "pub_date": "2025-11-17T18:59:03Z",
+      "notes": "Release 0.2.98",
+      "latest": true,
+      "platforms": {
+        "darwin-aarch64": {
+          "updater": {
+            "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.98/Rostoc-0.2.98-darwin-aarch64.app.tar.gz",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTZ6R25OT3JoY0tETzV1OXdhN0YrUnFINithMXVKZGROeUJqdlBZb0pJVHNvQ1V2a3gvamdnOHRnMCs4UXNOb2xWbGtoWWFyaHIrcnB5ajdzTXo1MUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDA1NjY1CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKeUp2a011bzBPYUFTem5nb2U1RDUrQUxrSEFONVJpQngyYkovZ0VtZUpud3YwR0JHVlFjZWxZSGRCQWZIaDJObW0xOWdsUG9oYzNaMldibmhEZ3ZlQ2c9PQo=",
+            "available": true
+          },
+          "installer": {
+            "dmg_url": "",
+            "available": false,
+            "notarization_status": "pending",
+            "submission_id": "12584482-9ed8-44a1-94e5-da00e0f3d8b5",
+            "submitted_at": "2025-11-17T18:59:03Z"
+          }
+        },
+        "windows-x86_64": {
+          "updater": {
+            "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.98/Rostoc-0.2.98-windows-x86_64.msi",
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQS8zZmJ2S2dkd3lBSi82N0UvV2dkVDJzbHpBUW0vZWpZa201ZUlTaTNqV0huSTBIWEhxVjJLRGtDY2RxYTR2WE5zdkpUa285MWZFTDNaT2NOa2ovdXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDA1NzM2CWZpbGU6Um9zdG9jXzAuMi45OF94NjRfZW4tVVMubXNpCjBSTmczUFpXWTRPVzVRWkZVMTJpYmpaUEk2bk01Vm9zUTJRMWRnTzNZYzQzTzZZUC9YcnRXZExSYjRzZnJtTTlUNE1yUHEwT0hvUk9JM3V6bVJ4OUN3PT0K",
+            "available": true
+          },
+          "installer": {
+            "msi_url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.98/Rostoc-0.2.98-windows-x86_64.msi",
+            "available": true
+          }
+        }
+      }
+    },
+    {
       "version": "0.2.97",
       "pub_date": "2025-11-17T17:56:49Z",
       "notes": "Release 0.2.97",
-      "latest": true,
+      "latest": false,
       "platforms": {
         "darwin-aarch64": {
           "updater": {
@@ -299,40 +332,6 @@
           },
           "installer": {
             "msi_url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.87-windows-x86_64.msi",
-            "available": true
-          }
-        }
-      }
-    },
-    {
-      "version": "0.2.86",
-      "pub_date": "2025-11-10T03:07:56Z",
-      "notes": "Release 0.2.86",
-      "latest": false,
-      "platforms": {
-        "darwin-aarch64": {
-          "updater": {
-            "url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc-0.2.86-darwin-aarch64.app.tar.gz",
-            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXlCQ1RqMW5iQ09vVUFwQW9hOVRhalZJUU16YmRwNm1OcW11dFpyb29ra0RHbmdHTzc4ZDJSaXRtMFhwOURFaFlaSGpWTlEyN0UwWTBnajU2aHhDSUFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNzQzODI5CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKYnNyVmdWNHdaRkxaMGNKZkdTQndIVUlhR2pWOXFoZE8wRFNSSjhQdnQraEZOQnNwRjRQRTZXd05Rcy8zOFdoUGxzWDIzRHRLZEZhd0IwQkFjSlorQXc9PQo=",
-            "available": true
-          },
-          "installer": {
-            "dmg_url": "https://alain1405.github.io/rostoc-updates/macos/Rostoc_0.2.86_aarch64.dmg",
-            "available": true,
-            "notarization_status": "accepted",
-            "submission_id": "dc10af91-789f-445f-abcd-7968c8df0aff",
-            "submitted_at": "2025-11-10T03:07:56Z",
-            "notarized_at": "2025-11-10T07:59:53Z"
-          }
-        },
-        "windows-x86_64": {
-          "updater": {
-            "url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.86-windows-x86_64.msi",
-            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTY4bXhJUVVWdzBvbmFrdnRzVllNNStDY3N5b29lYUZqaGhET0YybU5FUGVXaUMrVkNxa2VGNmlzaDJuamJkZE1zWEJzR2t1ZzZEYVBFYkx5N014b1FvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYyNzQzODk3CWZpbGU6Um9zdG9jXzAuMi44Nl94NjRfZW4tVVMubXNpClhqVzRsY2xVQTRnK1N5UkhwWGZFSmxLR1gxdTNGSTBzTzdyVFBLcUFaVUZQV2lrTlBib053bGd6aWlKV2E5ek1sRFVreTBTWEFVdWI2bEFLZk9SSENRPT0K",
-            "available": true
-          },
-          "installer": {
-            "msi_url": "https://alain1405.github.io/rostoc-updates/windows/Rostoc-0.2.86-windows-x86_64.msi",
             "available": true
           }
         }
