@@ -38,7 +38,7 @@ jobs:
         run: |
           # Create root site directory
           mkdir -p ./site
-          
+
           # Copy updates directory contents to root level of site
           # Binaries are now served from GitHub Releases, not Pages
           cp -r ./updates/* ./site/

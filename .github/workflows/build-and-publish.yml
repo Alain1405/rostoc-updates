@@ -4,36 +4,36 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: 'Branch, tag, or SHA to build from private repo'
+        description: "Branch, tag, or SHA to build from private repo"
         required: false
         type: string
-        default: 'main'
+        default: "main"
       commit_sha:
-        description: 'Commit SHA of the private repo (for stamping)'
+        description: "Commit SHA of the private repo (for stamping)"
         required: false
         type: string
       initiator:
-        description: 'Who triggered the run (for logging/summaries)'
+        description: "Who triggered the run (for logging/summaries)"
         required: false
         type: string
       is_release:
-        description: 'Whether to execute release publishing steps'
+        description: "Whether to execute release publishing steps"
         required: true
         type: boolean
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Branch, tag, or SHA to build from private repo'
+        description: "Branch, tag, or SHA to build from private repo"
         required: false
-        default: 'main'
+        default: "main"
       commit_sha:
-        description: 'Commit SHA of the private repo (for stamping)'
+        description: "Commit SHA of the private repo (for stamping)"
         required: false
       initiator:
-        description: 'Who triggered the run (for logging/summaries)'
+        description: "Who triggered the run (for logging/summaries)"
         required: false
       is_release:
-        description: 'Whether to execute release publishing steps'
+        description: "Whether to execute release publishing steps"
         required: true
         type: boolean
         default: false
@@ -136,7 +136,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -202,8 +202,8 @@ jobs:
       - name: Run smoke tests
         working-directory: private-src
         env:
-          REQUIRE_ROSI: '0'
-          ROSTOC_ROSI_DISABLED: '1'
+          REQUIRE_ROSI: "0"
+          ROSTOC_ROSI_DISABLED: "1"
         run: pnpm smoke
 
   build-macos:
@@ -273,7 +273,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -481,9 +481,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          ENABLE_RUNTIME_CACHE: '1'
-          UV_DISABLE_WORKSPACE: '1'
-          UV_PROJECT_ENVIRONMENT: 'shared'
+          ENABLE_RUNTIME_CACHE: "1"
+          UV_DISABLE_WORKSPACE: "1"
+          UV_PROJECT_ENVIRONMENT: "shared"
         run: |
           set -euo pipefail
           echo "[INFO] Starting build - output will be saved to build-macos.log"
@@ -1007,23 +1007,50 @@ jobs:
 
           echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release assets to GitHub Releases
+      - name: Upload binaries to DigitalOcean Spaces
         if: inputs.is_release && steps.detect-release-token.outputs.available == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.UPDATES_REPO_TOKEN }}
-          tag_name: ${{ inputs.ref }}
-          draft: false
-          prerelease: false
-          files: |
-            ${{ env.UPDATES_DIR }}/macos/Rostoc-${{ steps.extract_version.outputs.version }}-darwin-aarch64.app.tar.gz
-            ${{ env.UPDATES_DIR }}/macos/Rostoc-${{ steps.extract_version.outputs.version }}-darwin-aarch64.app.tar.gz.sig
-            ${{ env.UPDATES_DIR }}/macos/Rostoc_${{ steps.extract_version.outputs.version }}_aarch64.dmg
-          fail_on_unmatched_files: false
-          body: |
-            ## Rostoc ${{ steps.extract_version.outputs.version }}
-            
-            Release notes coming soon.
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: sgp1
+          SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
+          SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract_version.outputs.version }}"
+
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            pip install --quiet awscli
+          fi
+
+          echo "[INFO] Uploading macOS binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+
+          # Upload macOS artifacts
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "../${{ env.UPDATES_DIR }}/macos/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz" \
+            --acl public-read
+
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "../${{ env.UPDATES_DIR }}/macos/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz.sig" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz.sig" \
+            --acl public-read
+
+          # Upload DMG if present (will be replaced by stapler after notarization)
+          if [ -f "../${{ env.UPDATES_DIR }}/macos/Rostoc_${VERSION}_aarch64.dmg" ]; then
+            echo "[INFO] Uploading unsigned DMG (will be replaced after notarization)"
+            aws s3 cp \
+              --endpoint-url "${SPACES_ENDPOINT}" \
+              "../${{ env.UPDATES_DIR }}/macos/Rostoc_${VERSION}_aarch64.dmg" \
+              "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc_${VERSION}_aarch64.dmg" \
+              --acl public-read
+          fi
+
+          echo "[INFO] ✅ Upload complete"
 
       - name: Upload artifacts for manifest generation
         if: inputs.is_release
@@ -1087,7 +1114,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -1245,9 +1272,9 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          ENABLE_RUNTIME_CACHE: '1'
-          UV_DISABLE_WORKSPACE: '1'
-          UV_PROJECT_ENVIRONMENT: 'shared'
+          ENABLE_RUNTIME_CACHE: "1"
+          UV_DISABLE_WORKSPACE: "1"
+          UV_PROJECT_ENVIRONMENT: "shared"
         run: |
           set -euo pipefail
           # Only purge PyO3 build artifacts for release builds; for preview keep them to improve cache reuse
@@ -1652,18 +1679,39 @@ jobs:
           "latest_name=$latestName" >> $env:GITHUB_OUTPUT
           "checksum=$($hash.Hash)" >> $env:GITHUB_OUTPUT
 
-      - name: Upload Windows release assets to GitHub Releases
+      - name: Upload Windows binaries to DigitalOcean Spaces
         if: inputs.is_release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.UPDATES_REPO_TOKEN }}
-          tag_name: ${{ inputs.ref }}
-          draft: false
-          prerelease: false
-          files: |
-            updates/windows/Rostoc-${{ steps.extract_version_win.outputs.version }}-windows-x86_64.msi
-            updates/windows/Rostoc-${{ steps.extract_version_win.outputs.version }}-windows-x86_64.msi.sig
-          fail_on_unmatched_files: false
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: sgp1
+          SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
+          SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract_version_win.outputs.version }}"
+
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            pip install --quiet awscli
+          fi
+
+          echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "updates/windows/Rostoc-${VERSION}-windows-x86_64.msi" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-windows-x86_64.msi" \
+            --acl public-read
+
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "updates/windows/Rostoc-${VERSION}-windows-x86_64.msi.sig" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-windows-x86_64.msi.sig" \
+            --acl public-read
+
+          echo "[INFO] ✅ Upload complete"
 
       - name: Upload artifacts for manifest generation
         if: inputs.is_release
@@ -1722,6 +1770,7 @@ jobs:
           fi
 
           # Run the unified JSON generation script
+          DO_SPACES_CDN_URL="${{ secrets.DO_SPACES_CDN_URL }}" \
           bash private-src/scripts/ci/generate_releases_json.sh \
             "${VERSION}" \
             "macos-artifacts" \
@@ -1820,7 +1869,7 @@ jobs:
           mkdir -p pages-deploy
           cp updates/*.json pages-deploy/ 2>/dev/null || true
           cp updates/version.txt pages-deploy/ 2>/dev/null || true
-          
+
           # Keep directory structure for backward compatibility but no binaries
           mkdir -p pages-deploy/macos pages-deploy/windows
           cp updates/macos/checksums.txt pages-deploy/macos/ 2>/dev/null || true

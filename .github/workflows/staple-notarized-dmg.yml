@@ -65,9 +65,19 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+          DO_SPACES_ACCESS_KEY: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          DO_SPACES_SECRET_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          DO_SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
+          DO_SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+          DO_SPACES_CDN_URL: ${{ secrets.DO_SPACES_CDN_URL }}
         run: |
-          # Script now reads from releases.json on GitHub Pages
-          # No artifact download needed!
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            echo "[INFO] Installing AWS CLI"
+            pip3 install awscli
+          fi
+
+          # Script downloads from/uploads to DO Spaces
           bash scripts/macos/staple_and_upload_dmg.sh
 
       - name: Disable stapler when queue empty
