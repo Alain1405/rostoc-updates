@@ -1,0 +1,2 @@
+3e25dbf47fda61741427b240b16e9944e5fc2f41f0408c4f21aab482b6abd290  ./Rostoc-0.2.98-darwin-aarch64.app.tar.gz
+3e25dbf47fda61741427b240b16e9944e5fc2f41f0408c4f21aab482b6abd290  ./Rostoc.app.tar.gz
