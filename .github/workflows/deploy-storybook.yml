@@ -82,6 +82,12 @@ jobs:
             exit 1
           fi
 
+          if [ ! -d "$SOURCE_DIR/assets" ]; then
+            echo "::error::Storybook build is missing the assets directory ($SOURCE_DIR/assets)"
+            ls -la "$SOURCE_DIR"
+            exit 1
+          fi
+
           echo "[INFO] Uploading Storybook build to s3://${SPACES_BUCKET}/${VERSION_PREFIX}" 
           aws s3 sync \
             --delete \
@@ -98,6 +104,13 @@ jobs:
             --endpoint-url "${SPACES_ENDPOINT}" \
             --acl public-read
 
+          echo "[INFO] Updating bare-domain root (no delete to preserve other artifacts)"
+          aws s3 sync \
+            "$SOURCE_DIR/" \
+            "s3://${SPACES_BUCKET}/" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
+
           printf '{\n  "sha": "%s",\n  "uploadedAt": "%s",\n  "sourceRepo": "%s"\n}\n' \
             "${BUILD_SHA}" \
             "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -111,6 +124,6 @@ jobs:
           STORYBOOK_URL="https://storybook.rostoc.co/storybook/latest/"
           {
             echo "### Storybook deployment"
-            echo "- Source commit: \\`${BUILD_SHA}\\`"
+            echo "- Source commit: \`${BUILD_SHA}\`"
             echo "- Public URL: ${STORYBOOK_URL}"
           } >> "$GITHUB_STEP_SUMMARY"
