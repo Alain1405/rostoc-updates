@@ -1830,6 +1830,25 @@ jobs:
           name: releases-json
           path: updates
 
+      - name: Sync existing GitHub Pages content
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          rm -rf pages-existing pages-deploy
+          mkdir -p pages-deploy
+
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code "$REPO_URL" gh-pages >/dev/null 2>&1; then
+            echo "[INFO] Loading current gh-pages contents"
+            git clone --depth 1 --branch gh-pages "$REPO_URL" pages-existing
+            rsync -a --exclude '.git' pages-existing/ pages-deploy/
+            rm -rf pages-existing
+          else
+            echo "[INFO] gh-pages branch not found; starting from empty directory"
+          fi
+
       - name: Commit & push updates (with version history)
         run: |
           git config user.name "github-actions[bot]"
@@ -1862,7 +1881,7 @@ jobs:
 
       - name: Prepare Pages deployment
         run: |
-          # Create deployment directory with only JSON manifests
+          # Copy new JSON manifests into preloaded gh-pages working tree
           # Binaries are served from DigitalOcean Spaces
           mkdir -p pages-deploy
           cp updates/*.json pages-deploy/ 2>/dev/null || true
