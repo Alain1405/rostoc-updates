@@ -66,6 +66,7 @@ GitHub Pages (alain1405.github.io/rostoc-updates/):
 | `APPLE_ID`                    | Repository (rostoc-updates) | Apple ID for notarization.                                                                             |
 | `APPLE_APP_SPECIFIC_PASSWORD` | Repository (rostoc-updates) | App-specific password for notarytool.                                                                  |
 | `TAURI_SIGNING_PRIVATE_KEY`   | Repository (rostoc-updates) | Tauri updater signing key.                                                                             |
+| `ROSTOC_BACKEND_TOKEN`        | Repository (rostoc-updates) | Service token for POSTing release metadata to `/api/updates/publish/` on the Rostoc backend.           |
 
 See [DIGITALOCEAN_SPACES_SETUP.md](./DIGITALOCEAN_SPACES_SETUP.md) for detailed setup instructions.
 
@@ -77,6 +78,7 @@ See [DIGITALOCEAN_SPACES_SETUP.md](./DIGITALOCEAN_SPACES_SETUP.md) for detailed 
    - Uploads binaries to DigitalOcean Spaces (via AWS CLI with S3-compatible endpoint)
    - Submits macOS DMG to Apple notarization (async)
    - Generates `latest.json` and `releases.json` with Spaces CDN URLs
+   - Publishes release metadata to the Rostoc backend via `/api/updates/publish/` (runs when `ROSTOC_BACKEND_TOKEN` is configured)
    - Deploys manifests to GitHub Pages
    - Enables stapler workflow cron
    - Reports success via status context `rostoc-updates/release`
@@ -87,6 +89,23 @@ See [DIGITALOCEAN_SPACES_SETUP.md](./DIGITALOCEAN_SPACES_SETUP.md) for detailed 
    - Auto-disables cron when no pending notarizations remain
 
 If either side is missing the shared secrets, the dispatch/workflows will fail fast with actionable logs.
+
+### Backend publish hook
+
+When `ROSTOC_BACKEND_TOKEN` is present the release workflow sends a signed POST request to the Rostoc backend's `/api/updates/publish/` endpoint. The payload bundles:
+
+- Release metadata (`channel`, `version`, `build_sha`, manifest payload)
+- Asset inventory (Spaces key, size, checksum, CDN URL, Ed25519 signature when available)
+- The generated `releases.json` entry so the backend can persist notarization status
+
+You can override the defaults per-run via the reusable workflow inputs:
+
+| Input (`workflow_dispatch` / callers) | Default                                      | Description                                      |
+| ------------------------------------- | -------------------------------------------- | ------------------------------------------------ |
+| `release_channel`                     | `stable`                                     | Channel name recorded in backend releases        |
+| `backend_publish_url`                 | `https://api.rostoc.co/api/updates/publish/` | Alternate backend endpoint (e.g., staging stack) |
+
+If the token is missing the workflow simply records a summary note and skips the API call, keeping preview builds unaffected.
 
 ## ✅ Branch protection checklist
 

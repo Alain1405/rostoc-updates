@@ -20,6 +20,16 @@ on:
         description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
+      release_channel:
+        description: 'Channel label recorded for releases (stable/beta/etc)'
+        required: false
+        type: string
+        default: 'stable'
+      backend_publish_url:
+        description: 'Override backend API endpoint used for /api/updates/publish/'
+        required: false
+        type: string
+        default: 'https://api.rostoc.co/api/updates/publish/'
   workflow_dispatch:
     inputs:
       ref:
@@ -37,6 +47,14 @@ on:
         required: true
         type: boolean
         default: false
+      release_channel:
+        description: 'Channel label recorded for releases (stable/beta/etc)'
+        required: false
+        default: 'stable'
+      backend_publish_url:
+        description: 'Override backend API endpoint used for /api/updates/publish/'
+        required: false
+        default: 'https://api.rostoc.co/api/updates/publish/'
 
 permissions:
   contents: write # Push updates to this repo / checkout private repo
@@ -1726,6 +1744,12 @@ jobs:
       - build-windows
     if: inputs.is_release
     runs-on: ubuntu-22.04
+    env:
+      RELEASE_VERSION: ${{ needs.build-macos.outputs.version }}
+      RELEASE_CHANNEL: ${{ inputs.release_channel || 'stable' }}
+      BACKEND_PUBLISH_URL: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+      BUILD_SHA: ${{ inputs.commit_sha || github.sha }}
+      DO_SPACES_CDN_URL: ${{ secrets.DO_SPACES_CDN_URL || 'https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com' }}
     steps:
       - name: Checkout main source repository
         uses: actions/checkout@v4
@@ -1786,6 +1810,48 @@ jobs:
           echo ""
           echo "=== latest.json ==="
           cat json-output/latest.json
+
+      - name: Detect backend publish token
+        id: detect-backend-token
+        run: |
+          if [ -n "${BACKEND_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
+            echo '### ℹ️ Backend publish skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
+            echo '\`ROSTOC_BACKEND_TOKEN\` not configured; skipping /api/updates/publish/.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          BACKEND_TOKEN: ${{ secrets.ROSTOC_BACKEND_TOKEN }}
+
+      - name: Prepare backend publish payload
+        if: steps.detect-backend-token.outputs.available == 'true'
+        id: prepare-backend-payload
+        run: |
+          set -euo pipefail
+          python scripts/ci/build_backend_payload.py \
+            --version "$RELEASE_VERSION" \
+            --channel "$RELEASE_CHANNEL" \
+            --build-sha "$BUILD_SHA" \
+            --cdn-base "$DO_SPACES_CDN_URL" \
+            --manifest json-output/latest.json \
+            --releases json-output/releases.json \
+            --mac-root macos-artifacts \
+            --windows-root windows-artifacts
+          echo "payload=publish-payload.json" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release metadata to backend
+        if: steps.detect-backend-token.outputs.available == 'true'
+        env:
+          BACKEND_PUBLISH_TOKEN: ${{ secrets.ROSTOC_BACKEND_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -sSf -X POST "$BACKEND_PUBLISH_URL" \
+            -H "Authorization: Bearer ${BACKEND_PUBLISH_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @"${{ steps.prepare-backend-payload.outputs.payload }}"
 
       - name: Upload JSON artifacts
         uses: actions/upload-artifact@v4
