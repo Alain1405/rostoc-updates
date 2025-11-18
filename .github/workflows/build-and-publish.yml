@@ -1011,6 +1011,16 @@ jobs:
           cp "$TARBALL" "../${{ env.UPDATES_DIR }}/macos/Rostoc.app.tar.gz"
           cp "$SIGNATURE" "../${{ env.UPDATES_DIR }}/macos/Rostoc.app.tar.gz.sig"
 
+          # Copy DMG if present (will be replaced after notarization)
+          DMG_PATH=$(find target -maxdepth 5 -type f -name "*.dmg" -print -quit || true)
+          if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
+            DMG_NAME="Rostoc_${VERSION}_aarch64.dmg"
+            echo "[INFO] Found DMG at ${DMG_PATH}, copying to updates as ${DMG_NAME}"
+            cp "${DMG_PATH}" "../${{ env.UPDATES_DIR }}/macos/${DMG_NAME}"
+          else
+            echo "[WARN] No DMG found in target directory"
+          fi
+
           # Stamp version file
           {
             date -u +"%Y-%m-%dT%H:%M:%SZ"
