@@ -8,7 +8,7 @@ on:
 
 # Permissions for GitHub Pages deployment
 permissions:
-  contents: write
+  contents: read
 
 # Separate concurrency group for Storybook - won't block main Pages deployment
 concurrency:
@@ -18,8 +18,8 @@ concurrency:
 jobs:
   build-and-deploy:
     environment:
-      name: github-pages
-      url: https://alain1405.github.io/rostoc-updates/storybook/
+      name: storybook
+      url: https://storybook.rostoc.co/
     runs-on: ubuntu-latest
     steps:
       - name: Checkout private rostoc repo
@@ -27,7 +27,7 @@ jobs:
         with:
           repository: Alain1405/rostoc
           path: rostoc
-# actionlint: disable-next-line expr
+          # actionlint: disable-next-line expr
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
 
       - name: Setup Node.js
@@ -48,18 +48,69 @@ jobs:
       - name: Build Storybook
         run: |
           cd rostoc
-          STORYBOOK_BASE_PATH=/rostoc-updates/storybook/ pnpm build-storybook
+          pnpm build-storybook
         env:
           NODE_ENV: production
 
-      - name: Publish Storybook to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: rostoc/storybook-static
-          destination_dir: storybook
-          keep_files: true
-          full_commit_message: "docs(storybook): update from ${{ github.sha }}"
-          user_name: 'github-actions[bot]'
-          user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Upload Storybook to DigitalOcean Spaces
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: sgp1
+          SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
+          SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        run: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "[INFO] Installing AWS CLI"
+            pip install --quiet awscli
+          fi
+
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+            echo "::error::DigitalOcean Spaces credentials are required"
+            exit 1
+          fi
+
+          BUILD_SHA="${GITHUB_SHA}"
+          SOURCE_DIR="rostoc/storybook-static"
+          VERSION_PREFIX="storybook/${BUILD_SHA}"
+          LATEST_PREFIX="storybook/latest"
+
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "::error::Storybook build directory not found at $SOURCE_DIR"
+            exit 1
+          fi
+
+          echo "[INFO] Uploading Storybook build to s3://${SPACES_BUCKET}/${VERSION_PREFIX}" 
+          aws s3 sync \
+            --delete \
+            "$SOURCE_DIR/" \
+            "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
+
+          echo "[INFO] Updating latest alias"
+          aws s3 sync \
+            --delete \
+            "$SOURCE_DIR/" \
+            "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
+
+          printf '{\n  "sha": "%s",\n  "uploadedAt": "%s",\n  "sourceRepo": "%s"\n}\n' \
+            "${BUILD_SHA}" \
+            "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            "${GITHUB_REPOSITORY}" > storybook-build.json
+
+          aws s3 cp storybook-build.json \
+            "s3://${SPACES_BUCKET}/storybook/latest-build.json" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
+
+          STORYBOOK_URL="https://storybook.rostoc.co/storybook/latest/"
+          {
+            echo "### Storybook deployment"
+            echo "- Source commit: \\`${BUILD_SHA}\\`"
+            echo "- Public URL: ${STORYBOOK_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
