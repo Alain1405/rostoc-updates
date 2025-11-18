@@ -89,101 +89,27 @@ jobs:
           fi
 
           echo "[INFO] Uploading Storybook build to s3://${SPACES_BUCKET}/${VERSION_PREFIX}" 
-          # Upload each file type with correct MIME type (separate syncs required)
-          aws s3 sync --delete "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.js" --include "*.mjs" --content-type "application/javascript; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.html" --content-type "text/html; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.css" --content-type "text/css; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.json" --content-type "application/json; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.svg" --content-type "image/svg+xml"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.png" --content-type "image/png"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.jpg" --include "*.jpeg" --content-type "image/jpeg"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.woff" --content-type "font/woff"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.woff2" --content-type "font/woff2"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.ico" --content-type "image/x-icon"
+          aws s3 sync \
+            --delete \
+            "$SOURCE_DIR/" \
+            "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
 
           echo "[INFO] Updating latest alias"
-          aws s3 sync --delete "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.js" --include "*.mjs" --content-type "application/javascript; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.html" --content-type "text/html; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.css" --content-type "text/css; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.json" --content-type "application/json; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.svg" --content-type "image/svg+xml"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.png" --content-type "image/png"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.jpg" --include "*.jpeg" --content-type "image/jpeg"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.woff" --content-type "font/woff"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.woff2" --content-type "font/woff2"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.ico" --content-type "image/x-icon"
+          aws s3 sync \
+            --delete \
+            "$SOURCE_DIR/" \
+            "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
 
           echo "[INFO] Updating bare-domain root (no delete to preserve other artifacts)"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.js" --include "*.mjs" --content-type "application/javascript; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.html" --content-type "text/html; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.css" --content-type "text/css; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.json" --content-type "application/json; charset=utf-8"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.svg" --content-type "image/svg+xml"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.png" --content-type "image/png"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.jpg" --include "*.jpeg" --content-type "image/jpeg"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.woff" --content-type "font/woff"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.woff2" --content-type "font/woff2"
-          aws s3 sync "$SOURCE_DIR/" "s3://${SPACES_BUCKET}/" \
-            --endpoint-url "${SPACES_ENDPOINT}" --acl public-read \
-            --exclude "*" --include "*.ico" --content-type "image/x-icon"
+          aws s3 sync \
+            "$SOURCE_DIR/" \
+            "s3://${SPACES_BUCKET}/" \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            --acl public-read
 
           printf '{\n  "sha": "%s",\n  "uploadedAt": "%s",\n  "sourceRepo": "%s"\n}\n' \
             "${BUILD_SHA}" \
