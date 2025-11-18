@@ -1751,6 +1751,9 @@ jobs:
       BUILD_SHA: ${{ inputs.commit_sha || github.sha }}
       DO_SPACES_CDN_URL: ${{ secrets.DO_SPACES_CDN_URL || 'https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com' }}
     steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+
       - name: Checkout main source repository
         uses: actions/checkout@v4
         with:
