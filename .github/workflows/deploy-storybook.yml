@@ -94,7 +94,18 @@ jobs:
             "$SOURCE_DIR/" \
             "s3://${SPACES_BUCKET}/${VERSION_PREFIX}/" \
             --endpoint-url "${SPACES_ENDPOINT}" \
-            --acl public-read
+            --acl public-read \
+            --exclude "*" \
+            --include "*.html" --content-type "text/html" \
+            --include "*.js" --content-type "application/javascript" \
+            --include "*.css" --content-type "text/css" \
+            --include "*.json" --content-type "application/json" \
+            --include "*.svg" --content-type "image/svg+xml" \
+            --include "*.png" --content-type "image/png" \
+            --include "*.jpg" --content-type "image/jpeg" \
+            --include "*.ico" --content-type "image/x-icon" \
+            --include "*.woff" --content-type "font/woff" \
+            --include "*.woff2" --content-type "font/woff2"
 
           echo "[INFO] Updating latest alias"
           aws s3 sync \
@@ -102,14 +113,36 @@ jobs:
             "$SOURCE_DIR/" \
             "s3://${SPACES_BUCKET}/${LATEST_PREFIX}/" \
             --endpoint-url "${SPACES_ENDPOINT}" \
-            --acl public-read
+            --acl public-read \
+            --exclude "*" \
+            --include "*.html" --content-type "text/html" \
+            --include "*.js" --content-type "application/javascript" \
+            --include "*.css" --content-type "text/css" \
+            --include "*.json" --content-type "application/json" \
+            --include "*.svg" --content-type "image/svg+xml" \
+            --include "*.png" --content-type "image/png" \
+            --include "*.jpg" --content-type "image/jpeg" \
+            --include "*.ico" --content-type "image/x-icon" \
+            --include "*.woff" --content-type "font/woff" \
+            --include "*.woff2" --content-type "font/woff2"
 
           echo "[INFO] Updating bare-domain root (no delete to preserve other artifacts)"
           aws s3 sync \
             "$SOURCE_DIR/" \
             "s3://${SPACES_BUCKET}/" \
             --endpoint-url "${SPACES_ENDPOINT}" \
-            --acl public-read
+            --acl public-read \
+            --exclude "*" \
+            --include "*.html" --content-type "text/html" \
+            --include "*.js" --content-type "application/javascript" \
+            --include "*.css" --content-type "text/css" \
+            --include "*.json" --content-type "application/json" \
+            --include "*.svg" --content-type "image/svg+xml" \
+            --include "*.png" --content-type "image/png" \
+            --include "*.jpg" --content-type "image/jpeg" \
+            --include "*.ico" --content-type "image/x-icon" \
+            --include "*.woff" --content-type "font/woff" \
+            --include "*.woff2" --content-type "font/woff2"
 
           printf '{\n  "sha": "%s",\n  "uploadedAt": "%s",\n  "sourceRepo": "%s"\n}\n' \
             "${BUILD_SHA}" \

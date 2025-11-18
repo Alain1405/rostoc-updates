@@ -102,11 +102,19 @@ def main() -> None:
 
     assets: list[Dict[str, Any]] = []
 
-    mac_archive = find_first(args.mac_root, f"Rostoc-{args.version}-darwin-aarch64.app.tar.gz")
-    mac_signature = find_first(args.mac_root, f"Rostoc-{args.version}-darwin-aarch64.app.tar.gz.sig")
+    mac_archive = find_first(
+        args.mac_root, f"Rostoc-{args.version}-darwin-aarch64.app.tar.gz"
+    )
+    mac_signature = find_first(
+        args.mac_root, f"Rostoc-{args.version}-darwin-aarch64.app.tar.gz.sig"
+    )
     mac_dmg = find_first(args.mac_root, f"Rostoc_{args.version}_aarch64.dmg")
-    win_installer = find_first(args.windows_root, f"Rostoc-{args.version}-windows-x86_64.msi")
-    win_signature = find_first(args.windows_root, f"Rostoc-{args.version}-windows-x86_64.msi.sig")
+    win_installer = find_first(
+        args.windows_root, f"Rostoc-{args.version}-windows-x86_64.msi"
+    )
+    win_signature = find_first(
+        args.windows_root, f"Rostoc-{args.version}-windows-x86_64.msi.sig"
+    )
 
     darwin_entry = (release_entry.get("platforms", {}) or {}).get("darwin-aarch64", {})
     windows_entry = (release_entry.get("platforms", {}) or {}).get("windows-x86_64", {})
@@ -162,7 +170,9 @@ def main() -> None:
         assets.append(win_asset)
 
     if not assets:
-        raise SystemExit("No release assets discovered; refusing to publish empty payload")
+        raise SystemExit(
+            "No release assets discovered; refusing to publish empty payload"
+        )
 
     payload = {
         "channel": args.channel or "stable",

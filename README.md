@@ -57,8 +57,8 @@ GitHub Pages (alain1405.github.io/rostoc-updates/):
 | `DO_SPACES_ACCESS_KEY`        | Repository (rostoc-updates) | DigitalOcean Spaces API access key for uploading/downloading binaries.                                 |
 | `DO_SPACES_SECRET_KEY`        | Repository (rostoc-updates) | DigitalOcean Spaces API secret key.                                                                    |
 | `DO_SPACES_BUCKET`            | Repository (rostoc-updates) | Space name (e.g., `rostoc-releases`).                                                                  |
-| `DO_SPACES_ENDPOINT`             | Repository (rostoc-updates) | Spaces endpoint hostname (e.g., `sgp1.digitaloceanspaces.com`).                                           |
-| `DO_SPACES_CDN_URL`              | Repository (rostoc-updates) | CDN base URL without trailing slash (e.g., `https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com`).    |
+| `DO_SPACES_ENDPOINT`          | Repository (rostoc-updates) | Spaces endpoint hostname (e.g., `sgp1.digitaloceanspaces.com`).                                        |
+| `DO_SPACES_CDN_URL`           | Repository (rostoc-updates) | CDN base URL without trailing slash (e.g., `https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com`). |
 | `APPLE_CERTIFICATE`           | Repository (rostoc-updates) | Base64-encoded macOS signing certificate.                                                              |
 | `APPLE_CERTIFICATE_PASSWORD`  | Repository (rostoc-updates) | Certificate password.                                                                                  |
 | `APPLE_SIGNING_IDENTITY`      | Repository (rostoc-updates) | Code signing identity name.                                                                            |
