@@ -1883,7 +1883,9 @@ jobs:
     if: inputs.is_release
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
       actions: write
     environment:
       name: github-pages
@@ -1912,81 +1914,28 @@ jobs:
           name: releases-json
           path: updates
 
-      - name: Sync existing GitHub Pages content
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          rm -rf pages-existing pages-deploy
-          mkdir -p pages-deploy
-
-          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code "$REPO_URL" gh-pages >/dev/null 2>&1; then
-            echo "[INFO] Loading current gh-pages contents"
-            git clone --depth 1 --branch gh-pages "$REPO_URL" pages-existing
-            rsync -a --exclude '.git' pages-existing/ pages-deploy/
-            rm -rf pages-existing
-          else
-            echo "[INFO] gh-pages branch not found; starting from empty directory"
-          fi
-
-      - name: Commit & push updates (with version history)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Only add JSON manifests and metadata files, not the large binaries
-          git add updates/*.json updates/version.txt updates/macos/checksums.txt updates/windows/checksums.txt || true
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: publish updates v${{ needs.build-macos.outputs.version }} ($(date -u +%F))"
-            
-            # Pull any changes that happened while workflow was running
-            # Use theirs strategy for concurrent builds - newer version wins
-            if ! git pull --rebase origin main; then
-              echo "[INFO] Rebase conflict detected - resolving with 'theirs' strategy (keeping our newer version)"
-              # Accept our changes for all conflicts (we're the newer build)
-              git checkout --ours updates/*.json updates/version.txt updates/macos/checksums.txt updates/windows/checksums.txt 2>/dev/null || true
-              git add updates/*.json updates/version.txt updates/macos/checksums.txt updates/windows/checksums.txt || true
-              git rebase --continue || {
-                echo "[WARN] Rebase continuation failed, aborting and force pushing"
-                git rebase --abort
-                git push --force-with-lease
-                exit 0
-              }
-            fi
-            
-            git push
-          else
-            echo "No changes to commit"
-          fi
-
       - name: Prepare Pages deployment
         run: |
-          # Copy new JSON manifests into preloaded gh-pages working tree
+          # Copy JSON manifests and metadata files
           # Binaries are served from DigitalOcean Spaces
-          mkdir -p pages-deploy
-          cp updates/*.json pages-deploy/ 2>/dev/null || true
-          cp updates/version.txt pages-deploy/ 2>/dev/null || true
+          mkdir -p _site
+          cp updates/*.json _site/ 2>/dev/null || true
+          cp updates/version.txt _site/ 2>/dev/null || true
 
           # Keep directory structure for backward compatibility but no binaries
-          mkdir -p pages-deploy/macos pages-deploy/windows
-          cp updates/macos/checksums.txt pages-deploy/macos/ 2>/dev/null || true
-          cp updates/windows/checksums.txt pages-deploy/windows/ 2>/dev/null || true
+          mkdir -p _site/macos _site/windows
+          cp updates/macos/checksums.txt _site/macos/ 2>/dev/null || true
+          cp updates/windows/checksums.txt _site/windows/ 2>/dev/null || true
 
           # Ensure GitHub Pages keeps running without Jekyll
-          touch pages-deploy/.nojekyll
+          touch _site/.nojekyll
 
-      - name: Publish updates to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: pages-deploy
-          keep_files: true
-          full_commit_message: "${{ format('docs(pages): publish updates v{0}', needs.build-macos.outputs.version) }}"
-          user_name: "github-actions[bot]"
-          user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       - name: Summary
         run: |
