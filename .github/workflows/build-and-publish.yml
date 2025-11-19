@@ -4,57 +4,57 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: 'Branch, tag, or SHA to build from private repo'
+        description: "Branch, tag, or SHA to build from private repo"
         required: false
         type: string
-        default: 'main'
+        default: "main"
       commit_sha:
-        description: 'Commit SHA of the private repo (for stamping)'
+        description: "Commit SHA of the private repo (for stamping)"
         required: false
         type: string
       initiator:
-        description: 'Who triggered the run (for logging/summaries)'
+        description: "Who triggered the run (for logging/summaries)"
         required: false
         type: string
       is_release:
-        description: 'Whether to execute release publishing steps'
+        description: "Whether to execute release publishing steps"
         required: true
         type: boolean
       release_channel:
-        description: 'Channel label recorded for releases (stable/beta/etc)'
+        description: "Channel label recorded for releases (stable/beta/etc)"
         required: false
         type: string
-        default: 'stable'
+        default: "stable"
       backend_publish_url:
-        description: 'Override backend API endpoint used for /api/updates/publish/'
+        description: "Override backend API endpoint used for /api/updates/publish/"
         required: false
         type: string
-        default: 'https://api.rostoc.co/api/updates/publish/'
+        default: "https://api.rostoc.co/api/updates/publish/"
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Branch, tag, or SHA to build from private repo'
+        description: "Branch, tag, or SHA to build from private repo"
         required: false
-        default: 'main'
+        default: "main"
       commit_sha:
-        description: 'Commit SHA of the private repo (for stamping)'
+        description: "Commit SHA of the private repo (for stamping)"
         required: false
       initiator:
-        description: 'Who triggered the run (for logging/summaries)'
+        description: "Who triggered the run (for logging/summaries)"
         required: false
       is_release:
-        description: 'Whether to execute release publishing steps'
+        description: "Whether to execute release publishing steps"
         required: true
         type: boolean
         default: false
       release_channel:
-        description: 'Channel label recorded for releases (stable/beta/etc)'
+        description: "Channel label recorded for releases (stable/beta/etc)"
         required: false
-        default: 'stable'
+        default: "stable"
       backend_publish_url:
-        description: 'Override backend API endpoint used for /api/updates/publish/'
+        description: "Override backend API endpoint used for /api/updates/publish/"
         required: false
-        default: 'https://api.rostoc.co/api/updates/publish/'
+        default: "https://api.rostoc.co/api/updates/publish/"
 
 permissions:
   contents: write # Push updates to this repo / checkout private repo
@@ -152,7 +152,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -218,8 +218,8 @@ jobs:
       - name: Run smoke tests
         working-directory: private-src
         env:
-          REQUIRE_ROSI: '0'
-          ROSTOC_ROSI_DISABLED: '1'
+          REQUIRE_ROSI: "0"
+          ROSTOC_ROSI_DISABLED: "1"
         run: pnpm smoke
 
   build-macos:
@@ -289,7 +289,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -497,9 +497,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          ENABLE_RUNTIME_CACHE: '1'
-          UV_DISABLE_WORKSPACE: '1'
-          UV_PROJECT_ENVIRONMENT: 'shared'
+          ENABLE_RUNTIME_CACHE: "1"
+          UV_DISABLE_WORKSPACE: "1"
+          UV_PROJECT_ENVIRONMENT: "shared"
         run: |
           set -euo pipefail
           echo "[INFO] Starting build - output will be saved to build-macos.log"
@@ -1141,7 +1141,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -1299,9 +1299,9 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          ENABLE_RUNTIME_CACHE: '1'
-          UV_DISABLE_WORKSPACE: '1'
-          UV_PROJECT_ENVIRONMENT: 'shared'
+          ENABLE_RUNTIME_CACHE: "1"
+          UV_DISABLE_WORKSPACE: "1"
+          UV_PROJECT_ENVIRONMENT: "shared"
         run: |
           set -euo pipefail
           # Only purge PyO3 build artifacts for release builds; for preview keep them to improve cache reuse
@@ -1798,6 +1798,9 @@ jobs:
           # Extract version directly from the checked-out source
           VERSION=$(jq -r '.version' private-src/src-tauri/tauri.conf.json)
           echo "Generating releases.json and latest.json for version ${VERSION}"
+          
+          # Export version for use in subsequent steps (backend payload generation)
+          echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
           # Get submission ID from the build-macos job output or pending file
           SUBMISSION_ID=""
@@ -1982,8 +1985,8 @@ jobs:
           publish_dir: pages-deploy
           keep_files: true
           full_commit_message: "${{ format('docs(pages): publish updates v{0}', needs.build-macos.outputs.version) }}"
-          user_name: 'github-actions[bot]'
-          user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+          user_name: "github-actions[bot]"
+          user_email: "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Summary
         run: |
