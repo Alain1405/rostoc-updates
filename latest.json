@@ -1,15 +1,15 @@
 {
-  "version": "0.2.99",
-  "notes": "Release 0.2.99",
-  "pub_date": "2025-11-18T10:28:46Z",
+  "version": "0.2.101",
+  "notes": "Release 0.2.101",
+  "pub_date": "2025-11-19T02:30:06Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.99/Rostoc-0.2.99-darwin-aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTNjdWw3WldrR0FqNWhUNzlhbVVQK3krVzVacXpUa1dYZXBZeUNTUmc4WW8xd2RFZUZPUTlUZGRYTW9VTmkzUEk4MThxdUJ1M2tWVUlCUm9WeWpxUFEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDYxMjAxCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKUU9saElXVWxJalVBSzRLdEVkRm1NNjBtWmdiOGE4QXB4VFZMeG9NS2Nmc0lKMHpuM09NVVVPV21yZlR2bkx5SEtqY3JJT1ZSRUdIWE5kUUZRanYzQlE9PQo="
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.101/Rostoc-0.2.101-darwin-aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTlHL1ViTTZ2YkloNWJOUTZMTEd6L0ZLWmhOUlhHTE9DL080WndOOG55K2JvZElDazVna3lCR0ZydjNXeWtTb1p5aUFMaVZnSXZuRmlTSE5tdHc1QlFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNTE4OTE5CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKZHlYOHd1VEgrVDVnYU9RTkwrYWo3QkIyUXlGUHoyd1V5WjZ0dEtTZXl2b0dWODdDdWZDYng3bGtlQWpFb0Q5SlpEM0djV2NpR0cwWmlhcmdHaVJDQ3c9PQo="
     },
     "windows-x86_64": {
-      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.99/Rostoc-0.2.99-windows-x86_64.msi",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTViMEhTTjdJT24vK0YweWRsU3N5UUlHM1I5Y3B4R2Y3SzI1Zi9JV2V6SGFWcjBKaDN5aGEvK2ViVUFFYkYySE40S3RpSmZkNnhvazArZDlLZlZDVWc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNDYxNDQyCWZpbGU6Um9zdG9jXzAuMi45OV94NjRfZW4tVVMubXNpCnFYcW96VGNpMTBnOVAweXdPNUlzSFFRZm1ZZWxlQmJLM0lmd3Jrc1hYKzViSnFhdlVRZ1dFaXU4V1pLY3ZwYWc0R1c5ekJDTjRNNnRRZi8ram5vcEFBPT0K"
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.101/Rostoc-0.2.101-windows-x86_64.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXpxOGxleXRZc2g2WEF2aWQ2THd1c3JrY2hDRUUvVGtBL1F0YmxVL09VREIzbmhyMlkySWNUL2hLTmUxZWtFNlBBdys4TURLS1MvR2xYajRzc05xOEF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzYzNTE5MTM4CWZpbGU6Um9zdG9jXzAuMi4xMDFfeDY0X2VuLVVTLm1zaQpPNGg5bUI4M2lwRGo2UzBJYmF4bEVHN1Y3ZXdNQkk1T0Q5dW9CUUdUa0lJelhlNVhrWitERTdNRUZyWmtHSUxrZSsxM0VJMHBpZHliRkc2YVRJTWtCdz09Cg=="
     }
   }
 }
