@@ -154,6 +154,11 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Enable Corepack (pnpm)
         run: corepack enable
 
@@ -290,6 +295,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -1798,7 +1808,7 @@ jobs:
           # Extract version directly from the checked-out source
           VERSION=$(jq -r '.version' private-src/src-tauri/tauri.conf.json)
           echo "Generating releases.json and latest.json for version ${VERSION}"
-          
+
           # Export version for use in subsequent steps (backend payload generation)
           echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
