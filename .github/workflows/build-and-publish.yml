@@ -183,7 +183,7 @@ jobs:
         working-directory: private-src
         shell: bash
         run: |
-          ../scripts/ci/hash_lockfiles.sh .
+          scripts/ci/hash_lockfiles.sh .
 
       - name: Cache pnpm store
         uses: actions/cache@v4
@@ -332,7 +332,7 @@ jobs:
         working-directory: private-src
         shell: bash
         run: |
-          ../scripts/ci/hash_lockfiles.sh .
+          scripts/ci/hash_lockfiles.sh .
 
       - name: Cache pnpm store
         uses: actions/cache@v4
