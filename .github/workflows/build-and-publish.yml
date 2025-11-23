@@ -180,10 +180,9 @@ jobs:
 
       - name: Compute dependency hashes
         id: dependency-hashes
-        working-directory: private-src
         shell: bash
         run: |
-          scripts/ci/hash_lockfiles.sh .
+          scripts/ci/hash_lockfiles.sh private-src
 
       - name: Cache pnpm store
         uses: actions/cache@v4
@@ -329,10 +328,9 @@ jobs:
 
       - name: Compute dependency hashes
         id: dependency-hashes
-        working-directory: private-src
         shell: bash
         run: |
-          scripts/ci/hash_lockfiles.sh .
+          scripts/ci/hash_lockfiles.sh private-src
 
       - name: Cache pnpm store
         uses: actions/cache@v4
@@ -1188,10 +1186,9 @@ jobs:
 
       - name: Compute dependency hashes
         id: dependency-hashes
-        working-directory: private-src
         shell: bash
         run: |
-          ../scripts/ci/hash_lockfiles.sh .
+          scripts/ci/hash_lockfiles.sh private-src
 
       - name: Cache pnpm store
         uses: actions/cache@v4
