@@ -4,57 +4,57 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to build from private repo"
+        description: 'Branch, tag, or SHA to build from private repo'
         required: false
         type: string
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA of the private repo (for stamping)"
+        description: 'Commit SHA of the private repo (for stamping)'
         required: false
         type: string
       initiator:
-        description: "Who triggered the run (for logging/summaries)"
+        description: 'Who triggered the run (for logging/summaries)'
         required: false
         type: string
       is_release:
-        description: "Whether to execute release publishing steps"
+        description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
       release_channel:
-        description: "Channel label recorded for releases (stable/beta/etc)"
+        description: 'Channel label recorded for releases (stable/beta/etc)'
         required: false
         type: string
-        default: "stable"
+        default: 'stable'
       backend_publish_url:
-        description: "Override backend API endpoint used for /api/updates/publish/"
+        description: 'Override backend API endpoint used for /api/updates/publish/'
         required: false
         type: string
-        default: "https://api.rostoc.co/api/updates/publish/"
+        default: 'https://api.rostoc.co/api/updates/publish/'
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch, tag, or SHA to build from private repo"
+        description: 'Branch, tag, or SHA to build from private repo'
         required: false
-        default: "main"
+        default: 'main'
       commit_sha:
-        description: "Commit SHA of the private repo (for stamping)"
+        description: 'Commit SHA of the private repo (for stamping)'
         required: false
       initiator:
-        description: "Who triggered the run (for logging/summaries)"
+        description: 'Who triggered the run (for logging/summaries)'
         required: false
       is_release:
-        description: "Whether to execute release publishing steps"
+        description: 'Whether to execute release publishing steps'
         required: true
         type: boolean
         default: false
       release_channel:
-        description: "Channel label recorded for releases (stable/beta/etc)"
+        description: 'Channel label recorded for releases (stable/beta/etc)'
         required: false
-        default: "stable"
+        default: 'stable'
       backend_publish_url:
-        description: "Override backend API endpoint used for /api/updates/publish/"
+        description: 'Override backend API endpoint used for /api/updates/publish/'
         required: false
-        default: "https://api.rostoc.co/api/updates/publish/"
+        default: 'https://api.rostoc.co/api/updates/publish/'
 
 permissions:
   contents: write # Push updates to this repo / checkout private repo
@@ -152,12 +152,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -178,11 +178,18 @@ jobs:
           echo "Using STORE_PATH=$STORE_PATH" >&2
           echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Compute dependency hashes
+        id: dependency-hashes
+        working-directory: private-src
+        shell: bash
+        run: |
+          ../scripts/ci/hash_lockfiles.sh .
+
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: ${{ steps.verify-pnpm-store.outputs.STORE_PATH }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-${{ steps.dependency-hashes.outputs.pnpm }}
           restore-keys: pnpm-${{ runner.os }}-
 
       - name: Install uv (Python package manager)
@@ -198,7 +205,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: python-wheel-${{ runner.os }}-${{ hashFiles('private-src/uv.lock') }}
+          key: python-wheel-${{ runner.os }}-${{ steps.dependency-hashes.outputs.uv }}
           restore-keys: |
             python-wheel-${{ runner.os }}-
 
@@ -223,8 +230,8 @@ jobs:
       - name: Run smoke tests
         working-directory: private-src
         env:
-          REQUIRE_ROSI: "0"
-          ROSTOC_ROSI_DISABLED: "1"
+          REQUIRE_ROSI: '0'
+          ROSTOC_ROSI_DISABLED: '1'
         run: pnpm smoke
 
   build-macos:
@@ -294,12 +301,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -320,11 +327,18 @@ jobs:
           echo "Using STORE_PATH=$STORE_PATH" >&2
           echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Compute dependency hashes
+        id: dependency-hashes
+        working-directory: private-src
+        shell: bash
+        run: |
+          ../scripts/ci/hash_lockfiles.sh .
+
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-store.outputs.STORE_PATH }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-${{ steps.dependency-hashes.outputs.pnpm }}
           restore-keys: pnpm-${{ runner.os }}-
 
       - name: Install uv (Python package manager)
@@ -342,7 +356,7 @@ jobs:
             ~/Library/Caches/pip
             ~/.cache/uv
             ~/Library/Caches/uv
-          key: python-wheel-${{ runner.os }}-${{ hashFiles('private-src/uv.lock') }}
+          key: python-wheel-${{ runner.os }}-${{ steps.dependency-hashes.outputs.uv }}
           restore-keys: |
             python-wheel-${{ runner.os }}-
 
@@ -507,9 +521,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          ENABLE_RUNTIME_CACHE: "1"
-          UV_DISABLE_WORKSPACE: "1"
-          UV_PROJECT_ENVIRONMENT: "shared"
+          ENABLE_RUNTIME_CACHE: '1'
+          UV_DISABLE_WORKSPACE: '1'
+          UV_PROJECT_ENVIRONMENT: 'shared'
         run: |
           set -euo pipefail
           echo "[INFO] Starting build - output will be saved to build-macos.log"
@@ -1151,7 +1165,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Enable Corepack (pnpm)
         run: corepack enable
@@ -1172,11 +1186,18 @@ jobs:
           echo "Using STORE_PATH=$STORE_PATH" >&2
           echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Compute dependency hashes
+        id: dependency-hashes
+        working-directory: private-src
+        shell: bash
+        run: |
+          ../scripts/ci/hash_lockfiles.sh .
+
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: ${{ steps.windows-pnpm-store.outputs.STORE_PATH }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('private-src/pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-${{ steps.dependency-hashes.outputs.pnpm }}
           restore-keys: pnpm-${{ runner.os }}-
 
       - name: Cache Python wheels
@@ -1186,7 +1207,7 @@ jobs:
             ~\AppData\Local\pip\Cache
             ~\.cache\pip
             ~\AppData\Local\uv
-          key: python-wheel-${{ runner.os }}-${{ hashFiles('private-src/uv.lock') }}
+          key: python-wheel-${{ runner.os }}-${{ steps.dependency-hashes.outputs.uv }}
           restore-keys: |
             python-wheel-${{ runner.os }}-
 
@@ -1309,9 +1330,9 @@ jobs:
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          ENABLE_RUNTIME_CACHE: "1"
-          UV_DISABLE_WORKSPACE: "1"
-          UV_PROJECT_ENVIRONMENT: "shared"
+          ENABLE_RUNTIME_CACHE: '1'
+          UV_DISABLE_WORKSPACE: '1'
+          UV_PROJECT_ENVIRONMENT: 'shared'
         run: |
           set -euo pipefail
           # Only purge PyO3 build artifacts for release builds; for preview keep them to improve cache reuse
