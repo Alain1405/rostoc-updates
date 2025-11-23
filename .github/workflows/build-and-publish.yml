@@ -130,6 +130,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Setup SSH agent for private repo
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -253,11 +258,9 @@ jobs:
     steps:
       # --- Checkout this updates repo ---
       - name: Checkout updates repo
-        if: inputs.is_release
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: updates-repo
 
       # --- SSH method to read the private repo ---
       - name: Setup SSH agent for private repo
@@ -1127,6 +1130,11 @@ jobs:
       installer_latest: ${{ inputs.is_release && steps.prepare_windows_updates.outputs.latest_name || '' }}
       installer_checksum: ${{ inputs.is_release && steps.prepare_windows_updates.outputs.checksum || '' }}
     steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Setup SSH agent for private repo
         uses: webfactory/ssh-agent@v0.9.0
         with:
