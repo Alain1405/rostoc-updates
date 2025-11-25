@@ -10,9 +10,22 @@ if [ ! -f "$PNPM_LOCK" ]; then
   exit 1
 fi
 
-pnpm_hash=$(shasum -a 256 "$PNPM_LOCK" | awk '{print $1}')
+# Cross-platform hash function
+hash_file() {
+  local file=$1
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  else
+    # Fallback for Windows (Git Bash doesn't have shasum by default)
+    openssl dgst -sha256 "$file" | awk '{print $NF}'
+  fi
+}
+
+pnpm_hash=$(hash_file "$PNPM_LOCK")
 if [ -f "$UV_LOCK" ]; then
-  uv_hash=$(shasum -a 256 "$UV_LOCK" | awk '{print $1}')
+  uv_hash=$(hash_file "$UV_LOCK")
 else
   uv_hash="missing"
 fi
