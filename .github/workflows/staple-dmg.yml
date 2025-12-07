@@ -1,0 +1,217 @@
+name: Staple Notarized DMG
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Notarization job ID (UUID)'
+        required: true
+        type: string
+      version:
+        description: 'Release version (e.g., 0.2.122)'
+        required: true
+        type: string
+      dmg_url:
+        description: 'URL to download the notarized (unsigned) DMG'
+        required: true
+        type: string
+      upload_url:
+        description: 'S3 URL where stapled DMG should be uploaded'
+        required: true
+        type: string
+      backend_callback_url:
+        description: 'Backend API endpoint to notify when complete'
+        required: false
+        type: string
+        default: 'https://api.rostoc.co/api/updates/notarizations'
+
+permissions:
+  contents: read
+
+env:
+  LC_ALL: en_US.UTF-8
+  LANG: en_US.UTF-8
+  LC_CTYPE: en_US.UTF-8
+
+jobs:
+  staple-and-upload:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          echo "[INFO] Job ID: ${{ inputs.job_id }}"
+          echo "[INFO] Version: ${{ inputs.version }}"
+          echo "[INFO] DMG URL: ${{ inputs.dmg_url }}"
+          echo "[INFO] Upload URL: ${{ inputs.upload_url }}"
+
+          # Validate UUID format
+          if ! [[ "${{ inputs.job_id }}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "::error::Invalid job_id format (expected UUID)"
+            exit 1
+          fi
+
+      - name: Download notarized DMG
+        id: download
+        run: |
+          set -euo pipefail
+
+          DMG_FILENAME="Rostoc_${{ inputs.version }}_aarch64.dmg"
+          echo "[INFO] Downloading DMG from: ${{ inputs.dmg_url }}"
+
+          curl -sSfL -o "$DMG_FILENAME" "${{ inputs.dmg_url }}" || {
+            echo "::error::Failed to download DMG"
+            exit 1
+          }
+
+          if [[ ! -f "$DMG_FILENAME" ]]; then
+            echo "::error::Downloaded DMG not found"
+            exit 1
+          fi
+
+          SIZE=$(stat -f%z "$DMG_FILENAME" 2>/dev/null || stat -c%s "$DMG_FILENAME")
+          echo "[INFO] Downloaded DMG size: ${SIZE} bytes"
+
+          if [[ "$SIZE" -lt 10000000 ]]; then
+            echo "::warning::DMG size suspiciously small (< 10MB)"
+          fi
+
+          echo "dmg_path=$DMG_FILENAME" >> "$GITHUB_OUTPUT"
+
+      - name: Staple notarization ticket
+        id: staple
+        run: |
+          set -euo pipefail
+
+          DMG_PATH="${{ steps.download.outputs.dmg_path }}"
+          echo "[INFO] Stapling notarization ticket to: $DMG_PATH"
+
+          # Staple the notarization ticket
+          xcrun stapler staple "$DMG_PATH" || {
+            STATUS=$?
+            echo "::error::Stapling failed with exit code $STATUS"
+            
+            # Check if notarization might not be complete
+            echo "[INFO] Checking notarization status..."
+            xcrun stapler validate "$DMG_PATH" 2>&1 || true
+            
+            exit 1
+          }
+
+          echo "[INFO] ✅ Stapling successful"
+
+          # Verify the stapled DMG
+          echo "[INFO] Verifying stapled DMG..."
+          xcrun stapler validate "$DMG_PATH" || {
+            echo "::warning::Staple validation failed"
+          }
+
+          # Check signature
+          codesign -dv --verbose=4 "$DMG_PATH" 2>&1 | head -n 20 || true
+
+      - name: Upload stapled DMG to Spaces
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: sgp1
+          SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        run: |
+          set -euo pipefail
+
+          DMG_PATH="${{ steps.download.outputs.dmg_path }}"
+          UPLOAD_URL="${{ inputs.upload_url }}"
+
+          echo "[INFO] Uploading stapled DMG to: $UPLOAD_URL"
+
+          # Install AWS CLI if needed
+          if ! command -v aws &> /dev/null; then
+            echo "[INFO] Installing AWS CLI..."
+            pip install --quiet awscli
+          fi
+
+          # Extract S3 path from URL
+          # Format: https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.122/Rostoc_0.2.122_aarch64.dmg
+          # or: https://sgp1.digitaloceanspaces.com/rostoc-releases/releases/v0.2.122/Rostoc_0.2.122_aarch64.dmg
+
+          if [[ "$UPLOAD_URL" =~ ^https://[^/]+/([^/]+/.+)$ ]]; then
+            S3_PATH="${BASH_REMATCH[1]}"
+          else
+            echo "::error::Could not parse S3 path from upload URL: $UPLOAD_URL"
+            exit 1
+          fi
+
+          # Extract bucket name from path
+          BUCKET=$(echo "$S3_PATH" | cut -d'/' -f1)
+          KEY=$(echo "$S3_PATH" | cut -d'/' -f2-)
+
+          echo "[INFO] Bucket: $BUCKET"
+          echo "[INFO] Key: $KEY"
+
+          # Upload to S3 (overwrites existing file)
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "$DMG_PATH" \
+            "s3://${BUCKET}/${KEY}" \
+            --acl public-read || {
+            echo "::error::Failed to upload to Spaces"
+            exit 1
+          }
+
+          echo "[INFO] ✅ Upload complete"
+
+          # Construct final CDN URL
+          CDN_URL="https://${BUCKET}.sgp1.cdn.digitaloceanspaces.com/${KEY}"
+          echo "[INFO] Stapled DMG available at: $CDN_URL"
+
+      - name: Notify backend of completion
+        if: always()
+        env:
+          BACKEND_TOKEN: ${{ secrets.ROSTOC_BACKEND_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          JOB_ID="${{ inputs.job_id }}"
+          CALLBACK_URL="${{ inputs.backend_callback_url }}/${JOB_ID}/stapled"
+
+          # Determine status
+          if [[ "${{ steps.staple.outcome }}" == "success" ]]; then
+            STATUS="success"
+            MESSAGE="DMG stapled and uploaded successfully via CI"
+          else
+            STATUS="failed"
+            MESSAGE="Stapling failed in CI: ${{ steps.staple.outcome }}"
+          fi
+
+          echo "[INFO] Notifying backend: $CALLBACK_URL"
+
+          curl -sSf -X POST "$CALLBACK_URL" \
+            -H "Authorization: Bearer ${BACKEND_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"status\": \"${STATUS}\",
+              \"message\": \"${MESSAGE}\",
+              \"workflow_run_id\": \"${{ github.run_id }}\",
+              \"workflow_run_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+            }" || {
+            echo "::warning::Failed to notify backend (non-fatal)"
+          }
+
+          echo "[INFO] Backend notified"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## 📦 DMG Stapling Complete"
+            echo ""
+            echo "**Job ID:** ${{ inputs.job_id }}"
+            echo "**Version:** ${{ inputs.version }}"
+            echo "**Status:** ${{ steps.staple.outcome }}"
+            echo ""
+            if [[ "${{ steps.staple.outcome }}" == "success" ]]; then
+              echo "✅ Stapled DMG uploaded successfully"
+            else
+              echo "❌ Stapling failed - check logs above"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
