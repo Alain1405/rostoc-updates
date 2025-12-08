@@ -1,9 +1,11 @@
-name: Staple Notarized DMGs
+name: Staple Notarized DMGs (DEPRECATED)
 
+# This workflow is deprecated - notarization is now handled by the backend
+# See: backend/updates/notary_worker.py and .github/workflows/staple-dmg.yml
 on:
-  schedule:
-    # Run every 30 minutes
-    - cron: '*/30 * * * *'
+  # schedule:
+  #   # Run every 30 minutes
+  #   - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
