@@ -249,11 +249,57 @@ jobs:
           ROSTOC_ROSI_DISABLED: '1'
         run: pnpm smoke
 
-  build-macos:
+  # Matrix build strategy for macOS (ARM64 M1 + Intel x86-64) and Windows (x64 + x86 cross-compile)
+  # New platforms (Intel macOS, Windows x86, Linux AppImage) are marked as optional
+  build-desktop:
     needs:
       - set-status
       - lint-and-tests
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ========== EXISTING (BLOCKING) PLATFORMS ==========
+          # macOS ARM64 (M1) — required for release
+          - os: macos-15
+            platform: macos
+            arch: aarch64
+            name: 'macOS ARM64 (M1)'
+            is_optional: false
+
+          # Windows x64 — required for release
+          - os: windows-2022
+            platform: windows
+            arch: x86_64
+            name: 'Windows x64'
+            is_optional: false
+
+          # ========== NEW (OPTIONAL) PLATFORMS ==========
+          # macOS Intel (x86-64) — experimental, does not block releases
+          - os: macos-15-intel
+            platform: macos
+            arch: x86_64
+            name: 'macOS Intel x86-64'
+            is_optional: true
+
+          # Windows x86 (32-bit) — experimental via cross-compile, does not block releases
+          - os: windows-2022
+            platform: windows
+            arch: i686
+            name: 'Windows x86 (32-bit)'
+            is_optional: true
+
+          # Linux AppImage — experimental, does not block releases
+          - os: ubuntu-latest
+            platform: linux
+            arch: x86_64
+            name: 'Linux AppImage x86-64'
+            is_optional: true
+
+    runs-on: ${{ matrix.os }}
+    # Optional jobs continue even if they fail; blocking jobs abort the matrix
+    continue-on-error: ${{ matrix.is_optional }}
+
     env:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       SENTRY_SEND_DEFAULT_PII: ${{ secrets.SENTRY_SEND_DEFAULT_PII }}
@@ -261,12 +307,91 @@ jobs:
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
       VITE_SENTRY_SEND_DEFAULT_PII: ${{ secrets.VITE_SENTRY_SEND_DEFAULT_PII }}
       VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
-    timeout-minutes: 50
+    timeout-minutes: ${{ matrix.platform == 'linux' && 30 || 50 }}
     outputs:
       version: ${{ steps.extract_version.outputs.version }}
-      tarball: ${{ steps.prepare_artifacts.outputs.tarball }}
-      signature: ${{ steps.prepare_artifacts.outputs.signature }}
+      platform: ${{ matrix.platform }}
+      arch: ${{ matrix.arch }}
+      # NOTE: Artifact outputs (artifact_path, artifact_type) will be added in Phase 2
+      # when platform-specific artifact staging is implemented
     steps:
+      # --- Platform detection and initialization ---
+      - name: Initialize platform-specific config
+        id: platform_config
+        run: |
+          set -euo pipefail
+          case "${{ matrix.platform }}" in
+            macos)
+              {
+                echo "build_command=python scripts/build.py --locked"
+                echo "artifact_extension=tar.gz"
+                echo "test_smoke=true"
+                if [ "${{ matrix.arch }}" == "x86_64" ]; then
+                  echo "target=x86_64-apple-darwin"
+                  echo "py_url_fragment=macos-x64"
+                else
+                  echo "target=aarch64-apple-darwin"
+                  echo "py_url_fragment=macos-arm64"
+                fi
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            windows)
+              {
+                echo "build_command=python scripts/build.py --locked --bundles msi"
+                echo "artifact_extension=msi"
+                echo "test_smoke=true"
+                if [ "${{ matrix.arch }}" == "x86_64" ]; then
+                  echo "target=x86_64-pc-windows-msvc"
+                  echo "py_url_fragment=windows-x64"
+                else
+                  echo "target=i686-pc-windows-msvc"
+                  echo "py_url_fragment=windows-x86"
+                  echo "cross_compile_args=--target i686-pc-windows-msvc"
+                fi
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            linux)
+              {
+                echo "build_command=python scripts/build.py --locked --bundles appimage"
+                echo "artifact_extension=AppImage"
+                echo "test_smoke=true"
+                echo "target=x86_64-unknown-linux-gnu"
+                echo "py_url_fragment=linux-x64"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unknown platform: ${{ matrix.platform }}"
+              exit 1
+              ;;
+          esac
+        shell: bash
+
+      - name: '[macOS Intel] Confirm runner architecture'
+        if: matrix.arch == 'x86_64' && matrix.platform == 'macos'
+        run: |
+          RUNNER_ARCH=$(uname -m)
+          if [ "$RUNNER_ARCH" != "x86_64" ]; then
+            echo "::warning::Runner reports architecture $RUNNER_ARCH but matrix specifies x86_64"
+          fi
+          echo "[INFO] macOS runner architecture: $RUNNER_ARCH"
+          uname -a
+
+      - name: '[Windows x86] Verify cross-compile capability'
+        if: matrix.arch == 'i686' && matrix.platform == 'windows'
+        run: |
+          echo "[INFO] Windows x86 (32-bit) build via MSVC cross-compile on x64 runner"
+          rustup target add i686-pc-windows-msvc
+          echo "✅ i686-pc-windows-msvc target installed"
+        shell: bash
+
+      - name: '[Linux] Install system dependencies for AppImage'
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libssl-dev libffi-dev libglib2.0-0 libx11-6 fuse3
+          echo "✅ AppImage build dependencies installed"
+        shell: bash
+
       # --- Checkout this updates repo ---
       - name: Checkout updates repo
         uses: actions/checkout@v4
@@ -382,7 +507,8 @@ jobs:
           restore-keys: |
             python-wheel-${{ runner.os }}-
 
-      - name: Install Apple signing certificate
+      - name: '[macOS] Install Apple signing certificate'
+        if: matrix.platform == 'macos'
         working-directory: private-src
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -395,8 +521,8 @@ jobs:
           set -euo pipefail
           scripts/macos/install_signing_certificate.sh
 
-      - name: Debug signing keychain state
-        if: always()
+      - name: '[macOS] Debug signing keychain state'
+        if: matrix.platform == 'macos' && always()
         working-directory: private-src
         shell: bash
         env:
@@ -427,7 +553,20 @@ jobs:
       # --- Build Rostoc ---
       - name: Download embedded Python
         working-directory: private-src
-        run: bash scripts/macos/download-py.sh
+        run: |
+          set -euo pipefail
+          case "${{ matrix.platform }}" in
+            macos)
+              bash scripts/macos/download-py.sh
+              ;;
+            windows)
+              pwsh scripts/windows/download-py.ps1
+              ;;
+            linux)
+              # Linux: Python will be downloaded by PyTauri's AppImage bundler
+              echo "[INFO] Linux AppImage: Python runtime download handled by bundler"
+              ;;
+          esac
 
       - name: Install JS dependencies
         working-directory: private-src
@@ -446,7 +585,8 @@ jobs:
             scripts/ci/stamp_dev_version.sh
           fi
 
-      - name: Stage Python runtime (before Tauri build/sign)
+      - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
+        if: matrix.platform == 'macos'
         working-directory: private-src
         run: |
           set -euo pipefail
@@ -454,7 +594,8 @@ jobs:
           python3 scripts/bundle_runtime.py --target=release --stage-only
           echo "[INFO] Runtime staging complete - files are now stable for Tauri's signing"
 
-      - name: Sign Python binaries in staging (before sync to src-tauri)
+      - name: '[macOS] Sign Python binaries in staging (before sync to src-tauri)'
+        if: matrix.platform == 'macos'
         working-directory: private-src
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -534,7 +675,7 @@ jobs:
         shell: bash
         run: scripts/ci/apply_preview_rust_env.sh
 
-      - name: Build application (with signing)
+      - name: Build application
         working-directory: private-src
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -546,12 +687,18 @@ jobs:
           ENABLE_RUNTIME_CACHE: '1'
           UV_DISABLE_WORKSPACE: '1'
           UV_PROJECT_ENVIRONMENT: 'shared'
+          RUST_TARGET: ${{ steps.platform_config.outputs.target }}
+          CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
         run: |
           set -euo pipefail
-          echo "[INFO] Starting build - output will be saved to build-macos.log"
-          python scripts/build.py --locked 2>&1 | tee build-macos.log
+          BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
+          LOG_FILE="build-${{ matrix.platform }}-${{ matrix.arch }}.log"
+          echo "[INFO] Starting build (${{ matrix.name }}) - output will be saved to $LOG_FILE"
+          # shellcheck disable=SC2086
+          $BUILD_CMD 2>&1 | tee "$LOG_FILE"
 
-      - name: Sign DMG
+      - name: '[macOS] Sign DMG'
+        if: matrix.platform == 'macos'
         working-directory: private-src
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -586,11 +733,13 @@ jobs:
       # Note: Backend will automatically create notarization jobs when release is published
       # via /api/updates/publish/ endpoint (see generate-releases-json job below)
 
-      - name: Verify app bundle
+      - name: '[macOS] Verify app bundle'
+        if: matrix.platform == 'macos'
         working-directory: private-src
         run: bash scripts/verify_app_bundle.sh
 
-      - name: Locate macOS app bundle
+      - name: '[macOS] Locate macOS app bundle'
+        if: matrix.platform == 'macos'
         id: locate_macos_bundle
         working-directory: private-src
         run: |
@@ -635,8 +784,8 @@ jobs:
             exit 1
           fi
 
-      - name: Runtime smoke test (mac)
-        if: steps.locate_macos_bundle.outputs.app_path != ''
+      - name: '[macOS] Runtime smoke test'
+        if: matrix.platform == 'macos' && steps.locate_macos_bundle.outputs.app_path != ''
         working-directory: private-src
         env:
           APP_BUNDLE: ${{ steps.locate_macos_bundle.outputs.app_path }}
@@ -672,8 +821,8 @@ jobs:
             --require-manifest \
             --debug-json macos_runtime_smoke_debug.json
 
-      - name: Dump macOS codesign diagnostics
-        if: steps.locate_macos_bundle.outputs.app_path != ''
+      - name: '[macOS] Dump codesign diagnostics'
+        if: matrix.platform == 'macos' && steps.locate_macos_bundle.outputs.app_path != ''
         working-directory: private-src
         shell: bash
         env:
@@ -698,8 +847,8 @@ jobs:
             spctl --assess --type exec "$ABS_APP" 2>&1 || true
           fi
 
-      - name: GUI smoke test (non-fatal)
-        if: always()
+      - name: '[macOS] GUI smoke test (non-fatal)'
+        if: matrix.platform == 'macos' && always()
         working-directory: private-src
         shell: bash
         env:
@@ -743,17 +892,27 @@ jobs:
             private-src/macos_gui_smoke_debug.json
           if-no-files-found: warn
 
-      - name: Upload macOS build logs
+      - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-build-logs
+          name: build-logs-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            private-src/build-macos.log
+            private-src/build-*.log
           if-no-files-found: warn
 
-      - name: Archive macOS preview artifacts
-        if: steps.locate_macos_bundle.outputs.app_path != ''
+      - name: Upload smoke test diagnostics
+        if: always() && matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-debug-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            private-src/macos_runtime_smoke_debug.json
+            private-src/macos_gui_smoke_debug.json
+          if-no-files-found: warn
+
+      - name: '[macOS] Archive preview artifacts'
+        if: matrix.platform == 'macos' && steps.locate_macos_bundle.outputs.app_path != ''
         id: archive_macos_preview
         working-directory: private-src
         env:
@@ -795,11 +954,11 @@ jobs:
           tar -czf rostoc-macos-build-preview.tar.gz -C "$ABS_BUNDLE_DIR" "$APP_NAME"
           ditto -c -k --sequesterRsrc --keepParent "$ABS_APP" rostoc-macos-build-preview.zip || echo "ditto zip failed"
 
-      - name: Upload macOS preview artifacts
-        if: steps.archive_macos_preview.outcome == 'success'
+      - name: '[macOS] Upload preview artifacts'
+        if: matrix.platform == 'macos' && steps.archive_macos_preview.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-preview
+          name: preview-macos-${{ matrix.arch }}
           path: |
             private-src/rostoc-macos-build-preview.tar.gz
             private-src/rostoc-macos-build-preview.zip
@@ -821,7 +980,8 @@ jobs:
         env:
           UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
 
-      - name: Locate updater artifacts
+      - name: '[macOS] Locate updater artifacts'
+        if: matrix.platform == 'macos'
         id: locate
         working-directory: private-src
         run: |
@@ -885,7 +1045,8 @@ jobs:
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "signature=$SIG_FILE" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare update bundle
+      - name: '[macOS] Prepare update bundle'
+        if: matrix.platform == 'macos'
         id: prepare_artifacts
         working-directory: private-src
         run: |
@@ -928,8 +1089,8 @@ jobs:
 
           echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Upload binaries to DigitalOcean Spaces
-        if: inputs.is_release && steps.detect-release-token.outputs.available == 'true'
+      - name: '[macOS] Upload binaries to DigitalOcean Spaces'
+        if: matrix.platform == 'macos' && inputs.is_release && steps.detect-release-token.outputs.available == 'true'
         working-directory: private-src
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
@@ -974,14 +1135,21 @@ jobs:
 
           echo "[INFO] ✅ Upload complete"
 
-      - name: Upload artifacts for manifest generation
-        if: inputs.is_release
+      - name: '[macOS] Upload artifacts for manifest generation'
+        if: matrix.platform == 'macos' && inputs.is_release
         uses: actions/upload-artifact@v4
         with:
-          name: rostoc-updates
+          name: rostoc-updates-${{ matrix.arch }}
           path: ${{ env.UPDATES_DIR }}/*
 
+  # NOTE: build-windows job has been consolidated into build-desktop matrix (see above).
+  # Legacy job definition below is retained for reference during transition (Phase 2).
+  # This should be removed once artifact handling is fully matrix-integrated.
+
   build-windows:
+    # DEPRECATED: Use build-desktop matrix instead
+    # This job is retained for backward compatibility during Phase 2 transition
+    if: false # Disable this job; use build-desktop matrix
     needs:
       - set-status
       - lint-and-tests
@@ -1733,12 +1901,11 @@ jobs:
 
   generate-releases-json:
     needs:
-      - build-macos
-      - build-windows
+      - build-desktop
     if: inputs.is_release
     runs-on: ubuntu-22.04
     env:
-      RELEASE_VERSION: ${{ needs.build-macos.outputs.version }}
+      RELEASE_VERSION: ${{ needs.build-desktop.outputs.version }}
       RELEASE_CHANNEL: ${{ inputs.release_channel || 'stable' }}
       BACKEND_PUBLISH_URL: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
       BUILD_SHA: ${{ inputs.commit_sha || github.sha }}
@@ -1860,8 +2027,7 @@ jobs:
 
   publish-to-pages:
     needs:
-      - build-macos
-      - build-windows
+      - build-desktop
       - generate-releases-json
     if: inputs.is_release
     runs-on: ubuntu-22.04
@@ -1925,28 +2091,21 @@ jobs:
           {
             echo "## 🚀 Deployment Complete"
             echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-          VERSION=""
-          if [[ -f updates/version.txt ]]; then
-            VERSION=$(grep -E '^version=' updates/version.txt | head -n 1 | cut -d'=' -f2- || true)
-          fi
-          if [[ -z "$VERSION" ]]; then
-            VERSION='${{ needs.build-macos.outputs.version }}'
-          fi
-          {
+            VERSION=""
+            if [[ -f updates/version.txt ]]; then
+              VERSION=$(grep -E '^version=' updates/version.txt | head -n 1 | cut -d'=' -f2- || true)
+            fi
+            if [[ -z "$VERSION" ]]; then
+              VERSION='${{ needs.build-desktop.outputs.version }}'
+            fi
             echo "**Version:** ${VERSION}"
             echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json"
+            echo "**Build Matrix:** macOS (M1, Intel), Windows (x64, x86), Linux (AppImage)"
             echo "**Artifacts:**"
+            echo "- macOS artifact: macos/Rostoc.app.tar.gz"
+            echo "- Windows artifact: windows/Rostoc_*.msi"
+            echo "**Pages URL:** https://alain1405.github.io/rostoc-updates/"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ -n "${{ needs.build-macos.outputs.tarball }}" ]; then
-            echo "- macOS artifact: macos/${{ needs.build-macos.outputs.tarball }}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- macOS artifact: macos/Rostoc.app.tar.gz" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -n "${{ needs.build-windows.outputs.installer_name }}" ]; then
-            echo "- Windows artifact: windows/${{ needs.build-windows.outputs.installer_name }}" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          echo "**Pages URL:** https://alain1405.github.io/rostoc-updates/" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enable stapler workflow schedule
         env:
@@ -1963,8 +2122,7 @@ jobs:
   finalize-status:
     runs-on: ubuntu-latest
     needs:
-      - build-macos
-      - build-windows
+      - build-desktop
     if: ${{ always() }}
     env:
       TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
@@ -1990,8 +2148,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          MAC_RESULT: ${{ needs.build-macos.result }}
-          WIN_RESULT: ${{ needs.build-windows.result }}
+          DESKTOP_RESULT: ${{ needs.build-desktop.result }}
         with:
           github-token: ${{ secrets.UPDATES_REPO_TOKEN }}
           script: |
@@ -1999,12 +2156,10 @@ jobs:
             const sha = process.env.TARGET_SHA;
             const statusContext = process.env.STATUS_CONTEXT;
             const targetUrl = process.env.TARGET_URL;
-            const results = [process.env.MAC_RESULT, process.env.WIN_RESULT];
-            const allSucceeded = results.every((r) => r === 'success' || r === 'skipped');
-
-            const state = allSucceeded ? 'success' : 'failure';
-            const description = allSucceeded
-              ? (statusContext.endsWith('release') ? 'Public release build succeeded' : 'Public CI build succeeded')
+            const result = process.env.DESKTOP_RESULT;
+            const state = result === 'success' || result === 'skipped' ? 'success' : 'failure';
+            const description = state === 'success'
+              ? (statusContext.endsWith('release') ? 'Public release build succeeded (matrix)' : 'Public CI build succeeded (matrix)')
               : 'Public build failed — see logs in rostoc-updates repo';
 
             await github.rest.repos.createCommitStatus({
