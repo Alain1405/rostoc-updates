@@ -1287,6 +1287,35 @@ jobs:
             objdump -p "$EXE" | grep -i 'DLL Name' | head -n 40 || true
           fi
 
+      - name: Verify DLLs staged for MSI packaging
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "[INFO] Verifying Windows DLLs are staged in src-tauri/ for MSI packaging" >&2
+
+          # Check for required DLLs in src-tauri/ root (where Tauri will package them from)
+          REQUIRED_DLLS=("python3.dll" "python313.dll" "vcruntime140.dll" "vcruntime140_1.dll")
+          MISSING=()
+
+          for dll in "${REQUIRED_DLLS[@]}"; do
+            if [ -f "src-tauri/$dll" ]; then
+              SIZE=$(stat -c%s "src-tauri/$dll" 2>/dev/null || stat -f%z "src-tauri/$dll" 2>/dev/null || echo "0")
+              echo "[OK] Found src-tauri/$dll (${SIZE} bytes)" >&2
+            else
+              echo "[ERROR] Missing src-tauri/$dll - will not be included in MSI!" >&2
+              MISSING+=("$dll")
+            fi
+          done
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::${#MISSING[@]} required DLL(s) missing from src-tauri/ root: ${MISSING[*]}"
+            echo "DLLs must be copied to src-tauri/ during build so Tauri packages them next to the exe."
+            exit 1
+          fi
+
+          echo "[INFO] All required DLLs present in src-tauri/ - MSI will include them" >&2
+
       - name: Runtime smoke test
         working-directory: private-src
         shell: bash
@@ -1406,6 +1435,42 @@ jobs:
           "installed_exe=$exePath" >> $env:GITHUB_OUTPUT
           "installed_py=$expectedPyPath" >> $env:GITHUB_OUTPUT
 
+      - name: Verify DLLs in MSI installation
+        if: steps.locate_installed_windows_msi.outcome == 'success'
+        working-directory: private-src
+        shell: pwsh
+        env:
+          INSTALLED_EXE: ${{ steps.locate_installed_windows_msi.outputs.installed_exe }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:INSTALLED_EXE) {
+            throw "INSTALLED_EXE not set"
+          }
+          $exeDir = Split-Path -Parent $env:INSTALLED_EXE
+          Write-Host "[INFO] Verifying required DLLs are installed next to rostoc.exe at: $exeDir"
+
+          $requiredDlls = @('python3.dll', 'python313.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
+          $missing = @()
+
+          foreach ($dll in $requiredDlls) {
+            $dllPath = Join-Path $exeDir $dll
+            if (Test-Path -LiteralPath $dllPath) {
+              $size = (Get-Item -LiteralPath $dllPath).Length
+              Write-Host "[OK] Found $dll ($size bytes)"
+            } else {
+              Write-Host "[ERROR] Missing $dll - rostoc.exe will fail to launch!"
+              $missing += $dll
+            }
+          }
+
+          if ($missing.Count -gt 0) {
+            Write-Host "::error::MSI installation missing $($missing.Count) required DLL(s): $($missing -join ', ')"
+            Write-Host "This is a critical MSI packaging bug - the app will not launch for end users."
+            throw "Required DLLs missing from MSI installation"
+          }
+
+          Write-Host "[INFO] All required DLLs present in MSI installation"
+
       - name: Runtime smoke test (MSI install)
         if: steps.locate_installed_windows_msi.outcome == 'success'
         working-directory: private-src
@@ -1426,21 +1491,19 @@ jobs:
             --strict
 
       - name: GUI smoke test (MSI install)
-        if: always()
+        if: steps.locate_installed_windows_msi.outcome == 'success'
         working-directory: private-src
         shell: pwsh
         env:
           INSTALLED_EXE: ${{ steps.locate_installed_windows_msi.outputs.installed_exe }}
           INSTALLED_PY: ${{ steps.locate_installed_windows_msi.outputs.installed_py }}
         run: |
-          $ErrorActionPreference = 'Continue'
+          $ErrorActionPreference = 'Stop'
           if (-not $env:INSTALLED_PY -or -not (Test-Path -LiteralPath $env:INSTALLED_PY)) {
-            Write-Host '[WARN] Installed embedded python missing, skipping MSI GUI smoke test'
-            exit 0
+            throw "Installed embedded python not found at '$env:INSTALLED_PY'"
           }
           if (-not $env:INSTALLED_EXE -or -not (Test-Path -LiteralPath $env:INSTALLED_EXE)) {
-            Write-Host '[WARN] Installed rostoc.exe missing, skipping MSI GUI smoke test'
-            exit 0
+            throw "Installed rostoc.exe not found at '$env:INSTALLED_EXE'"
           }
           Write-Host "[INFO] Running MSI GUI smoke test against $env:INSTALLED_EXE"
           $script = Join-Path $PWD 'scripts\ci\unified_smoke_validator.py'
@@ -1450,6 +1513,9 @@ jobs:
             --exe-path $env:INSTALLED_EXE `
             --debug-json windows_msi_gui_smoke_debug.json `
             --strict
+          if ($LASTEXITCODE -ne 0) {
+            throw "GUI smoke test failed with exit code $LASTEXITCODE - rostoc.exe did not launch successfully"
+          }
 
       - name: Uninstall MSI (cleanup)
         if: always()
