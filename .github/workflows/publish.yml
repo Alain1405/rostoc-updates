@@ -1,0 +1,249 @@
+name: Publish to Pages (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+        description: 'Git reference for source repo (for fetching manifest generation scripts)'
+      is_release:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether this is a release build'
+      release_channel:
+        required: false
+        type: string
+        default: 'stable'
+        description: 'Release channel (stable, beta, dev)'
+      commit_sha:
+        required: false
+        type: string
+        description: 'Commit SHA for backend publishing'
+      backend_publish_url:
+        required: false
+        type: string
+        default: 'https://api.rostoc.co/api/updates/publish/'
+        description: 'Backend API endpoint for release publishing'
+
+env:
+  PRIVATE_REPO: alain1405/rostoc
+  UPDATES_DIR: updates
+  VERSION_FILE: version.txt
+
+jobs:
+  generate-releases-json:
+    if: inputs.is_release
+    runs-on: ubuntu-22.04
+    env:
+      RELEASE_CHANNEL: ${{ inputs.release_channel || 'stable' }}
+      BACKEND_PUBLISH_URL: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+      BUILD_SHA: ${{ inputs.commit_sha || github.sha }}
+      DO_SPACES_CDN_URL: ${{ secrets.DO_SPACES_CDN_URL || 'https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com' }}
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+    steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+
+      - name: Checkout main source repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          path: private-src
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates
+          path: macos-artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates-windows
+          path: windows-artifacts
+
+      - name: Download pending notarizations metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: pending-notarizations
+          path: private-src
+        continue-on-error: true
+
+      - name: Extract version
+        id: extract-version
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r '.version' private-src/src-tauri/tauri.conf.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Generate unified JSON manifests
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ env.RELEASE_VERSION }}"
+          echo "Generating releases.json and latest.json for version ${VERSION}"
+
+          # Get submission ID from the build output or pending file
+          SUBMISSION_ID=""
+          if [[ -f "private-src/pending-notarizations.csv" ]]; then
+            SUBMISSION_ID=$(tail -n 1 private-src/pending-notarizations.csv | cut -d',' -f1)
+            echo "[INFO] Found notarization submission ID: ${SUBMISSION_ID}"
+          fi
+
+          # Run the unified JSON generation script
+          DO_SPACES_CDN_URL="${{ secrets.DO_SPACES_CDN_URL }}" \
+          bash private-src/scripts/ci/generate_releases_json.sh \
+            "${VERSION}" \
+            "macos-artifacts" \
+            "windows-artifacts" \
+            "json-output" \
+            "${SUBMISSION_ID}"
+
+          echo "Generated JSON files:"
+          ls -lh json-output/
+          echo ""
+          echo "=== releases.json (first release entry) ==="
+          jq '.releases[0]' json-output/releases.json
+          echo ""
+          echo "=== latest.json ==="
+          cat json-output/latest.json
+
+      - name: Detect backend publish token
+        id: detect-backend-token
+        run: |
+          if [ -n "${BACKEND_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
+            echo '### ℹ️ Backend publish skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
+            echo '\`ROSTOC_BACKEND_TOKEN\` not configured; skipping /api/updates/publish/.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          BACKEND_TOKEN: ${{ secrets.ROSTOC_BACKEND_TOKEN }}
+
+      - name: Prepare backend publish payload
+        if: steps.detect-backend-token.outputs.available == 'true'
+        id: prepare-backend-payload
+        run: |
+          set -euo pipefail
+          python scripts/ci/build_backend_payload.py \
+            --version "${{ env.RELEASE_VERSION }}" \
+            --channel "${{ env.RELEASE_CHANNEL }}" \
+            --build-sha "${{ env.BUILD_SHA }}" \
+            --cdn-base "${{ env.DO_SPACES_CDN_URL }}" \
+            --manifest json-output/latest.json \
+            --releases json-output/releases.json \
+            --mac-root macos-artifacts \
+            --windows-root windows-artifacts
+          echo "payload=publish-payload.json" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release metadata to backend
+        if: steps.detect-backend-token.outputs.available == 'true'
+        env:
+          BACKEND_PUBLISH_TOKEN: ${{ secrets.ROSTOC_BACKEND_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -sSf -X POST "${{ env.BACKEND_PUBLISH_URL }}" \
+            -H "Authorization: Bearer ${BACKEND_PUBLISH_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @"${{ steps.prepare-backend-payload.outputs.payload }}"
+
+      - name: Upload JSON artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: releases-json
+          path: json-output/*.json
+
+  publish-to-pages:
+    if: inputs.is_release
+    needs: generate-releases-json
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      actions: write
+    environment:
+      name: github-pages
+      url: https://alain1405.github.io/rostoc-updates/
+    steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates
+          path: updates
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rostoc-updates-windows
+          path: updates/windows
+
+      - name: Download JSON manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: releases-json
+          path: updates
+
+      - name: Prepare Pages deployment
+        run: |
+          # Copy JSON manifests and metadata files
+          # Binaries are served from DigitalOcean Spaces
+          mkdir -p _site
+          cp updates/*.json _site/ 2>/dev/null || true
+          cp updates/version.txt _site/ 2>/dev/null || true
+
+          # Keep directory structure for backward compatibility but no binaries
+          mkdir -p _site/macos _site/windows
+          cp updates/macos/checksums.txt _site/macos/ 2>/dev/null || true
+          cp updates/windows/checksums.txt _site/windows/ 2>/dev/null || true
+
+          # Ensure GitHub Pages keeps running without Jekyll
+          touch _site/.nojekyll
+
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Summary
+        run: |
+          {
+            echo "## 🚀 Deployment Complete"
+            echo ""
+            VERSION="${{ needs.generate-releases-json.outputs.version }}"
+            echo "**Version:** ${VERSION}"
+            echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json"
+            echo "**Build Matrix:** macOS (M1, Intel), Windows (x64, x86), Linux (AppImage)"
+            echo "**Artifacts:**"
+            echo "- macOS artifact: macos/Rostoc.app.tar.gz"
+            echo "- Windows artifact: windows/Rostoc_*.msi"
+            echo "**Pages URL:** https://alain1405.github.io/rostoc-updates/"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enable stapler workflow schedule
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Ensuring stapler workflow is enabled for notarization follow-up"
+          curl -s -X PUT \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/Alain1405/rostoc-updates/actions/workflows/staple-notarized-dmg.yml/enable >/dev/null
+          echo "Stapler workflow enabled"

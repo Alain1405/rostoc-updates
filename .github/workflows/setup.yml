@@ -1,0 +1,204 @@
+name: Setup & Validation
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to build from private repo'
+        required: false
+        type: string
+        default: 'main'
+      commit_sha:
+        description: 'Commit SHA of the private repo (for stamping)'
+        required: false
+        type: string
+      is_release:
+        description: 'Whether to execute release publishing steps'
+        required: true
+        type: boolean
+
+env:
+  PRIVATE_REPO: alain1405/rostoc
+  LC_ALL: en_US.UTF-8
+  LANG: en_US.UTF-8
+  LC_CTYPE: en_US.UTF-8
+
+jobs:
+  set-status:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
+      STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
+      STATUS_DESCRIPTION: ${{ inputs.is_release && 'Public release build running' || 'Public CI build running' }}
+    steps:
+      - name: Detect status token
+        id: detect-status-token
+        run: |
+          if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
+            echo '### ℹ️ Status updates skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
+            echo '\`UPDATES_REPO_TOKEN\` not provided; omitting private repo commit status.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+
+      - name: Set pending status in private repo
+        if: ${{ env.TARGET_SHA != '' && steps.detect-status-token.outputs.available == 'true' }}
+        uses: actions/github-script@v7
+        env:
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          github-token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          result-encoding: string
+          script: |
+            const [owner, repo] = process.env.PRIVATE_REPO.split('/');
+            const sha = process.env.TARGET_SHA;
+            const statusContext = process.env.STATUS_CONTEXT;
+            const description = process.env.STATUS_DESCRIPTION;
+            const targetUrl = process.env.TARGET_URL;
+
+            if (!owner || !repo) {
+              core.warning(`Unable to parse PRIVATE_REPO env "${process.env.PRIVATE_REPO}"; skipping status update.`);
+              return 'skipped';
+            }
+
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state: 'pending',
+              context: statusContext,
+              description,
+              target_url: targetUrl
+            });
+
+            core.info(`Set pending status (${context}) on ${owner}/${repo}@${sha}`);
+            return 'pending-set';
+
+  lint-and-tests:
+    needs: set-status
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout updates repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH agent for private repo
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+      - name: Add GitHub to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout private repo (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          path: private-src
+          fetch-depth: 0
+
+      - name: Restore production icons
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -x scripts/restore_prod_icons.sh ]; then
+            bash scripts/restore_prod_icons.sh
+          else
+            echo "::warning::restore_prod_icons.sh missing; skipping icon restore"
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
+
+      - name: Derive pnpm store path
+        id: verify-pnpm-store
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd private-src
+          echo "[INFO] pnpm version: $(pnpm --version || true)" >&2
+          STORE_PATH=$(pnpm store path 2>/dev/null | tr -d '\r' || true)
+          if [ -z "${STORE_PATH}" ]; then
+            echo "[WARN] pnpm store path empty; falling back to default ~/.pnpm-store" >&2
+            STORE_PATH="$HOME/.pnpm-store"
+          fi
+          mkdir -p "$STORE_PATH" || true
+          echo "Using STORE_PATH=$STORE_PATH" >&2
+          echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Compute dependency hashes
+        id: dependency-hashes
+        shell: bash
+        run: |
+          scripts/ci/hash_lockfiles.sh private-src
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.verify-pnpm-store.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ steps.dependency-hashes.outputs.pnpm }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install uv (Python package manager)
+        working-directory: private-src
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "UV_BIN=$HOME/.local/bin" >> "$GITHUB_ENV"
+
+      - name: Cache Python wheels
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: python-wheel-${{ runner.os }}-${{ steps.dependency-hashes.outputs.uv }}
+          restore-keys: |
+            python-wheel-${{ runner.os }}-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: private-src
+          shared-key: lint
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install JS dependencies
+        working-directory: private-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint suite
+        working-directory: private-src
+        run: pnpm lint
+
+      - name: Run smoke tests
+        working-directory: private-src
+        env:
+          REQUIRE_ROSI: '0'
+          ROSTOC_ROSI_DISABLED: '1'
+        run: pnpm smoke

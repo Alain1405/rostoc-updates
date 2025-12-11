@@ -1,0 +1,74 @@
+name: Finalize Status (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      commit_sha:
+        required: false
+        type: string
+        description: 'Commit SHA for status updates'
+      is_release:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether this is a release build'
+      build_result:
+        required: true
+        type: string
+        description: 'Result of the build job (success, failure, etc.)'
+
+env:
+  PRIVATE_REPO: alain1405/rostoc
+
+jobs:
+  finalize-status:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
+      STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
+    steps:
+      - name: Detect status token
+        id: detect-finalize-token
+        run: |
+          if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC2016
+            echo '### ℹ️ Final status skipped' >> "$GITHUB_STEP_SUMMARY"
+            # shellcheck disable=SC2016
+            echo '\`UPDATES_REPO_TOKEN\` not provided; final commit status omitted.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+
+      - name: Update commit status with result
+        if: ${{ env.TARGET_SHA != '' && steps.detect-finalize-token.outputs.available == 'true' }}
+        uses: actions/github-script@v7
+        env:
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_RESULT: ${{ inputs.build_result }}
+        with:
+          github-token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          script: |
+            const [owner, repo] = process.env.PRIVATE_REPO.split('/');
+            const sha = process.env.TARGET_SHA;
+            const statusContext = process.env.STATUS_CONTEXT;
+            const targetUrl = process.env.TARGET_URL;
+            const result = process.env.BUILD_RESULT;
+            const state = result === 'success' || result === 'skipped' ? 'success' : 'failure';
+            const description = state === 'success'
+              ? (statusContext.endsWith('release') ? 'Public release build succeeded (matrix)' : 'Public CI build succeeded (matrix)')
+              : 'Public build failed — see logs in rostoc-updates repo';
+
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state,
+              context: statusContext,
+              description,
+              target_url: targetUrl
+            });
+
+            core.info(`Set ${state} status (${statusContext}) on ${owner}/${repo}@${sha}`);
