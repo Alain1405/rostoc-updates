@@ -11,6 +11,13 @@ on:
         description: 'Release version (e.g., 0.2.122)'
         required: true
         type: string
+      arch:
+        description: 'macOS architecture (aarch64 or x86_64)'
+        required: true
+        type: choice
+        options:
+          - aarch64
+          - x86_64
       dmg_url:
         description: 'URL to download the notarized (unsigned) DMG'
         required: true
@@ -43,6 +50,7 @@ jobs:
           set -euo pipefail
           echo "[INFO] Job ID: ${{ inputs.job_id }}"
           echo "[INFO] Version: ${{ inputs.version }}"
+          echo "[INFO] Architecture: ${{ inputs.arch }}"
           echo "[INFO] DMG URL: ${{ inputs.dmg_url }}"
           echo "[INFO] Upload URL: ${{ inputs.upload_url }}"
 
@@ -52,12 +60,18 @@ jobs:
             exit 1
           fi
 
+          # Validate architecture
+          if ! [[ "${{ inputs.arch }}" =~ ^(aarch64|x86_64)$ ]]; then
+            echo "::error::Invalid architecture: ${{ inputs.arch }} (must be aarch64 or x86_64)"
+            exit 1
+          fi
+
       - name: Download notarized DMG
         id: download
         run: |
           set -euo pipefail
 
-          DMG_FILENAME="Rostoc_${{ inputs.version }}_aarch64.dmg"
+          DMG_FILENAME="Rostoc_${{ inputs.version }}_${{ inputs.arch }}.dmg"
           echo "[INFO] Downloading DMG from: ${{ inputs.dmg_url }}"
 
           curl -sSfL -o "$DMG_FILENAME" "${{ inputs.dmg_url }}" || {
@@ -207,6 +221,7 @@ jobs:
             echo ""
             echo "**Job ID:** ${{ inputs.job_id }}"
             echo "**Version:** ${{ inputs.version }}"
+            echo "**Architecture:** ${{ inputs.arch }}"
             echo "**Status:** ${{ steps.staple.outcome }}"
             echo ""
             if [[ "${{ steps.staple.outcome }}" == "success" ]]; then

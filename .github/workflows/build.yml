@@ -676,6 +676,74 @@ jobs:
             private-src/macos_gui_smoke_debug.json
           if-no-files-found: warn
 
+      - name: '[Windows x86] Runtime smoke test (cross-compile validation)'
+        if: matrix.platform == 'windows' && matrix.arch == 'i686' && always()
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Use canonical path from runtime_config
+          PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path windows)
+          PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
+          if [ -z "$PYBIN" ]; then
+            echo "[WARN] Embedded python.exe not found at canonical location for x86 build"
+            exit 0
+          fi
+          echo "[INFO] Running x86 runtime smoke test: $PYBIN" >&2
+          "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
+            --platform windows \
+            --comprehensive \
+            --require-manifest \
+            --debug-json windows_x86_runtime_smoke_debug.json \
+            --strict || {
+            exitcode=$?
+            echo "[WARN] x86 smoke test failed (optional platform, continuing): exit code $exitcode"
+            exit 0
+          }
+
+      - name: '[Linux] Runtime smoke test'
+        if: matrix.platform == 'linux' && always()
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Find embedded Python from AppImage build
+          PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path unix)
+          PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
+          if [ -z "$PYBIN" ]; then
+            echo "[WARN] Embedded python not found at canonical location for Linux build"
+            exit 0
+          fi
+          echo "[INFO] Running Linux runtime smoke test: $PYBIN" >&2
+          "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
+            --platform linux \
+            --comprehensive \
+            --require-manifest \
+            --debug-json linux_runtime_smoke_debug.json \
+            --strict || {
+            exitcode=$?
+            echo "[WARN] Linux smoke test failed (optional platform, continuing): exit code $exitcode"
+            exit 0
+          }
+
+      - name: Upload Windows x86 smoke diagnostics
+        if: always() && matrix.platform == 'windows' && matrix.arch == 'i686'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-debug-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            private-src/windows_x86_runtime_smoke_debug.json
+          if-no-files-found: warn
+
+      - name: Upload Linux smoke diagnostics
+        if: always() && matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-debug-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            private-src/linux_runtime_smoke_debug.json
+          if-no-files-found: warn
+
       - name: '[macOS] Archive preview artifacts'
         if: matrix.platform == 'macos' && steps.locate_macos_bundle.outputs.app_path != ''
         id: archive_macos_preview
@@ -899,6 +967,232 @@ jobs:
           fi
 
           echo "[INFO] ✅ Upload complete"
+
+      - name: '[Windows] Locate updater artifacts'
+        if: matrix.platform == 'windows'
+        id: locate-windows
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $searchRoots = @('target', 'src-tauri/target')
+          $candidates = @()
+          foreach ($root in $searchRoots) {
+            if (-not (Test-Path -LiteralPath $root)) { continue }
+            $found = Get-ChildItem -Path $root -Recurse -File -Filter '*.msi' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+            if ($found) { $candidates += $found }
+          }
+          $msi = $candidates | Select-Object -First 1
+          if (-not $msi) {
+            throw 'MSI artifact not found under target/ or src-tauri/target/'
+          }
+          $sigPath = "$($msi.FullName).sig"
+          if (-not (Test-Path $sigPath)) {
+            $sigCandidate = Get-ChildItem -Path $msi.DirectoryName -Filter "$($msi.BaseName)*.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($sigCandidate) {
+              $sigPath = $sigCandidate.FullName
+            } else {
+              throw "Signature file not found for $($msi.Name)"
+            }
+          }
+          "artifact=$($msi.FullName)" >> $env:GITHUB_OUTPUT
+          "signature=$sigPath" >> $env:GITHUB_OUTPUT
+          Write-Host "[INFO] Located MSI: $($msi.FullName)"
+          Write-Host "[INFO] Located signature: $sigPath"
+
+      - name: '[Windows] Prepare update bundle'
+        if: matrix.platform == 'windows' && inputs.is_release
+        id: prepare-windows-artifacts
+        working-directory: private-src
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ steps.extract_version.outputs.version }}'
+          $artifact = '${{ steps.locate-windows.outputs.artifact }}'
+          $signature = '${{ steps.locate-windows.outputs.signature }}'
+          $arch = '${{ matrix.arch }}'
+
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'Version missing' }
+          if (-not (Test-Path $artifact)) { throw "Artifact missing: $artifact" }
+          if (-not (Test-Path $signature)) { throw "Signature missing: $signature" }
+
+          # Create Windows updates directory
+          $parent = Split-Path -Parent $PWD
+          $updatesRoot = Join-Path $parent '${{ env.UPDATES_DIR }}'
+          $windowsDir = Join-Path $updatesRoot 'windows'
+          New-Item -ItemType Directory -Path $windowsDir -Force | Out-Null
+
+          # Determine architecture label for filename
+          $archLabel = if ($arch -eq 'i686') { 'x86' } else { 'x64' }
+
+          # Copy artifacts with version-tagged names
+          $extension = [System.IO.Path]::GetExtension($artifact)
+          $msiName = "Rostoc-${version}-windows-${archLabel}${extension}"
+          Copy-Item $artifact (Join-Path $windowsDir $msiName) -Force
+          Copy-Item $signature (Join-Path $windowsDir "${msiName}.sig") -Force
+
+          # Also copy as latest for convenience
+          $latestName = "Rostoc-windows-${archLabel}${extension}"
+          Copy-Item $artifact (Join-Path $windowsDir $latestName) -Force
+          Copy-Item $signature (Join-Path $windowsDir "${latestName}.sig") -Force
+
+          # Generate checksums
+          $hash = Get-FileHash -Path (Join-Path $windowsDir $msiName) -Algorithm SHA256
+          "$($hash.Hash)  $msiName" | Out-File -FilePath (Join-Path $windowsDir 'checksums.txt') -Encoding utf8 -Append
+
+          Write-Host "[INFO] Windows artifacts staged: $msiName"
+          "msi_name=$msiName" >> $env:GITHUB_OUTPUT
+
+      - name: '[Windows] Upload binaries to DigitalOcean Spaces'
+        if: matrix.platform == 'windows' && inputs.is_release && steps.detect-release-token.outputs.available == 'true'
+        working-directory: private-src
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: sgp1
+          SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
+          SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract_version.outputs.version }}"
+          ARCH_LABEL=$([ "$ARCH" = "i686" ] && echo "x86" || echo "x64")
+
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            pip install --quiet awscli
+          fi
+
+          echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+
+          # Upload Windows artifacts
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "../${{ env.UPDATES_DIR }}/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+            --acl public-read
+
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "../${{ env.UPDATES_DIR }}/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
+            --acl public-read
+
+          echo "[INFO] ✅ Upload complete"
+
+      - name: '[Windows] Upload artifacts for manifest generation'
+        if: matrix.platform == 'windows' && inputs.is_release
+        uses: actions/upload-artifact@v4
+        with:
+          name: rostoc-updates-${{ matrix.arch }}
+          path: ${{ env.UPDATES_DIR }}/*
+
+      - name: '[Linux] Locate updater artifacts'
+        if: matrix.platform == 'linux'
+        id: locate-linux
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          SEARCH_DIRS=(target/release/bundle src-tauri/target/release/bundle)
+          APPIMAGE=""
+          for dir in "${SEARCH_DIRS[@]}"; do
+            [[ -d "$dir" ]] || continue
+            cand=$(find "$dir" -maxdepth 1 -name '*.AppImage' -print -quit 2>/dev/null || true)
+            if [[ -n "$cand" ]]; then
+              APPIMAGE="$cand"
+              break
+            fi
+          done
+
+          if [[ -z "$APPIMAGE" ]]; then
+            echo "::error::No AppImage artifact found in target/ or src-tauri/target/"
+            exit 1
+          fi
+
+          # AppImage is typically self-signed; verify it exists
+          if [[ ! -f "$APPIMAGE" ]]; then
+            echo "::error::AppImage file not found: $APPIMAGE"
+            exit 1
+          fi
+
+          echo "appimage=$APPIMAGE" >> "$GITHUB_OUTPUT"
+          echo "[INFO] Located AppImage: $APPIMAGE"
+
+      - name: '[Linux] Prepare update bundle'
+        if: matrix.platform == 'linux' && inputs.is_release
+        id: prepare-linux-artifacts
+        working-directory: private-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract_version.outputs.version }}"
+          APPIMAGE="${{ steps.locate-linux.outputs.appimage }}"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Version missing"
+            exit 1
+          fi
+          if [[ ! -f "$APPIMAGE" ]]; then
+            echo "::error::AppImage missing: $APPIMAGE"
+            exit 1
+          fi
+
+          # Create Linux updates directory
+          mkdir -p "../${{ env.UPDATES_DIR }}/linux"
+
+          # Copy AppImage with version-tagged name
+          APPIMAGE_NAME="Rostoc-${VERSION}-x86_64.AppImage"
+          cp "$APPIMAGE" "../${{ env.UPDATES_DIR }}/linux/$APPIMAGE_NAME"
+
+          # Also copy as latest for convenience
+          cp "$APPIMAGE" "../${{ env.UPDATES_DIR }}/linux/Rostoc-x86_64.AppImage"
+
+          # Generate checksums
+          (cd "../${{ env.UPDATES_DIR }}/linux" && sha256sum ./*.AppImage > checksums.txt)
+
+          echo "[INFO] Linux artifacts staged: $APPIMAGE_NAME"
+          echo "appimage_name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: '[Linux] Upload binaries to DigitalOcean Spaces'
+        if: matrix.platform == 'linux' && inputs.is_release && steps.detect-release-token.outputs.available == 'true'
+        working-directory: private-src
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: sgp1
+          SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
+          SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract_version.outputs.version }}"
+
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            pip install --quiet awscli
+          fi
+
+          echo "[INFO] Uploading Linux binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+
+          # Upload Linux AppImage
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "../${{ env.UPDATES_DIR }}/linux/Rostoc-${VERSION}-x86_64.AppImage" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-x86_64.AppImage" \
+            --acl public-read
+
+          echo "[INFO] ✅ Upload complete"
+
+      - name: '[Linux] Upload artifacts for manifest generation'
+        if: matrix.platform == 'linux' && inputs.is_release
+        uses: actions/upload-artifact@v4
+        with:
+          name: rostoc-updates-${{ matrix.arch }}
+          path: ${{ env.UPDATES_DIR }}/*
 
       - name: '[macOS] Upload artifacts for manifest generation'
         if: matrix.platform == 'macos' && inputs.is_release
