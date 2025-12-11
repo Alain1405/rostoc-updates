@@ -1,0 +1,238 @@
+name: 'Build Compile (Download Python, Build, Stage)'
+description: 'Download Python runtime, install JS deps, stamp version, compile application'
+
+inputs:
+  platform:
+    description: 'Platform being built (macos, windows, linux)'
+    required: true
+  arch:
+    description: 'Architecture being built (aarch64, x86_64, i686)'
+    required: true
+  is_release:
+    description: 'Whether this is a release build'
+    required: false
+    default: 'false'
+
+outputs:
+  build_command:
+    description: 'Build command used'
+    value: ${{ steps.platform_config.outputs.build_command }}
+  target:
+    description: 'Rust target triple'
+    value: ${{ steps.platform_config.outputs.target }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Initialize platform-specific config
+      id: platform_config
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.platform }}" in
+          macos)
+            {
+              echo "build_command=python scripts/build.py --locked"
+              echo "artifact_extension=tar.gz"
+              echo "test_smoke=true"
+              if [ "${{ inputs.arch }}" == "x86_64" ]; then
+                echo "target=x86_64-apple-darwin"
+                echo "py_url_fragment=macos-x64"
+              else
+                echo "target=aarch64-apple-darwin"
+                echo "py_url_fragment=macos-arm64"
+              fi
+            } >> "$GITHUB_OUTPUT"
+            ;;
+          windows)
+            {
+              echo "build_command=python scripts/build.py --locked --bundles msi"
+              echo "artifact_extension=msi"
+              echo "test_smoke=true"
+              if [ "${{ inputs.arch }}" == "x86_64" ]; then
+                echo "target=x86_64-pc-windows-msvc"
+                echo "py_url_fragment=windows-x64"
+              else
+                echo "target=i686-pc-windows-msvc"
+                echo "py_url_fragment=windows-x86"
+                echo "cross_compile_args=--target i686-pc-windows-msvc"
+              fi
+            } >> "$GITHUB_OUTPUT"
+            ;;
+          linux)
+            {
+              echo "build_command=python scripts/build.py --locked --bundles appimage"
+              echo "artifact_extension=AppImage"
+              echo "test_smoke=true"
+              echo "target=x86_64-unknown-linux-gnu"
+              echo "py_url_fragment=linux-x64"
+            } >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "::error::Unknown platform: ${{ inputs.platform }}"
+            exit 1
+            ;;
+        esac
+
+    - name: '[macOS Intel] Confirm runner architecture'
+      if: ${{ inputs.arch == 'x86_64' && inputs.platform == 'macos' }}
+      shell: bash
+      run: |
+        RUNNER_ARCH=$(uname -m)
+        if [ "$RUNNER_ARCH" != "x86_64" ]; then
+          echo "::warning::Runner reports architecture $RUNNER_ARCH but matrix specifies x86_64"
+        fi
+        echo "[INFO] macOS runner architecture: $RUNNER_ARCH"
+        uname -a
+
+    - name: '[Windows x86] Verify cross-compile capability'
+      if: ${{ inputs.arch == 'i686' && inputs.platform == 'windows' }}
+      shell: bash
+      run: |
+        echo "[INFO] Windows x86 (32-bit) build via MSVC cross-compile on x64 runner"
+        rustup target add i686-pc-windows-msvc
+        echo "✅ i686-pc-windows-msvc target installed"
+
+    - name: '[Linux] Install system dependencies for AppImage'
+      if: ${{ inputs.platform == 'linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y libssl-dev libffi-dev libglib2.0-0 libx11-6 fuse3
+        echo "✅ AppImage build dependencies installed"
+
+    - name: Download embedded Python
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.platform }}" in
+          macos)
+            bash scripts/macos/download-py.sh
+            ;;
+          windows)
+            pwsh scripts/windows/download-py.ps1
+            ;;
+          linux)
+            echo "[INFO] Linux AppImage: Python runtime download handled by bundler"
+            ;;
+        esac
+
+    - name: Install JS dependencies
+      working-directory: private-src
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Stamp build version
+      working-directory: private-src
+      shell: bash
+      env:
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_RUN_NUMBER: ${{ github.run_number }}
+      run: |
+        set -euo pipefail
+        if [[ -n "${RELEASE_VERSION:-}" ]]; then
+          scripts/ci/stamp_dev_version.sh --version "$RELEASE_VERSION"
+        else
+          scripts/ci/stamp_dev_version.sh
+        fi
+
+    - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[INFO] Pre-staging Python runtime to ensure stable file attributes before signing"
+        python3 scripts/bundle_runtime.py --target=release --stage-only
+        echo "[INFO] Runtime staging complete - files are now stable for Tauri's signing"
+
+    - name: '[macOS] Sign Python binaries in staging (before sync to src-tauri)'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      env:
+        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      run: |
+        set -euo pipefail
+        echo "[INFO] Signing Python binaries and libraries in build/runtime_staging/pyembed/python"
+        echo "[INFO] These will be synced to src-tauri/ by build.py, preserving signatures"
+
+        # Sign all executables in bin/
+        if [ -d "build/runtime_staging/pyembed/python/bin" ]; then
+          find build/runtime_staging/pyembed/python/bin -type f \( -perm +111 -o -name "python*" \) | while read -r binary; do
+            if file "$binary" | grep -q "Mach-O"; then
+              echo "  Signing: $(basename "$binary")"
+              codesign --force --sign "$APPLE_SIGNING_IDENTITY" \
+                --timestamp \
+                --options runtime \
+                "$binary" || echo "    Warning: failed to sign $binary"
+            fi
+          done
+        fi
+
+        # Sign all dylibs and .so files in lib/
+        if [ -d "build/runtime_staging/pyembed/python/lib" ]; then
+          find build/runtime_staging/pyembed/python/lib -type f \( -name "*.dylib" -o -name "*.so" \) | while read -r lib; do
+            echo "  Signing: $(basename "$lib")"
+            codesign --force --sign "$APPLE_SIGNING_IDENTITY" \
+              --timestamp \
+              --options runtime \
+              "$lib" || echo "    Warning: failed to sign $lib"
+          done
+        fi
+
+        echo "[INFO] Python runtime signing complete in staging area"
+
+    - name: Validate version matches tag (release builds only)
+      if: ${{ inputs.is_release == 'true' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+        REF="${{ github.ref }}"
+
+        if [[ "$REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+          TAG_VERSION="${BASH_REMATCH[1]}"
+          echo "[INFO] Tag version: $TAG_VERSION"
+          echo "[INFO] Code version: $VERSION"
+
+          if [[ "$TAG_VERSION" != "$VERSION" ]]; then
+            echo "::error::Version mismatch! Tag is $REF (version $TAG_VERSION) but tauri.conf.json has version $VERSION"
+            exit 1
+          fi
+
+          echo "✅ Version validation passed: $VERSION matches tag $REF"
+        else
+          echo "[WARN] Not building from a version tag (ref: $REF), skipping version validation"
+        fi
+
+    - name: Apply preview build tuning (no-release)
+      if: ${{ inputs.is_release != 'true' }}
+      working-directory: private-src
+      shell: bash
+      run: scripts/ci/apply_preview_rust_env.sh
+
+    - name: Build application
+      working-directory: private-src
+      shell: bash
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        ENABLE_RUNTIME_CACHE: '1'
+        UV_DISABLE_WORKSPACE: '1'
+        UV_PROJECT_ENVIRONMENT: 'shared'
+        RUST_TARGET: ${{ steps.platform_config.outputs.target }}
+        CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
+      run: |
+        set -euo pipefail
+        BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
+        LOG_FILE="build-${{ inputs.platform }}-${{ inputs.arch }}.log"
+        echo "[INFO] Starting build — output will be saved to $LOG_FILE"
+        # shellcheck disable=SC2086
+        $BUILD_CMD 2>&1 | tee "$LOG_FILE"

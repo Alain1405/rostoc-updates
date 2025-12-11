@@ -1,0 +1,127 @@
+name: 'Build Sign & Validate (macOS signing and verification)'
+description: 'Sign DMG, verify app bundle, dump codesign diagnostics'
+
+inputs:
+  platform:
+    description: 'Platform being built (macos, windows, linux)'
+    required: true
+  arch:
+    description: 'Architecture being built (aarch64, x86_64, i686)'
+    required: true
+
+outputs:
+  app_path:
+    description: 'Path to app bundle (macOS only)'
+    value: ${{ steps.locate_macos_bundle.outputs.app_path }}
+  python_path:
+    description: 'Path to embedded Python binary (macOS only)'
+    value: ${{ steps.locate_macos_bundle.outputs.python_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: '[macOS] Sign DMG'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      env:
+        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      run: |
+        set -euo pipefail
+
+        # Find the DMG file
+        DMG_PATH=$(find target/release/bundle/dmg -name "*.dmg" -type f | head -n 1)
+
+        if [ -z "$DMG_PATH" ]; then
+          echo "::error::No DMG file found in target/release/bundle/dmg"
+          exit 1
+        fi
+
+        echo "[INFO] Found DMG: $DMG_PATH"
+        echo "[INFO] Signing DMG with identity: $APPLE_SIGNING_IDENTITY"
+
+        # Sign the DMG
+        codesign --sign "$APPLE_SIGNING_IDENTITY" \
+                 --timestamp \
+                 --options runtime \
+                 "$DMG_PATH"
+
+        # Verify the signature
+        echo "[INFO] Verifying DMG signature"
+        codesign --verify --deep --strict --verbose=2 "$DMG_PATH"
+
+        echo "[INFO] DMG signed successfully"
+
+    - name: '[macOS] Verify app bundle'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      run: bash scripts/verify_app_bundle.sh
+
+    - name: '[macOS] Locate macOS app bundle'
+      if: ${{ inputs.platform == 'macos' }}
+      id: locate_macos_bundle
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        SEARCH_DIRS=(target/bundle-release/bundle/macos src-tauri/target/bundle-release/bundle/macos src-tauri/target/release/bundle/macos target/release/bundle/macos)
+        APP_PATH=""
+        for dir in "${SEARCH_DIRS[@]}"; do
+          if [ -d "$dir" ]; then
+            APP=$(find "$dir" -maxdepth 1 -name "*.app" -type d | head -n 1)
+            if [ -n "$APP" ]; then
+              APP_PATH="$APP"
+              break
+            fi
+          fi
+        done
+        if [ -z "$APP_PATH" ]; then
+          echo "::error::Rostoc.app not found in any expected location:"
+          for dir in "${SEARCH_DIRS[@]}"; do
+            echo "  - $dir"
+          done
+          exit 1
+        fi
+        # Use canonical path from runtime_config
+        PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path unix)
+        MACOS_RES=$(python3 scripts/ci/get_runtime_path.py macos_resources)
+        PYBIN="$APP_PATH/$MACOS_RES/$PYTHON_PATH"
+        APP_PARENT=$(dirname "$APP_PATH")
+        APP_NAME=$(basename "$APP_PATH")
+        {
+          echo "app_path=$APP_PATH"
+          echo "app_parent=$APP_PARENT"
+          echo "app_name=$APP_NAME"
+          echo "python_path=$PYBIN"
+        } >> "$GITHUB_OUTPUT"
+        if [ ! -x "$PYBIN" ]; then
+          echo "::warning::Embedded Python at $PYBIN not found or not executable"
+          exit 0
+        fi
+
+    - name: '[macOS] Dump codesign diagnostics'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      env:
+        APP_BUNDLE: ${{ steps.locate_macos_bundle.outputs.app_path }}
+      run: |
+        set -euo pipefail
+        if [[ "${APP_BUNDLE}" == /* ]]; then
+          ABS_APP="${APP_BUNDLE}"
+        else
+          ABS_APP="$GITHUB_WORKSPACE/private-src/${APP_BUNDLE}"
+        fi
+        if [ ! -d "$ABS_APP" ]; then
+          echo "[WARN] App bundle not found at $ABS_APP, skipping diagnostics"
+          exit 0
+        fi
+        echo "[DEBUG] codesign -dv --verbose=4 output" >&2
+        codesign -dv --verbose=4 "$ABS_APP" 2>&1 || true
+        echo "[DEBUG] codesign --verify --deep --strict output" >&2
+        codesign --verify --deep --strict "$ABS_APP" 2>&1 || true
+        if command -v spctl >/dev/null 2>&1; then
+          echo "[DEBUG] spctl assessment output" >&2
+          spctl --assess --type exec "$ABS_APP" 2>&1 || true
+        fi

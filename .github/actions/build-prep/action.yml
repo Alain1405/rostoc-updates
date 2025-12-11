@@ -1,0 +1,200 @@
+name: 'Build Prep (Checkout, SSH, Toolchains)'
+description: 'Prepare build environment: checkout repos, setup SSH, install toolchains'
+
+inputs:
+  ref:
+    description: 'Git reference to build'
+    required: true
+  is_release:
+    description: 'Whether this is a release build'
+    required: false
+    default: 'false'
+  platform:
+    description: 'Platform being built (macos, windows, linux)'
+    required: true
+  arch:
+    description: 'Architecture being built (aarch64, x86_64, i686)'
+    required: true
+
+outputs:
+  pnpm_store_path:
+    description: 'Path to pnpm store'
+    value: ${{ steps.pnpm-store.outputs.STORE_PATH }}
+  version:
+    description: 'Extracted version from tauri.conf.json'
+    value: ${{ steps.extract_version.outputs.version }}
+  release_version:
+    description: 'Release version (if is_release)'
+    value: ${{ env.RELEASE_VERSION }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout updates repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup SSH agent for private repo
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+
+    - name: Add GitHub to known_hosts
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+    - name: Checkout private repo (read-only)
+      uses: actions/checkout@v4
+      with:
+        repository: alain1405/rostoc
+        ref: ${{ inputs.ref }}
+        ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+        path: private-src
+        fetch-depth: 0
+        sparse-checkout: |
+          /*
+          !/references/
+        sparse-checkout-cone-mode: false
+
+    - name: Restore production icons
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -x scripts/restore_prod_icons.sh ]; then
+          bash scripts/restore_prod_icons.sh
+        else
+          echo "::warning::restore_prod_icons.sh missing; skipping icon restore"
+        fi
+
+    - name: Capture release version
+      if: ${{ inputs.is_release == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        REF="${{ inputs.ref }}"
+        VERSION=${REF#v}
+        if [[ -z "$VERSION" ]]; then
+          echo "::error::Unable to derive release version from ref '$REF'" >&2
+          exit 1
+        fi
+        echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Setup Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Enable Corepack (pnpm)
+      shell: bash
+      run: corepack enable
+
+    - name: Derive pnpm store path
+      id: pnpm-store
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd private-src
+        echo "[INFO] pnpm version: $(pnpm --version || true)" >&2
+        STORE_PATH=$(pnpm store path 2>/dev/null | tr -d '\r' || true)
+        if [ -z "${STORE_PATH}" ]; then
+          echo "[WARN] pnpm store path empty; falling back to default ~/.pnpm-store" >&2
+          STORE_PATH="$HOME/.pnpm-store"
+        fi
+        mkdir -p "$STORE_PATH" || true
+        echo "Using STORE_PATH=$STORE_PATH" >&2
+        echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_OUTPUT"
+
+    - name: Compute dependency hashes
+      id: dependency-hashes
+      shell: bash
+      run: scripts/ci/hash_lockfiles.sh private-src
+
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.pnpm-store.outputs.STORE_PATH }}
+        key: pnpm-${{ runner.os }}-${{ steps.dependency-hashes.outputs.pnpm }}
+        restore-keys: pnpm-${{ runner.os }}-
+
+    - name: Install uv (Python package manager)
+      working-directory: private-src
+      shell: bash
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "UV_BIN=$HOME/.local/bin" >> "$GITHUB_ENV"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Cache Python wheels
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          ~/Library/Caches/pip
+          ~/.cache/uv
+          ~/Library/Caches/uv
+        key: python-wheel-${{ runner.os }}-${{ steps.dependency-hashes.outputs.uv }}
+        restore-keys: |
+          python-wheel-${{ runner.os }}-
+
+    - name: '[macOS] Install Apple signing certificate'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      env:
+        APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      run: |
+        set -euo pipefail
+        scripts/macos/install_signing_certificate.sh
+
+    - name: '[macOS] Debug signing keychain state'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      env:
+        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      run: |
+        set -euo pipefail
+        echo "[DEBUG] Listing configured keychains" >&2
+        security list-keychains || true
+        echo "[DEBUG] Available signing identities" >&2
+        security find-identity -v -p codesigning || true
+        if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+          echo "[DEBUG] Matching certificate summary for ${APPLE_SIGNING_IDENTITY}" >&2
+          security find-certificate -Z -a -c "$APPLE_SIGNING_IDENTITY" 2>/dev/null | grep -E 'SHA-1|SHA-256|"' || true
+        else
+          echo "[DEBUG] APPLE_SIGNING_IDENTITY not provided" >&2
+        fi
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Rust dependencies and build artifacts
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: private-src
+        shared-key: macos
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Extract version
+      id: extract_version
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "[INFO] Extracted version: $VERSION"
