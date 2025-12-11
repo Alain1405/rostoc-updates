@@ -33,6 +33,10 @@ on:
         type: string
         default: 'https://api.rostoc.co/api/updates/publish/'
         description: 'Backend API endpoint for release publishing'
+      initiator:
+        required: false
+        type: string
+        description: 'GitHub user who initiated the workflow'
 
 permissions:
   contents: write

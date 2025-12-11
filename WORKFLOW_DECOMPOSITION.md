@@ -6,16 +6,16 @@ Successfully refactored the monolithic `build-and-publish.yml` workflow (2,176 l
 
 ### Line Count Comparison
 
-| File | Type | Lines | Purpose |
-|------|------|-------|---------|
-| `build-and-publish.yml` (original) | Monolithic | 2,176 | All jobs combined |
-| `build-and-publish.yml` (new) | Orchestrator | 88 | Calls reusable workflows |
-| `setup.yml` | Reusable | 204 | Initial setup & validation |
-| `build.yml` | Reusable | 908 | Desktop builds (5 platform matrix) |
-| `publish.yml` | Reusable | 249 | JSON manifests + GitHub Pages |
-| `finalize.yml` | Reusable | 74 | Commit status updates |
-| `.github/scripts/platform-config.sh` | Helper | 64 | Platform detection |
-| **Total** | **5 files** | **1,523** | **30% reduction** |
+| File                                 | Type         | Lines     | Purpose                            |
+| ------------------------------------ | ------------ | --------- | ---------------------------------- |
+| `build-and-publish.yml` (original)   | Monolithic   | 2,176     | All jobs combined                  |
+| `build-and-publish.yml` (new)        | Orchestrator | 88        | Calls reusable workflows           |
+| `setup.yml`                          | Reusable     | 204       | Initial setup & validation         |
+| `build.yml`                          | Reusable     | 908       | Desktop builds (5 platform matrix) |
+| `publish.yml`                        | Reusable     | 249       | JSON manifests + GitHub Pages      |
+| `finalize.yml`                       | Reusable     | 74        | Commit status updates              |
+| `.github/scripts/platform-config.sh` | Helper       | 64        | Platform detection                 |
+| **Total**                            | **5 files**  | **1,523** | **30% reduction**                  |
 
 ## 🏗️ Architecture
 
@@ -261,16 +261,16 @@ jobs:
 
 ## 🎯 Benefits Summary
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| File Size | 2,176 lines (monolithic) | 88 lines (orchestrator) + 5 reusable |
-| Maintainability | Hard to navigate | Clear separation of concerns |
-| Reusability | N/A | Each workflow can be called independently |
-| Testing | All-or-nothing | Can test individual reusable workflows |
-| Parallelism | Complex (inline) | Native matrix support |
-| Platform Support | 5 platforms (matrix) | 5 platforms (matrix, preserved) |
-| Documentation | Implicit in code | Clear job names and comments |
-| Debugging | Hard to trace | Clear dependency graph |
+| Aspect           | Before                   | After                                     |
+| ---------------- | ------------------------ | ----------------------------------------- |
+| File Size        | 2,176 lines (monolithic) | 88 lines (orchestrator) + 5 reusable      |
+| Maintainability  | Hard to navigate         | Clear separation of concerns              |
+| Reusability      | N/A                      | Each workflow can be called independently |
+| Testing          | All-or-nothing           | Can test individual reusable workflows    |
+| Parallelism      | Complex (inline)         | Native matrix support                     |
+| Platform Support | 5 platforms (matrix)     | 5 platforms (matrix, preserved)           |
+| Documentation    | Implicit in code         | Clear job names and comments              |
+| Debugging        | Hard to trace            | Clear dependency graph                    |
 
 ---
 

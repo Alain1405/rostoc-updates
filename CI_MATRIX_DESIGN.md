@@ -46,13 +46,13 @@ build-desktop:
 
 ### Platform Job Characteristics
 
-| Platform | Runner | Arch | Blocking | Status | Notes |
-|----------|--------|------|----------|--------|-------|
-| macOS M1 | `macos-15` (free) | ARM64 | ✅ | ✅ Stable | Notarization + codesigning |
-| Windows x64 | `windows-2022` (free) | x86-64 | ✅ | ✅ Stable | MSI packaging, WiX |
-| macOS Intel | `macos-15-intel` (free) | x86-64 | ❌ | 🧪 Optional | Same signing as M1 |
-| Windows x86 | `windows-2022` (free) | x86 | ❌ | 🧪 Optional | Cross-compile via `i686-pc-windows-msvc` |
-| Linux AppImage | `ubuntu-latest` (free) | x86-64 | ❌ | 🧪 Optional | New: AppImage bundler |
+| Platform       | Runner                  | Arch   | Blocking | Status     | Notes                                    |
+| -------------- | ----------------------- | ------ | -------- | ---------- | ---------------------------------------- |
+| macOS M1       | `macos-15` (free)       | ARM64  | ✅        | ✅ Stable   | Notarization + codesigning               |
+| Windows x64    | `windows-2022` (free)   | x86-64 | ✅        | ✅ Stable   | MSI packaging, WiX                       |
+| macOS Intel    | `macos-15-intel` (free) | x86-64 | ❌        | 🧪 Optional | Same signing as M1                       |
+| Windows x86    | `windows-2022` (free)   | x86    | ❌        | 🧪 Optional | Cross-compile via `i686-pc-windows-msvc` |
+| Linux AppImage | `ubuntu-latest` (free)  | x86-64 | ❌        | 🧪 Optional | New: AppImage bundler                    |
 
 ## Key Changes Made
 
