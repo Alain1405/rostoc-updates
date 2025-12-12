@@ -44,10 +44,10 @@ runs:
         echo "[INFO] Signing DMG with identity: $APPLE_SIGNING_IDENTITY"
 
         # Sign the DMG
-        codesign --sign "$APPLE_SIGNING_IDENTITY" \
-                 --timestamp \
-                 --options runtime \
-                 "$DMG_PATH"
+        codesign --force --sign "$APPLE_SIGNING_IDENTITY" \
+           --timestamp \
+           --options runtime \
+           "$DMG_PATH"
 
         # Verify the signature
         echo "[INFO] Verifying DMG signature"

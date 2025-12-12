@@ -126,13 +126,23 @@ runs:
         set -euo pipefail
         case "${{ inputs.platform }}" in
           macos)
-            bash scripts/macos/download-py.sh
+            if [ "${{ inputs.arch }}" = "x86_64" ]; then
+              PYTHON_TARGET="x86_64-apple-darwin"
+            else
+              PYTHON_TARGET="aarch64-apple-darwin"
+            fi
+            PYTHON_TARGET="$PYTHON_TARGET" bash scripts/macos/download-py.sh
             ;;
           windows)
-            pwsh scripts/windows/download-py.ps1
+            if [ "${{ inputs.arch }}" = "i686" ]; then
+              PYTHON_TARGET="i686-pc-windows-msvc"
+            else
+              PYTHON_TARGET="x86_64-pc-windows-msvc"
+            fi
+            PYTHON_TARGET="$PYTHON_TARGET" pwsh scripts/windows/download-py.ps1
             ;;
           linux)
-            echo "[INFO] Linux AppImage: Python runtime download handled by bundler"
+            PYTHON_TARGET="x86_64-unknown-linux-gnu" bash scripts/linux/download-py.sh
             ;;
         esac
 
