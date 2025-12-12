@@ -109,6 +109,12 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           is_release: ${{ inputs.is_release }}
+          apple_signing_identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          apple_team_id: ${{ secrets.APPLE_TEAM_ID }}
+          apple_id: ${{ secrets.APPLE_ID }}
+          apple_app_specific_password: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          tauri_signing_private_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          tauri_signing_private_key_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       # --- Phase 3: Sign & Validate (macOS-specific) ---
       - uses: ./.github/actions/build-sign-validate

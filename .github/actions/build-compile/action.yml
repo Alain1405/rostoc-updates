@@ -12,6 +12,24 @@ inputs:
     description: 'Whether this is a release build'
     required: false
     default: 'false'
+  apple_signing_identity:
+    description: 'Apple signing identity (macOS signing)'
+    required: false
+  apple_team_id:
+    description: 'Apple Team ID (macOS signing)'
+    required: false
+  apple_id:
+    description: 'Apple ID (notarytool)'
+    required: false
+  apple_app_specific_password:
+    description: 'App-specific password for Apple ID (notarytool)'
+    required: false
+  tauri_signing_private_key:
+    description: 'Tauri updater signing key'
+    required: false
+  tauri_signing_private_key_password:
+    description: 'Password for the Tauri updater signing key'
+    required: false
 
 outputs:
   build_command:
@@ -152,7 +170,7 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
       run: |
         set -euo pipefail
         echo "[INFO] Signing Python binaries and libraries in build/runtime_staging/pyembed/python"
@@ -218,12 +236,12 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.tauri_signing_private_key }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.tauri_signing_private_key_password }}
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
+        APPLE_TEAM_ID: ${{ inputs.apple_team_id }}
+        APPLE_ID: ${{ inputs.apple_id }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.apple_app_specific_password }}
         ENABLE_RUNTIME_CACHE: '1'
         UV_DISABLE_WORKSPACE: '1'
         UV_PROJECT_ENVIRONMENT: 'shared'
