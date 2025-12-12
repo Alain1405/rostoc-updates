@@ -57,12 +57,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        SEARCH_DIRS=(
-          target/bundle-release/bundle/macos
-          src-tauri/target/bundle-release/bundle/macos
-          target/release/bundle/macos
-          src-tauri/target/release/bundle/macos
-        )
+        mapfile -t SEARCH_DIRS < <(python scripts/ci/get_bundle_dirs.py macos tarball)
 
         TARBALL=""
         for dir in "${SEARCH_DIRS[@]}"; do
@@ -132,14 +127,8 @@ runs:
         cp "$SIGNATURE" "../updates/macos/Rostoc.app.tar.gz.sig"
 
         # Copy DMG if present (will be replaced after notarization)
-        # Search in the same locations as tarball/bundle artifacts
-        SEARCH_DIRS=(
-          target/bundle-release/bundle/macos
-          src-tauri/target/bundle-release/bundle/macos
-          target/release/bundle/dmg
-          src-tauri/target/release/bundle/dmg
-        )
-        
+        mapfile -t SEARCH_DIRS < <(python scripts/ci/get_bundle_dirs.py macos dmg)
+
         DMG_PATH=""
         for dir in "${SEARCH_DIRS[@]}"; do
           [[ -d "$dir" ]] || continue
@@ -149,7 +138,7 @@ runs:
             break
           fi
         done
-        
+
         if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
           DMG_NAME="Rostoc_${VERSION}_${ARCH}.dmg"
           DMG_SIZE=$(du -h "${DMG_PATH}" | cut -f1)
