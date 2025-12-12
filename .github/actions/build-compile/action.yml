@@ -134,6 +134,7 @@ runs:
           libffi-dev \
           libglib2.0-0 \
           libglib2.0-dev \
+          libgtk-3-dev \
           pkg-config \
           libx11-6 \
           fuse3
@@ -277,6 +278,8 @@ runs:
         UV_PROJECT_ENVIRONMENT: 'shared'
         RUST_TARGET: ${{ steps.platform_config.outputs.target }}
         CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
+        # Skip rosi (and its pandas dependency) on optional 32-bit Windows builds
+        SKIP_ROSI: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' && '1' || '' }}
       run: |
         set -euo pipefail
         BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
