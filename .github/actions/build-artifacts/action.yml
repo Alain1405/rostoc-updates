@@ -15,6 +15,21 @@ inputs:
   version:
     description: 'Version string to use in artifact naming'
     required: false
+  updates_repo_token:
+    description: 'Token for uploading release artifacts'
+    required: false
+  do_spaces_access_key:
+    description: 'DigitalOcean Spaces access key'
+    required: false
+  do_spaces_secret_key:
+    description: 'DigitalOcean Spaces secret key'
+    required: false
+  do_spaces_bucket:
+    description: 'DigitalOcean Spaces bucket name'
+    required: false
+  do_spaces_endpoint:
+    description: 'DigitalOcean Spaces endpoint'
+    required: false
 
 runs:
   using: 'composite'
@@ -24,7 +39,7 @@ runs:
       id: detect-release-token
       shell: bash
       env:
-        UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+        UPDATES_REPO_TOKEN: ${{ inputs.updates_repo_token }}
       run: |
         if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
           echo "available=true" >> "$GITHUB_OUTPUT"
@@ -142,11 +157,11 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.do_spaces_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.do_spaces_secret_key }}
         AWS_DEFAULT_REGION: sgp1
-        SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
-        SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        SPACES_BUCKET: ${{ inputs.do_spaces_bucket }}
+        SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
@@ -267,11 +282,11 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.do_spaces_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.do_spaces_secret_key }}
         AWS_DEFAULT_REGION: sgp1
-        SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
-        SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        SPACES_BUCKET: ${{ inputs.do_spaces_bucket }}
+        SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
       run: |
@@ -374,11 +389,11 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.do_spaces_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.do_spaces_secret_key }}
         AWS_DEFAULT_REGION: sgp1
-        SPACES_BUCKET: ${{ secrets.DO_SPACES_BUCKET }}
-        SPACES_ENDPOINT: ${{ secrets.DO_SPACES_ENDPOINT }}
+        SPACES_BUCKET: ${{ inputs.do_spaces_bucket }}
+        SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail

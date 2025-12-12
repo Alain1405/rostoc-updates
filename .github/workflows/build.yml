@@ -122,6 +122,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          apple_signing_identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       # --- Phase 4: Tests (smoke tests for all platforms) ---
       - uses: ./.github/actions/build-tests
@@ -140,6 +141,11 @@ jobs:
           arch: ${{ matrix.arch }}
           is_release: ${{ inputs.is_release }}
           version: ${{ steps.prep.outputs.version }}
+          updates_repo_token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          do_spaces_access_key: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          do_spaces_secret_key: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          do_spaces_bucket: ${{ secrets.DO_SPACES_BUCKET }}
+          do_spaces_endpoint: ${{ secrets.DO_SPACES_ENDPOINT }}
 
       # --- Export version for downstream jobs ---
       - name: Export version

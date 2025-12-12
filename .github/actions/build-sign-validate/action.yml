@@ -8,6 +8,9 @@ inputs:
   arch:
     description: 'Architecture being built (aarch64, x86_64, i686)'
     required: true
+  apple_signing_identity:
+    description: 'Apple signing identity for codesign'
+    required: false
 
 outputs:
   app_path:
@@ -25,7 +28,7 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
       run: |
         set -euo pipefail
 
