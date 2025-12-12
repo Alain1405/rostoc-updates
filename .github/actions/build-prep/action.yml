@@ -168,8 +168,9 @@ runs:
         UV_DIR="$HOME/.local/bin"
         echo "UV_BIN=$UV_DIR" >> "$GITHUB_ENV"
         echo "$UV_DIR" >> "$GITHUB_PATH"
+        # Make uv immediately available in this step
+        PATH="$UV_DIR:$PATH"
         if command -v cygpath >/dev/null 2>&1; then
-          # Ensure Windows-style path is available for PATH consumers (shutil.which)
           WIN_UV_DIR=$(cygpath -w "$UV_DIR")
           echo "$WIN_UV_DIR" >> "$GITHUB_PATH"
         fi
