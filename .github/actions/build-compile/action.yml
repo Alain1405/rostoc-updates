@@ -103,6 +103,17 @@ runs:
         echo "[INFO] macOS runner architecture: $RUNNER_ARCH"
         uname -a
 
+    - name: '[macOS Intel] Clear stale pyembed (force x86_64 download)'
+      if: ${{ inputs.arch == 'x86_64' && inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -d src-tauri/pyembed ]; then
+          echo "[INFO] Removing existing src-tauri/pyembed to avoid arm64 leftovers"
+          rm -rf src-tauri/pyembed
+        fi
+
     - name: '[Windows x86] Verify cross-compile capability'
       if: ${{ inputs.arch == 'i686' && inputs.platform == 'windows' }}
       shell: bash
@@ -116,7 +127,16 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y libssl-dev libffi-dev libglib2.0-0 libx11-6 fuse3
+        # libglib2.0-dev provides gobject-2.0.pc required by gobject-sys
+        # pkg-config is needed so cargo can locate gobject
+        sudo apt-get install -y \
+          libssl-dev \
+          libffi-dev \
+          libglib2.0-0 \
+          libglib2.0-dev \
+          pkg-config \
+          libx11-6 \
+          fuse3
         echo "✅ AppImage build dependencies installed"
 
     - name: Download embedded Python

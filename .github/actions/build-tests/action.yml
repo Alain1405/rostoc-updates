@@ -50,7 +50,7 @@ runs:
         fi
         echo "[INFO] Running runtime smoke test: $PYBIN"
         "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
-          --platform macos \
+          --platform mac \
           --comprehensive \
           --require-manifest \
           --debug-json macos_runtime_smoke_debug.json \
@@ -79,7 +79,7 @@ runs:
         fi
         echo "[INFO] Running GUI smoke test with 10s timeout"
         "$PYBIN" scripts/ci/unified_smoke_validator.py gui \
-          --platform macos \
+          --platform mac \
           --timeout 10 \
           --debug-json macos_gui_smoke_debug.json || {
           exitcode=$?
