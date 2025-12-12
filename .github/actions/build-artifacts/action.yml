@@ -132,13 +132,38 @@ runs:
         cp "$SIGNATURE" "../updates/macos/Rostoc.app.tar.gz.sig"
 
         # Copy DMG if present (will be replaced after notarization)
-        DMG_PATH=$(find target -maxdepth 5 -type f -name "*.dmg" -print -quit || true)
+        # Search in the same locations as tarball/bundle artifacts
+        SEARCH_DIRS=(
+          target/bundle-release/bundle/macos
+          src-tauri/target/bundle-release/bundle/macos
+          target/release/bundle/dmg
+          src-tauri/target/release/bundle/dmg
+        )
+        
+        DMG_PATH=""
+        for dir in "${SEARCH_DIRS[@]}"; do
+          [[ -d "$dir" ]] || continue
+          cand=$(find "$dir" -maxdepth 1 -name "*.dmg" -print -quit 2>/dev/null || true)
+          if [[ -n "$cand" && -f "$cand" ]]; then
+            DMG_PATH="$cand"
+            break
+          fi
+        done
+        
         if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
           DMG_NAME="Rostoc_${VERSION}_${ARCH}.dmg"
-          echo "[INFO] Found DMG at ${DMG_PATH}, copying to updates as ${DMG_NAME}"
-          cp "${DMG_PATH}" "../updates/macos/${DMG_NAME}"
+          DMG_SIZE=$(du -h "${DMG_PATH}" | cut -f1)
+          echo "[INFO] Found DMG at ${DMG_PATH} (${DMG_SIZE}), copying to updates as ${DMG_NAME}"
+          cp -v "${DMG_PATH}" "../updates/macos/${DMG_NAME}"
+          ls -lh "../updates/macos/${DMG_NAME}"
         else
-          echo "[WARN] No DMG found in target directory"
+          echo "[WARN] No DMG found in any search directory"
+          for dir in "${SEARCH_DIRS[@]}"; do
+            if [[ -d "$dir" ]]; then
+              echo "[DEBUG] Contents of $dir:" >&2
+              ls -la "$dir" 2>/dev/null || true
+            fi
+          done
         fi
 
         # Stamp version file
