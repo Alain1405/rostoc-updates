@@ -420,5 +420,5 @@ runs:
       if: ${{ inputs.is_release == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: rostoc-updates-${{ inputs.arch }}
+        name: rostoc-updates-${{ inputs.platform }}-${{ inputs.arch }}
         path: updates/*

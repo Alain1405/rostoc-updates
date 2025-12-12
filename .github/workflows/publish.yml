@@ -58,13 +58,13 @@ jobs:
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: rostoc-updates
+          name: rostoc-updates-macos-aarch64
           path: macos-artifacts
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: rostoc-updates-windows
+          name: rostoc-updates-windows-x86_64
           path: windows-artifacts
 
       - name: Download pending notarizations metadata
@@ -183,13 +183,13 @@ jobs:
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: rostoc-updates
+          name: rostoc-updates-macos-aarch64
           path: updates
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: rostoc-updates-windows
+          name: rostoc-updates-windows-x86_64
           path: updates/windows
 
       - name: Download JSON manifests
