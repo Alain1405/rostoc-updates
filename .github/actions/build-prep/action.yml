@@ -16,6 +16,40 @@ inputs:
     description: 'Architecture being built (aarch64, x86_64, i686)'
     required: true
 
+  private_repo_ssh_key:
+    description: 'Deploy key for alain1405/rostoc'
+    required: true
+
+  apple_certificate:
+    description: 'Base64-encoded Apple signing certificate'
+    required: false
+    default: ''
+
+  apple_certificate_password:
+    description: 'Password for Apple signing certificate'
+    required: false
+    default: ''
+
+  apple_signing_identity:
+    description: 'Apple signing identity name'
+    required: false
+    default: ''
+
+  apple_team_id:
+    description: 'Apple Developer Team ID'
+    required: false
+    default: ''
+
+  apple_id:
+    description: 'Apple ID for notarization'
+    required: false
+    default: ''
+
+  apple_app_specific_password:
+    description: 'App-specific password for Apple ID'
+    required: false
+    default: ''
+
 outputs:
   pnpm_store_path:
     description: 'Path to pnpm store'
@@ -38,7 +72,7 @@ runs:
     - name: Setup SSH agent for private repo
       uses: webfactory/ssh-agent@v0.9.0
       with:
-        ssh-private-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+        ssh-private-key: ${{ inputs.private_repo_ssh_key }}
 
     - name: Add GitHub to known_hosts
       shell: bash
@@ -51,7 +85,7 @@ runs:
       with:
         repository: alain1405/rostoc
         ref: ${{ inputs.ref }}
-        ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+        ssh-key: ${{ inputs.private_repo_ssh_key }}
         path: private-src
         fetch-depth: 0
         sparse-checkout: |
@@ -150,12 +184,12 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        APPLE_CERTIFICATE: ${{ inputs.apple_certificate }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ inputs.apple_certificate_password }}
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
+        APPLE_TEAM_ID: ${{ inputs.apple_team_id }}
+        APPLE_ID: ${{ inputs.apple_id }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.apple_app_specific_password }}
       run: |
         set -euo pipefail
         scripts/macos/install_signing_certificate.sh
@@ -165,7 +199,7 @@ runs:
       working-directory: private-src
       shell: bash
       env:
-        APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
       run: |
         set -euo pipefail
         echo "[DEBUG] Listing configured keychains" >&2

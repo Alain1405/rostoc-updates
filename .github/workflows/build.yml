@@ -94,6 +94,13 @@ jobs:
           is_release: ${{ inputs.is_release }}
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          private_repo_ssh_key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
+          apple_certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          apple_certificate_password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          apple_signing_identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          apple_team_id: ${{ secrets.APPLE_TEAM_ID }}
+          apple_id: ${{ secrets.APPLE_ID }}
+          apple_app_specific_password: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
 
       # --- Phase 2: Compile (Python, build, stage) ---
       - uses: ./.github/actions/build-compile
