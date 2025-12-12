@@ -83,6 +83,9 @@ jobs:
       arch: ${{ matrix.arch }}
 
     steps:
+      - name: Checkout repo (actions + workflows)
+        uses: actions/checkout@v4
+
       # --- Phase 1: Prep (checkout, SSH, toolchains) ---
       - uses: ./.github/actions/build-prep
         id: prep
