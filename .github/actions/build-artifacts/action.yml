@@ -113,6 +113,7 @@ runs:
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
+        ARCH: ${{ inputs.arch }}
       run: |
         set -euo pipefail
         TARBALL="${{ steps.locate-macos.outputs.tarball }}"
@@ -122,7 +123,7 @@ runs:
         mkdir -p "../updates/macos"
 
         # Copy artifacts with version-tagged names
-        TARBALL_NAME="Rostoc-${VERSION}-darwin-aarch64.app.tar.gz"
+        TARBALL_NAME="Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz"
         cp "$TARBALL" "../updates/macos/$TARBALL_NAME"
         cp "$SIGNATURE" "../updates/macos/${TARBALL_NAME}.sig"
 
@@ -133,7 +134,7 @@ runs:
         # Copy DMG if present (will be replaced after notarization)
         DMG_PATH=$(find target -maxdepth 5 -type f -name "*.dmg" -print -quit || true)
         if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
-          DMG_NAME="Rostoc_${VERSION}_aarch64.dmg"
+          DMG_NAME="Rostoc_${VERSION}_${ARCH}.dmg"
           echo "[INFO] Found DMG at ${DMG_PATH}, copying to updates as ${DMG_NAME}"
           cp "${DMG_PATH}" "../updates/macos/${DMG_NAME}"
         else
@@ -163,6 +164,7 @@ runs:
         SPACES_BUCKET: ${{ inputs.do_spaces_bucket }}
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
+        ARCH: ${{ inputs.arch }}
       run: |
         set -euo pipefail
 
@@ -177,23 +179,23 @@ runs:
         # Upload macOS artifacts
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/macos/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz" \
+          "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
+          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
           --acl public-read
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/macos/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz.sig" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-aarch64.app.tar.gz.sig" \
+          "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
+          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
           --acl public-read
 
         # Upload DMG if present
-        if [ -f "../updates/macos/Rostoc_${VERSION}_aarch64.dmg" ]; then
+        if [ -f "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" ]; then
           echo "[INFO] Uploading unsigned DMG (will be replaced after notarization)"
           aws s3 cp \
             --endpoint-url "${SPACES_ENDPOINT}" \
-            "../updates/macos/Rostoc_${VERSION}_aarch64.dmg" \
-            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc_${VERSION}_aarch64.dmg" \
+            "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
+            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc_${VERSION}_${ARCH}.dmg" \
             --acl public-read
         fi
 
