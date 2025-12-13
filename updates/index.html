@@ -271,21 +271,24 @@
       }
 
       function renderPlatform(name, platform) {
-        const icon =
-          {
-            'darwin-aarch64': '🍎',
-            'darwin-x86_64': '🍎',
-            'windows-x86_64': '🪟',
-            'linux-x86_64': '🐧',
-          }[name] || '💾';
+        const [osKey, archKey] = name.split('-');
 
-        const displayName =
+        const osLabel =
           {
-            'darwin-aarch64': 'macOS (Apple Silicon)',
-            'darwin-x86_64': 'macOS (Intel)',
-            'windows-x86_64': 'Windows',
-            'linux-x86_64': 'Linux',
-          }[name] || name;
+            darwin: 'macOS',
+            windows: 'Windows',
+            linux: 'Linux',
+          }[osKey] || osKey || 'Unknown OS';
+
+        const architecture = platform.architecture || archKey || 'unknown';
+        const archLabel =
+          {
+            aarch64: 'Apple Silicon (arm64)',
+            arm64: 'Apple Silicon (arm64)',
+            x86_64: 'Intel/AMD (x64)',
+            amd64: 'Intel/AMD (x64)',
+            i686: 'Intel/AMD (x86, 32-bit)',
+          }[architecture] || architecture;
 
         // Build download links
         const downloadLinks = [];
@@ -362,29 +365,12 @@
 
         return `
                 <div class="platform">
-                    <div class="platform-name">
-                        <span class="platform-icon">${icon}</span>
-                        ${displayName}
-                    </div>
+                  <div class="platform-name">${osLabel} · ${archLabel}</div>
                     <div class="download-links">
                         ${downloadLinks.join('')}
                     </div>
-                    ${renderPlatformStats(platform)}
                 </div>
             `;
-      }
-
-      function renderPlatformStats(platform) {
-        const stats = [];
-
-        if (platform.size) {
-          const sizeMB = (platform.size / (1024 * 1024)).toFixed(1);
-          stats.push(`<span class="stat">📦 ${sizeMB} MB</span>`);
-        }
-
-        return stats.length > 0
-          ? `<div class="stats">${stats.join('')}</div>`
-          : '';
       }
 
       function escapeHtml(text) {
