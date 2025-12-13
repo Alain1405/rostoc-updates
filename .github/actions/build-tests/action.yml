@@ -163,11 +163,11 @@ runs:
           private-src/linux_runtime_smoke_debug.json
         if-no-files-found: warn
 
-    - name: Upload build logs
+    - name: Upload build logs (post-tests)
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: build-logs-${{ inputs.platform }}-${{ inputs.arch }}
+        name: build-logs-post-tests-${{ inputs.platform }}-${{ inputs.arch }}
         path: |
           private-src/build-*.log
         if-no-files-found: warn
