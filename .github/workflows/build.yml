@@ -27,83 +27,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # ========== EXISTING (BLOCKING) PLATFORMS (PRODUCTION) ==========
-          - variant: production
-            os: macos-15
-            platform: macos
-            arch: aarch64
-            name: 'macOS ARM64 (M1)'
-            is_optional: false
-
-          - variant: production
-            os: windows-2022
-            platform: windows
-            arch: x86_64
-            name: 'Windows x64'
-            is_optional: false
-
-          # ========== NEW (OPTIONAL) PLATFORMS (PRODUCTION) ==========
-          - variant: production
-            os: macos-15-intel
-            platform: macos
-            arch: x86_64
-            name: 'macOS Intel x86-64'
-            is_optional: true
-
-          - variant: production
-            os: windows-2022
-            platform: windows
-            arch: i686
-            name: 'Windows x86 (32-bit)'
-            is_optional: true
-
-          - variant: production
-            os: ubuntu-latest
-            platform: linux
-            arch: x86_64
-            name: 'Linux AppImage x86-64'
-            is_optional: true
-
-          # ========== STAGING VARIANT (runs only on release builds) ==========
-          - variant: staging
-            os: macos-15
-            platform: macos
-            arch: aarch64
-            name: 'macOS ARM64 (M1) — Staging'
-            is_optional: false
-
-          - variant: staging
-            os: windows-2022
-            platform: windows
-            arch: x86_64
-            name: 'Windows x64 — Staging'
-            is_optional: false
-
-          - variant: staging
-            os: macos-15-intel
-            platform: macos
-            arch: x86_64
-            name: 'macOS Intel x86-64 — Staging'
-            is_optional: true
-
-          - variant: staging
-            os: windows-2022
-            platform: windows
-            arch: i686
-            name: 'Windows x86 (32-bit) — Staging'
-            is_optional: true
-
-          - variant: staging
-            os: ubuntu-latest
-            platform: linux
-            arch: x86_64
-            name: 'Linux AppImage x86-64 — Staging'
-            is_optional: true
+        include: ${{ fromJson(inputs.is_release && '[{"variant":"production","os":"macos-15","platform":"macos","arch":"aarch64","name":"macOS ARM64 (M1)","is_optional":false},{"variant":"production","os":"windows-2022","platform":"windows","arch":"x86_64","name":"Windows x64","is_optional":false},{"variant":"production","os":"macos-15-intel","platform":"macos","arch":"x86_64","name":"macOS Intel x86-64","is_optional":true},{"variant":"production","os":"windows-2022","platform":"windows","arch":"i686","name":"Windows x86 (32-bit)","is_optional":true},{"variant":"production","os":"ubuntu-latest","platform":"linux","arch":"x86_64","name":"Linux AppImage x86-64","is_optional":true},{"variant":"staging","os":"macos-15","platform":"macos","arch":"aarch64","name":"macOS ARM64 (M1) — Staging","is_optional":false},{"variant":"staging","os":"windows-2022","platform":"windows","arch":"x86_64","name":"Windows x64 — Staging","is_optional":false},{"variant":"staging","os":"macos-15-intel","platform":"macos","arch":"x86_64","name":"macOS Intel x86-64 — Staging","is_optional":true},{"variant":"staging","os":"windows-2022","platform":"windows","arch":"i686","name":"Windows x86 (32-bit) — Staging","is_optional":true},{"variant":"staging","os":"ubuntu-latest","platform":"linux","arch":"x86_64","name":"Linux AppImage x86-64 — Staging","is_optional":true}]' || '[{"variant":"production","os":"macos-15","platform":"macos","arch":"aarch64","name":"macOS ARM64 (M1)","is_optional":false},{"variant":"production","os":"windows-2022","platform":"windows","arch":"x86_64","name":"Windows x64","is_optional":false},{"variant":"production","os":"macos-15-intel","platform":"macos","arch":"x86_64","name":"macOS Intel x86-64","is_optional":true},{"variant":"production","os":"windows-2022","platform":"windows","arch":"i686","name":"Windows x86 (32-bit)","is_optional":true},{"variant":"production","os":"ubuntu-latest","platform":"linux","arch":"x86_64","name":"Linux AppImage x86-64","is_optional":true}]') }}
 
     runs-on: ${{ matrix.os }}
-    # Optional jobs continue even if they fail; staging jobs only run for release builds
-    if: inputs.is_release || matrix.variant == 'production'
+    # Optional jobs continue even if they fail
     continue-on-error: ${{ matrix.is_optional }}
 
     env:
