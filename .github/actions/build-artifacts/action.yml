@@ -57,7 +57,10 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        mapfile -t SEARCH_DIRS < <(python scripts/ci/get_bundle_dirs.py macos tarball)
+        SEARCH_DIRS=()
+        while IFS= read -r line; do
+          SEARCH_DIRS+=("$line")
+        done < <(python scripts/ci/get_bundle_dirs.py macos tarball)
 
         TARBALL=""
         for dir in "${SEARCH_DIRS[@]}"; do
@@ -127,7 +130,10 @@ runs:
         cp "$SIGNATURE" "../updates/macos/Rostoc.app.tar.gz.sig"
 
         # Copy DMG if present (will be replaced after notarization)
-        mapfile -t SEARCH_DIRS < <(python scripts/ci/get_bundle_dirs.py macos dmg)
+        SEARCH_DIRS=()
+        while IFS= read -r line; do
+          SEARCH_DIRS+=("$line")
+        done < <(python scripts/ci/get_bundle_dirs.py macos dmg)
 
         DMG_PATH=""
         for dir in "${SEARCH_DIRS[@]}"; do
