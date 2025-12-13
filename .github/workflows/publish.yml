@@ -180,18 +180,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: rostoc-updates-macos-aarch64
-          path: updates
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: rostoc-updates-windows-x86_64
-          path: updates/windows
-
       - name: Download JSON manifests
         uses: actions/download-artifact@v4
         with:
@@ -200,16 +188,10 @@ jobs:
 
       - name: Prepare Pages deployment
         run: |
-          # Copy JSON manifests and metadata files
-          # Binaries are served from DigitalOcean Spaces
+          # Copy JSON manifests and metadata files (binaries are served from Spaces)
           mkdir -p _site
           cp updates/*.json _site/ 2>/dev/null || true
           cp updates/version.txt _site/ 2>/dev/null || true
-
-          # Keep directory structure for backward compatibility but no binaries
-          mkdir -p _site/macos _site/windows
-          cp updates/macos/checksums.txt _site/macos/ 2>/dev/null || true
-          cp updates/windows/checksums.txt _site/windows/ 2>/dev/null || true
 
           # Ensure GitHub Pages keeps running without Jekyll
           touch _site/.nojekyll
