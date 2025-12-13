@@ -30,6 +30,10 @@ inputs:
   do_spaces_endpoint:
     description: 'DigitalOcean Spaces endpoint'
     required: false
+  variant:
+    description: 'App variant (production|staging)'
+    required: false
+    default: 'production'
 
 runs:
   using: 'composite'
@@ -185,6 +189,7 @@ runs:
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
+        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
       run: |
         set -euo pipefail
 
@@ -194,19 +199,20 @@ runs:
           pip install --quiet awscli
         fi
 
-        echo "[INFO] Uploading macOS binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+        RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
+        echo "[INFO] Uploading macOS binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
 
         # Upload macOS artifacts
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
           --acl public-read
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
           --acl public-read
 
         # Upload DMG if present
@@ -215,7 +221,7 @@ runs:
           aws s3 cp \
             --endpoint-url "${SPACES_ENDPOINT}" \
             "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
-            "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc_${VERSION}_${ARCH}.dmg" \
+            "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc_${VERSION}_${ARCH}.dmg" \
             --acl public-read
         fi
 
@@ -311,6 +317,7 @@ runs:
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
+        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
       run: |
         set -euo pipefail
         ARCH_LABEL=$([ "$ARCH" = "i686" ] && echo "x86" || echo "x64")
@@ -321,19 +328,20 @@ runs:
           pip install --quiet awscli
         fi
 
-        echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+        RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
+        echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
 
         # Upload Windows artifacts
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
           --acl public-read
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
           --acl public-read
 
         echo "[INFO] ✅ Windows upload complete"
@@ -417,6 +425,7 @@ runs:
         SPACES_BUCKET: ${{ inputs.do_spaces_bucket }}
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
+        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
       run: |
         set -euo pipefail
 
@@ -426,13 +435,14 @@ runs:
           pip install --quiet awscli
         fi
 
-        echo "[INFO] Uploading Linux binaries to Spaces: ${SPACES_BUCKET}/releases/v${VERSION}/"
+        RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
+        echo "[INFO] Uploading Linux binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
 
         # Upload Linux AppImage
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/linux/Rostoc-${VERSION}-x86_64.AppImage" \
-          "s3://${SPACES_BUCKET}/releases/v${VERSION}/Rostoc-${VERSION}-x86_64.AppImage" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-x86_64.AppImage" \
           --acl public-read
 
         echo "[INFO] ✅ Linux upload complete"
@@ -442,5 +452,5 @@ runs:
       if: ${{ inputs.is_release == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: rostoc-updates-${{ inputs.platform }}-${{ inputs.arch }}
+        name: ${{ inputs.variant == 'staging' && 'rostoc-updates-staging' || 'rostoc-updates' }}-${{ inputs.platform }}-${{ inputs.arch }}
         path: updates/*

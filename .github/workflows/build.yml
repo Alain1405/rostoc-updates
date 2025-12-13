@@ -28,45 +28,82 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ========== EXISTING (BLOCKING) PLATFORMS ==========
-          # macOS ARM64 (M1) — required for release
-          - os: macos-15
+          # ========== EXISTING (BLOCKING) PLATFORMS (PRODUCTION) ==========
+          - variant: production
+            os: macos-15
             platform: macos
             arch: aarch64
             name: 'macOS ARM64 (M1)'
             is_optional: false
 
-          # Windows x64 — required for release
-          - os: windows-2022
+          - variant: production
+            os: windows-2022
             platform: windows
             arch: x86_64
             name: 'Windows x64'
             is_optional: false
 
-          # ========== NEW (OPTIONAL) PLATFORMS ==========
-          # macOS Intel (x86-64) — experimental, does not block releases
-          - os: macos-15-intel
+          # ========== NEW (OPTIONAL) PLATFORMS (PRODUCTION) ==========
+          - variant: production
+            os: macos-15-intel
             platform: macos
             arch: x86_64
             name: 'macOS Intel x86-64'
             is_optional: true
 
-          # Windows x86 (32-bit) — experimental via cross-compile, does not block releases
-          - os: windows-2022
+          - variant: production
+            os: windows-2022
             platform: windows
             arch: i686
             name: 'Windows x86 (32-bit)'
             is_optional: true
 
-          # Linux AppImage — experimental, does not block releases
-          - os: ubuntu-latest
+          - variant: production
+            os: ubuntu-latest
             platform: linux
             arch: x86_64
             name: 'Linux AppImage x86-64'
             is_optional: true
 
+          # ========== STAGING VARIANT (runs only on release builds) ==========
+          - variant: staging
+            os: macos-15
+            platform: macos
+            arch: aarch64
+            name: 'macOS ARM64 (M1) — Staging'
+            is_optional: false
+
+          - variant: staging
+            os: windows-2022
+            platform: windows
+            arch: x86_64
+            name: 'Windows x64 — Staging'
+            is_optional: false
+
+          - variant: staging
+            os: macos-15-intel
+            platform: macos
+            arch: x86_64
+            name: 'macOS Intel x86-64 — Staging'
+            is_optional: true
+
+          - variant: staging
+            os: windows-2022
+            platform: windows
+            arch: i686
+            name: 'Windows x86 (32-bit) — Staging'
+            is_optional: true
+
+          - variant: staging
+            os: ubuntu-latest
+            platform: linux
+            arch: x86_64
+            name: 'Linux AppImage x86-64 — Staging'
+            is_optional: true
+
     runs-on: ${{ matrix.os }}
-    # Optional jobs continue even if they fail; blocking jobs abort the matrix
+    # Optional jobs continue even if they fail; staging jobs only run for release builds
+    if: inputs.is_release || matrix.variant == 'production'
     continue-on-error: ${{ matrix.is_optional }}
 
     env:
@@ -76,6 +113,11 @@ jobs:
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
       VITE_SENTRY_SEND_DEFAULT_PII: ${{ secrets.VITE_SENTRY_SEND_DEFAULT_PII }}
       VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
+      ROSTOC_APP_VARIANT: ${{ matrix.variant }}
+      ROSTOC_UPDATE_CHANNEL: ${{ matrix.variant == 'staging' && 'staging' || 'stable' }}
+      TAURI_PRODUCT_NAME: ${{ matrix.variant == 'staging' && 'Rostoc Staging' || 'Rostoc' }}
+      TAURI_IDENTIFIER: ${{ matrix.variant == 'staging' && 'app.rostoc.staging' || 'app.rostoc' }}
+      DO_RELEASE_PREFIX: ${{ matrix.variant == 'staging' && 'releases/staging' || 'releases' }}
     timeout-minutes: ${{ matrix.platform == 'linux' && 30 || 50 }}
     outputs:
       version: ${{ steps.extract_version.outputs.version }}
@@ -150,6 +192,7 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           is_release: ${{ inputs.is_release }}
+          variant: ${{ matrix.variant }}
           version: ${{ steps.prep.outputs.version }}
           updates_repo_token: ${{ secrets.UPDATES_REPO_TOKEN }}
           do_spaces_access_key: ${{ secrets.DO_SPACES_ACCESS_KEY }}
