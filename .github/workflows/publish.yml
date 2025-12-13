@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p macos-artifacts windows-artifacts
+          mkdir -p macos-artifacts windows-artifacts linux-artifacts
 
           ROOT="artifacts"
           if [ -d "${ROOT}/updates" ]; then
@@ -89,6 +89,14 @@ jobs:
             echo "::error::No Windows artifacts found in downloaded payloads"
             ls -la "${ROOT}" || true
             exit 1
+          fi
+
+          # Copy any Linux artifacts (all arches) into linux-artifacts (optional)
+          if compgen -G "${ROOT}/linux/*" > /dev/null; then
+            cp -R "${ROOT}"/linux/* linux-artifacts/
+            echo "Linux artifacts found and consolidated"
+          else
+            echo "::notice::No Linux artifacts found (optional)"
           fi
 
       - name: Download pending notarizations metadata
@@ -166,7 +174,8 @@ jobs:
             --manifest json-output/latest.json \
             --releases json-output/releases.json \
             --mac-root macos-artifacts \
-            --windows-root windows-artifacts
+            --windows-root windows-artifacts \
+            --linux-root linux-artifacts
           echo "payload=publish-payload.json" >> "$GITHUB_OUTPUT"
 
       - name: Publish release metadata to backend

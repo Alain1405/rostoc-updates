@@ -67,8 +67,8 @@ jobs:
       is_release: ${{ inputs.is_release || false }}
     secrets: inherit
 
-  # Phase 3: Publish (generate-releases-json, publish-to-pages)
-  publish:
+  # Phase 3a: Publish production channel
+  publish-production:
     if: inputs.is_release
     needs: build
     uses: ./.github/workflows/publish.yml
@@ -76,14 +76,27 @@ jobs:
       ref: ${{ inputs.ref }}
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       is_release: true
-      release_channel: ${{ inputs.release_channel || 'stable' }}
+      release_channel: 'stable'
+      backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+    secrets: inherit
+
+  # Phase 3b: Publish staging channel
+  publish-staging:
+    if: inputs.is_release
+    needs: build
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      is_release: true
+      release_channel: 'staging'
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
     secrets: inherit
 
   # Phase 4: Finalize (update commit status)
   finalize:
     if: always()
-    needs: [build, publish]
+    needs: [build, publish-production, publish-staging]
     uses: ./.github/workflows/finalize.yml
     with:
       commit_sha: ${{ inputs.commit_sha || github.sha }}

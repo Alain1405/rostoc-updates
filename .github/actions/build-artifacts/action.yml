@@ -172,8 +172,8 @@ runs:
           echo "git_sha=$(git rev-parse --short HEAD)"
         } > "../updates/version.txt"
 
-        # Generate checksums
-        (cd "../updates/macos" && sha256sum ./*.tar.gz > checksums.txt || shasum -a 256 ./*.tar.gz > checksums.txt)
+        # Generate checksums using helper script
+        bash .github/scripts/generate-checksums.sh "../updates/macos"
 
         echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
@@ -202,7 +202,17 @@ runs:
         RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
         echo "[INFO] Uploading macOS binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
 
+        # Load checksums for verification
+        echo "[INFO] Loading checksums from checksums.txt"
+        TARBALL_CHECKSUM=$(grep "Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" "../updates/macos/checksums.txt" | awk '{print $1}')
+        DMG_CHECKSUM=$(grep "Rostoc_${VERSION}_${ARCH}.dmg" "../updates/macos/checksums.txt" | awk '{print $1}')
+        
+        echo "[INFO] Expected checksums:"
+        echo "  Tarball: ${TARBALL_CHECKSUM}"
+        echo "  DMG: ${DMG_CHECKSUM}"
+
         # Upload macOS artifacts
+        echo "[INFO] Uploading tarball..."
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
@@ -218,11 +228,22 @@ runs:
         # Upload DMG if present
         if [ -f "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" ]; then
           echo "[INFO] Uploading unsigned DMG (will be replaced after notarization)"
+          echo "[INFO] DMG checksum before upload: ${DMG_CHECKSUM}"
+          
+          DMG_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc_${VERSION}_${ARCH}.dmg"
+          
           aws s3 cp \
             --endpoint-url "${SPACES_ENDPOINT}" \
             "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
-            "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc_${VERSION}_${ARCH}.dmg" \
+            "${DMG_S3_URL}" \
             --acl public-read
+          
+          # Verify upload using helper script
+          bash .github/scripts/verify-s3-upload.sh \
+            "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
+            "${DMG_S3_URL}" \
+            "${DMG_CHECKSUM}" \
+            "${SPACES_ENDPOINT}"
         fi
 
         echo "[INFO] ✅ macOS upload complete"
@@ -298,12 +319,16 @@ runs:
         Copy-Item $artifact (Join-Path $windowsDir $latestName) -Force
         Copy-Item $signature (Join-Path $windowsDir "${latestName}.sig") -Force
 
-        # Generate checksums
-        $hash = Get-FileHash -Path (Join-Path $windowsDir $msiName) -Algorithm SHA256
-        "$($hash.Hash)  $msiName" | Out-File -FilePath (Join-Path $windowsDir 'checksums.txt') -Encoding utf8 -Append
-
         Write-Host "[INFO] Windows artifacts staged: $msiName"
         "msi_name=$msiName" >> $env:GITHUB_OUTPUT
+
+    - name: '[Windows] Generate checksums'
+      if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash .github/scripts/generate-checksums.sh "../updates/windows"
 
     - name: '[Windows] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -331,12 +356,29 @@ runs:
         RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
         echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
 
+        # Load checksums for verification
+        echo "[INFO] Loading checksums from checksums.txt"
+        MSI_CHECKSUM=$(grep "Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" "../updates/windows/checksums.txt" | awk '{print $1}')
+        
+        echo "[INFO] Expected checksum:"
+        echo "  MSI: ${MSI_CHECKSUM}"
+
         # Upload Windows artifacts
+        echo "[INFO] Uploading MSI..."
+        MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi"
+        
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+          "${MSI_S3_URL}" \
           --acl public-read
+
+        # Verify MSI upload
+        bash .github/scripts/verify-s3-upload.sh \
+          "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+          "${MSI_S3_URL}" \
+          "${MSI_CHECKSUM}" \
+          "${SPACES_ENDPOINT}"
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
