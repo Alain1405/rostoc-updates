@@ -55,17 +55,41 @@ jobs:
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           path: private-src
 
-      - name: Download macOS artifacts
+      - name: Download all release artifacts for channel
         uses: actions/download-artifact@v4
         with:
-          name: rostoc-updates-macos-aarch64
-          path: macos-artifacts
+          pattern: ${{ inputs.release_channel == 'staging' && 'rostoc-updates-staging-*' || 'rostoc-updates-*' }}
+          path: artifacts
+          merge-multiple: true
 
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: rostoc-updates-windows-x86_64
-          path: windows-artifacts
+      - name: Consolidate platform artifacts
+        run: |
+          set -euo pipefail
+
+          mkdir -p macos-artifacts windows-artifacts
+
+          ROOT="artifacts"
+          if [ -d "${ROOT}/updates" ]; then
+            ROOT="${ROOT}/updates"
+          fi
+
+          # Copy any macOS artifacts (all arches) into macos-artifacts
+          if compgen -G "${ROOT}/macos/*" > /dev/null; then
+            cp -R "${ROOT}"/macos/* macos-artifacts/
+          else
+            echo "::error::No macOS artifacts found in downloaded payloads"
+            ls -la "${ROOT}" || true
+            exit 1
+          fi
+
+          # Copy any Windows artifacts (all arches) into windows-artifacts
+          if compgen -G "${ROOT}/windows/*" > /dev/null; then
+            cp -R "${ROOT}"/windows/* windows-artifacts/
+          else
+            echo "::error::No Windows artifacts found in downloaded payloads"
+            ls -la "${ROOT}" || true
+            exit 1
+          fi
 
       - name: Download pending notarizations metadata
         uses: actions/download-artifact@v4
