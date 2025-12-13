@@ -100,7 +100,7 @@ runs:
         set -euo pipefail
         echo "::group::Force pulling latest from ${{ inputs.ref }}"
         git fetch origin "${{ inputs.ref }}"
-        git reset --hard "origin/${{ inputs.ref }}"
+        git reset --hard FETCH_HEAD
         CURRENT_SHA=$(git rev-parse HEAD)
         echo "::notice::Building at commit $CURRENT_SHA"
         echo "::endgroup::"
