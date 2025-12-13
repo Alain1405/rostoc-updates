@@ -282,6 +282,7 @@ runs:
         CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
         # Skip rosi (and its pandas dependency) on optional 32-bit Windows builds
         SKIP_ROSI: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' && '1' || '' }}
+        APPIMAGE_EXTRACT_AND_RUN: ${{ inputs.platform == 'linux' && '1' || '' }}
       run: |
         set -euo pipefail
         BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
