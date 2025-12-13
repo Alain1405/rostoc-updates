@@ -93,6 +93,18 @@ runs:
           !/references/
         sparse-checkout-cone-mode: false
 
+    - name: Force pull latest commit from private repo
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Force pulling latest from ${{ inputs.ref }}"
+        git fetch origin "${{ inputs.ref }}"
+        git reset --hard "origin/${{ inputs.ref }}"
+        CURRENT_SHA=$(git rev-parse HEAD)
+        echo "::notice::Building at commit $CURRENT_SHA"
+        echo "::endgroup::"
+
     - name: Restore production icons
       working-directory: private-src
       shell: bash

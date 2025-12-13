@@ -116,6 +116,16 @@ jobs:
           tauri_signing_private_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           tauri_signing_private_key_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      # --- Upload build logs (even on failure) ---
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.platform }}-${{ matrix.arch }}
+          path: private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log
+          retention-days: 7
+          if-no-files-found: warn
+
       # --- Phase 3: Sign & Validate (macOS-specific) ---
       - uses: ./.github/actions/build-sign-validate
         id: sign_validate
