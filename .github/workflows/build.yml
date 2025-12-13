@@ -90,7 +90,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-pre-tests-${{ matrix.platform }}-${{ matrix.arch }}
+          name: build-logs-pre-tests-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log
           retention-days: 7
           if-no-files-found: warn
@@ -107,6 +107,7 @@ jobs:
       - uses: ./.github/actions/build-tests
         id: tests
         with:
+          variant: ${{ matrix.variant }}
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           app_path: ${{ steps.sign_validate.outputs.app_path }}
