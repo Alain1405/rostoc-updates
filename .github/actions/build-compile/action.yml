@@ -130,9 +130,9 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -qq
-        # libglib2.0-dev provides gobject-2.0.pc required by gobject-sys
-        # pkg-config is needed so cargo can locate gobject
+        # Tauri v2 + WebKit 4.1 dependencies for AppImage
         # libfuse2 is required by AppImage tools (linuxdeploy is itself an AppImage)
+        # librsvg2-dev and libayatana-appindicator3-dev are required for proper GTK bundling
         sudo apt-get install -y \
           libssl-dev \
           libffi-dev \
@@ -141,6 +141,9 @@ runs:
           libgtk-3-dev \
           libwebkit2gtk-4.1-dev \
           libjavascriptcoregtk-4.1-dev \
+          librsvg2-dev \
+          libayatana-appindicator3-dev \
+          patchelf \
           pkg-config \
           libx11-6 \
           fuse3 \
