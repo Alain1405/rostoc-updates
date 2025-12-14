@@ -69,7 +69,7 @@ runs:
                 echo "target=x86_64-pc-windows-msvc"
                 echo "py_url_fragment=windows-x64"
               else
-                # For 32-bit Windows, explicitly pass --target to ensure WiX creates 32-bit MSI
+                # For 32-bit Windows, pass --target to Tauri CLI so WiX creates 32-bit MSI
                 echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc"
                 echo "target=i686-pc-windows-msvc"
                 echo "py_url_fragment=windows-x86"
