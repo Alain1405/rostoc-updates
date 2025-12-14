@@ -64,17 +64,18 @@ runs:
             ;;
           windows)
             {
-              echo "build_command=python scripts/build.py --locked --bundles msi"
-              echo "artifact_extension=msi"
-              echo "test_smoke=true"
               if [ "${{ inputs.arch }}" == "x86_64" ]; then
+                echo "build_command=python scripts/build.py --locked --bundles msi"
                 echo "target=x86_64-pc-windows-msvc"
                 echo "py_url_fragment=windows-x64"
               else
+                # For 32-bit Windows, explicitly pass --target to ensure WiX creates 32-bit MSI
+                echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc"
                 echo "target=i686-pc-windows-msvc"
                 echo "py_url_fragment=windows-x86"
-                echo "cross_compile_args=--target i686-pc-windows-msvc"
               fi
+              echo "artifact_extension=msi"
+              echo "test_smoke=true"
             } >> "$GITHUB_OUTPUT"
             ;;
           linux)
@@ -131,6 +132,7 @@ runs:
         sudo apt-get update -qq
         # libglib2.0-dev provides gobject-2.0.pc required by gobject-sys
         # pkg-config is needed so cargo can locate gobject
+        # libfuse2 is required by AppImage tools (linuxdeploy is itself an AppImage)
         sudo apt-get install -y \
           libssl-dev \
           libffi-dev \
@@ -141,7 +143,8 @@ runs:
           libjavascriptcoregtk-4.1-dev \
           pkg-config \
           libx11-6 \
-          fuse3
+          fuse3 \
+          libfuse2
         echo "✅ AppImage build dependencies installed"
 
     - name: Download embedded Python
@@ -287,6 +290,8 @@ runs:
         # Linux AppImage workarounds for FUSE and linuxdeploy issues
         APPIMAGE_EXTRACT_AND_RUN: ${{ inputs.platform == 'linux' && '1' || '' }}
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}
+        OUTPUT: ${{ inputs.platform == 'linux' && '2' || '' }}
+        VERBOSE: ${{ inputs.platform == 'linux' && '1' || '' }}
       run: |
         set -euo pipefail
         BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
@@ -299,9 +304,18 @@ runs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN:-<not set>}"
           echo "NO_STRIP=${NO_STRIP:-<not set>}"
-          echo "FUSE version: $(fusermount3 --version 2>&1 || echo 'not available')"
+          echo "OUTPUT=${OUTPUT:-<not set>}"
+          echo "VERBOSE=${VERBOSE:-<not set>}"
+          echo ""
+          echo "FUSE installations:"
+          dpkg -l | grep -i fuse || echo "  No FUSE packages found"
+          echo ""
+          echo "FUSE version: $(fusermount3 --version 2>&1 || echo 'fusermount3 not available')"
+          echo "fusermount version: $(fusermount --version 2>&1 || echo 'fusermount not available')"
+          echo ""
           echo "Available disk space: $(df -h . | tail -1 | awk '{print $4}')"
           echo "Kernel: $(uname -r)"
+          echo "User: $(whoami)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         fi
         
