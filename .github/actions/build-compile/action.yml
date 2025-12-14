@@ -121,6 +121,8 @@ runs:
         echo "[INFO] Windows x86 (32-bit) build via MSVC cross-compile on x64 runner"
         rustup target add i686-pc-windows-msvc
         echo "✅ i686-pc-windows-msvc target installed"
+        echo "CARGO_BUILD_TARGET=i686-pc-windows-msvc" >> "$GITHUB_ENV"
+        echo "✅ CARGO_BUILD_TARGET environment variable set for automatic cross-compilation"
 
     - name: '[Linux] Install system dependencies for AppImage'
       if: ${{ inputs.platform == 'linux' }}
@@ -282,11 +284,45 @@ runs:
         CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
         # Skip rosi (and its pandas dependency) on optional 32-bit Windows builds
         SKIP_ROSI: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' && '1' || '' }}
+        # Linux AppImage workarounds for FUSE and linuxdeploy issues
         APPIMAGE_EXTRACT_AND_RUN: ${{ inputs.platform == 'linux' && '1' || '' }}
+        NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}
       run: |
         set -euo pipefail
         BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
         LOG_FILE="build-${{ inputs.platform }}-${{ inputs.arch }}.log"
+        
+        # Debug logging for Linux builds
+        if [[ "${{ inputs.platform }}" == "linux" ]]; then
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "[DEBUG] Linux AppImage Build Environment"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN:-<not set>}"
+          echo "NO_STRIP=${NO_STRIP:-<not set>}"
+          echo "FUSE version: $(fusermount3 --version 2>&1 || echo 'not available')"
+          echo "Available disk space: $(df -h . | tail -1 | awk '{print $4}')"
+          echo "Kernel: $(uname -r)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        fi
+        
         echo "[INFO] Starting build — output will be saved to $LOG_FILE"
         # shellcheck disable=SC2086
         $BUILD_CMD 2>&1 | tee "$LOG_FILE"
+        BUILD_EXIT_CODE=$?
+        
+        # Post-build debug logging for Linux
+        if [[ "${{ inputs.platform }}" == "linux" ]]; then
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "[DEBUG] Linux AppImage Build Results (exit code: $BUILD_EXIT_CODE)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Checking for AppImage artifacts in target directories..."
+          find target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in target/"
+          find src-tauri/target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in src-tauri/target/"
+          
+          echo ""
+          echo "Last 50 lines of build log showing linuxdeploy execution:"
+          grep -A 20 -B 5 "linuxdeploy" "$LOG_FILE" | tail -50 || echo "  (linuxdeploy not found in log)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        fi
+        
+        exit $BUILD_EXIT_CODE
