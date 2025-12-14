@@ -259,6 +259,7 @@ def main() -> None:
 
     # Load stored checksums from all artifact roots
     mac_checksums = load_checksums(args.mac_root)
+    windows_checksums = load_checksums(args.windows_root)
     linux_checksums = load_checksums(args.linux_root)
     
     print(f"Loaded {len(mac_checksums)} macOS checksums")
