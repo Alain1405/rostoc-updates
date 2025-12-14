@@ -172,8 +172,8 @@ runs:
           echo "git_sha=$(git rev-parse --short HEAD)"
         } > "../updates/version.txt"
 
-        # Generate checksums using helper script
-        bash .github/scripts/generate-checksums.sh "../updates/macos"
+        # Generate checksums using helper script from rostoc-updates repo
+        bash ../.github/scripts/generate-checksums.sh "../updates/macos"
 
         echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
@@ -238,8 +238,8 @@ runs:
             "${DMG_S3_URL}" \
             --acl public-read
           
-          # Verify upload using helper script
-          bash .github/scripts/verify-s3-upload.sh \
+          # Verify upload using helper script from rostoc-updates repo
+          bash ../.github/scripts/verify-s3-upload.sh \
             "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
             "${DMG_S3_URL}" \
             "${DMG_CHECKSUM}" \
@@ -328,7 +328,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        bash .github/scripts/generate-checksums.sh "../updates/windows"
+        bash ../.github/scripts/generate-checksums.sh "../updates/windows"
 
     - name: '[Windows] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -373,8 +373,8 @@ runs:
           "${MSI_S3_URL}" \
           --acl public-read
 
-        # Verify MSI upload
-        bash .github/scripts/verify-s3-upload.sh \
+        # Verify MSI upload using helper script from rostoc-updates repo
+        bash ../.github/scripts/verify-s3-upload.sh \
           "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
           "${MSI_S3_URL}" \
           "${MSI_CHECKSUM}" \
