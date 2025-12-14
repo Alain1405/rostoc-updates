@@ -337,8 +337,16 @@ runs:
           find src-tauri/target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in src-tauri/target/"
           
           echo ""
-          echo "Last 50 lines of build log showing linuxdeploy execution:"
-          grep -A 20 -B 5 "linuxdeploy" "$LOG_FILE" | tail -50 || echo "  (linuxdeploy not found in log)"
+          echo "Last 100 lines of build log (to capture linuxdeploy errors):"
+          tail -100 "$LOG_FILE" || echo "  (Could not read log file)"
+          
+          echo ""
+          echo "Searching for error patterns in build log:"
+          grep -i "error\|failed\|linuxdeploy" "$LOG_FILE" | tail -30 || echo "  (No error patterns found)"
+          
+          echo ""
+          echo "AppImage build directory contents:"
+          find src-tauri/target -type d -name "appimage" -exec sh -c 'echo "Contents of {}"; ls -lah "{}" 2>/dev/null || echo "  (directory not accessible)"' \; || echo "  (No appimage directory found)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         fi
 

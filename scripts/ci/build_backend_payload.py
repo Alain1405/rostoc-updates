@@ -14,7 +14,7 @@ from typing import Any, Dict
 ROSTOC_SCRIPTS = Path(__file__).resolve().parents[3] / "rostoc" / "scripts"
 if ROSTOC_SCRIPTS.exists():
     sys.path.insert(0, str(ROSTOC_SCRIPTS))
-    from runtime_config import ARTIFACT_NAMING
+    from runtime_config import ARTIFACT_NAMING, STORAGE_PATHS
 else:
     # Fallback for when running without rostoc repo
     class ARTIFACT_NAMING:
@@ -36,6 +36,23 @@ else:
         @staticmethod
         def get_signature_name(artifact: str) -> str:
             return f"{artifact}.sig"
+    
+    class STORAGE_PATHS:
+        @staticmethod
+        def get_storage_path(version: str, filename: str, channel: str = "stable") -> str:
+            prefix = "releases/staging" if channel == "staging" else "releases"
+            return f"{prefix}/v{version}/{filename}"
+        
+        @staticmethod
+        def get_cdn_url(version: str, filename: str, cdn_base: str, channel: str = "stable") -> str:
+            if not cdn_base:
+                return ""
+            storage_path = STORAGE_PATHS.get_storage_path(version, filename, channel)
+            return f"{cdn_base}/{storage_path}"
+        
+        @staticmethod
+        def get_signature_path(version: str, filename: str, channel: str = "stable") -> str:
+            return STORAGE_PATHS.get_storage_path(version, f"{filename}.sig", channel)
 
 
 def sha256(path: Path) -> str:
@@ -88,13 +105,9 @@ def build_asset(
     if source is None or not source.exists():
         return None
 
-    # Build spaces_path with proper channel prefix (except for stable/production)
-    if channel == "stable":
-        spaces_path = f"releases/v{version}/{source.name}"
-        cdn_url = f"{cdn_base}/releases/v{version}/{source.name}" if cdn_base else ""
-    else:
-        spaces_path = f"releases/{channel}/v{version}/{source.name}"
-        cdn_url = f"{cdn_base}/releases/{channel}/v{version}/{source.name}" if cdn_base else ""
+    # Use centralized path generation from STORAGE_PATHS
+    spaces_path = STORAGE_PATHS.get_storage_path(version, source.name, channel)
+    cdn_url = STORAGE_PATHS.get_cdn_url(version, source.name, cdn_base, channel)
     
     # Use stored checksum if available, otherwise compute it
     if stored_checksum:
@@ -119,7 +132,7 @@ def build_asset(
         extra_payload.setdefault("cdn_url", cdn_url)
 
     if signature is not None and signature.exists():
-        asset["signature_path"] = f"releases/v{version}/{signature.name}"
+        asset["signature_path"] = STORAGE_PATHS.get_signature_path(version, source.name, channel)
         sig_text = signature.read_text(encoding="utf-8").strip()
         if sig_text:
             extra_payload.setdefault("signature_ed25519", sig_text)
