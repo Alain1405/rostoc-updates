@@ -58,7 +58,7 @@ jobs:
       - name: Download all release artifacts for channel
         uses: actions/download-artifact@v4
         with:
-          pattern: ${{ inputs.release_channel == 'staging' && 'rostoc-updates-staging-*' || 'rostoc-updates-*' }}
+          pattern: ${{ inputs.release_channel == 'staging' && 'rostoc-updates-staging-*' || 'rostoc-updates-stable-*' }}
           path: artifacts
           merge-multiple: true
 
@@ -206,11 +206,11 @@ jobs:
       - name: Upload JSON artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: releases-json
+          name: releases-json-${{ env.RELEASE_CHANNEL }}
           path: json-output/*.json
 
   publish-to-pages:
-    if: inputs.is_release
+    if: inputs.is_release && inputs.release_channel == 'stable'
     needs: generate-releases-json
     runs-on: ubuntu-22.04
     permissions:
@@ -230,7 +230,7 @@ jobs:
       - name: Download JSON manifests
         uses: actions/download-artifact@v4
         with:
-          name: releases-json
+          name: releases-json-${{ inputs.release_channel }}
           path: updates
 
       - name: Prepare Pages deployment

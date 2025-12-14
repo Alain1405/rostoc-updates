@@ -79,6 +79,7 @@ def build_asset(
     architecture: str,
     kind: str,
     cdn_base: str,
+    channel: str = "stable",
     signature: Path | None = None,
     mime_type: str = "",
     extra: Dict[str, Any] | None = None,
@@ -87,8 +88,13 @@ def build_asset(
     if source is None or not source.exists():
         return None
 
-    spaces_path = f"releases/v{version}/{source.name}"
-    cdn_url = f"{cdn_base}/releases/v{version}/{source.name}" if cdn_base else ""
+    # Build spaces_path with proper channel prefix (except for stable/production)
+    if channel == "stable":
+        spaces_path = f"releases/v{version}/{source.name}"
+        cdn_url = f"{cdn_base}/releases/v{version}/{source.name}" if cdn_base else ""
+    else:
+        spaces_path = f"releases/{channel}/v{version}/{source.name}"
+        cdn_url = f"{cdn_base}/releases/{channel}/v{version}/{source.name}" if cdn_base else ""
     
     # Use stored checksum if available, otherwise compute it
     if stored_checksum:
@@ -169,6 +175,7 @@ def process_platform_artifacts(
     platform: str,
     arch: str,
     version: str,
+    channel: str,
     artifact_root: Path,
     checksums: Dict[str, str],
     cdn_base: str,
@@ -202,6 +209,7 @@ def process_platform_artifacts(
             architecture=backend_arch,
             kind="archive",
             cdn_base=cdn_base,
+            channel=channel,
             signature=archive_sig,
             mime_type=get_mime_type(platform, "archive"),
             extra={"artifact": "updater"},
@@ -234,6 +242,7 @@ def process_platform_artifacts(
             architecture=backend_arch,
             kind="installer",
             cdn_base=cdn_base,
+            channel=channel,
             signature=installer_sig,
             mime_type=get_mime_type(platform, "installer"),
             extra=extra,
@@ -293,6 +302,7 @@ def main() -> None:
             platform=platform,
             arch=arch,
             version=args.version,
+            channel=args.channel,
             artifact_root=artifact_root,
             checksums=checksums,
             cdn_base=args.cdn_base,

@@ -494,5 +494,5 @@ runs:
       if: ${{ inputs.is_release == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.variant == 'staging' && 'rostoc-updates-staging' || 'rostoc-updates' }}-${{ inputs.platform }}-${{ inputs.arch }}
+        name: ${{ inputs.variant == 'staging' && 'rostoc-updates-staging' || 'rostoc-updates-stable' }}-${{ inputs.platform }}-${{ inputs.arch }}
         path: updates/*
