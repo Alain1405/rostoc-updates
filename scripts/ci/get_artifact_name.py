@@ -26,9 +26,16 @@ import sys
 from pathlib import Path
 
 # Add rostoc scripts to path for runtime_config import
-ROSTOC_SCRIPTS = Path(__file__).resolve().parents[3] / "rostoc" / "scripts"
-if ROSTOC_SCRIPTS.exists():
-    sys.path.insert(0, str(ROSTOC_SCRIPTS))
+# Try CI path first (private-src/), then local dev path (sibling repo)
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROSTOC_SCRIPTS_CI = SCRIPT_DIR.parents[1] / "private-src" / "scripts"  # rostoc-updates/scripts/ci -> rostoc-updates/ -> private-src/scripts
+ROSTOC_SCRIPTS_LOCAL = SCRIPT_DIR.parents[3] / "rostoc" / "scripts"  # For local development
+
+if ROSTOC_SCRIPTS_CI.exists():
+    sys.path.insert(0, str(ROSTOC_SCRIPTS_CI))
+    from runtime_config import ARTIFACT_NAMING
+elif ROSTOC_SCRIPTS_LOCAL.exists():
+    sys.path.insert(0, str(ROSTOC_SCRIPTS_LOCAL))
     from runtime_config import ARTIFACT_NAMING
 else:
     # Fallback for when running without rostoc repo
