@@ -206,7 +206,7 @@ runs:
         echo "[INFO] Loading checksums from checksums.txt"
         TARBALL_CHECKSUM=$(grep "Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" "../updates/macos/checksums.txt" | awk '{print $1}')
         DMG_CHECKSUM=$(grep "Rostoc_${VERSION}_${ARCH}.dmg" "../updates/macos/checksums.txt" | awk '{print $1}')
-        
+
         echo "[INFO] Expected checksums:"
         echo "  Tarball: ${TARBALL_CHECKSUM}"
         echo "  DMG: ${DMG_CHECKSUM}"
@@ -359,14 +359,14 @@ runs:
         # Load checksums for verification
         echo "[INFO] Loading checksums from checksums.txt"
         MSI_CHECKSUM=$(grep "Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" "../updates/windows/checksums.txt" | awk '{print $1}')
-        
+
         echo "[INFO] Expected checksum:"
         echo "  MSI: ${MSI_CHECKSUM}"
 
         # Upload Windows artifacts
         echo "[INFO] Uploading MSI..."
         MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi"
-        
+
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
           "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \

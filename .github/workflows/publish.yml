@@ -184,10 +184,24 @@ jobs:
           BACKEND_PUBLISH_TOKEN: ${{ secrets.ROSTOC_BACKEND_TOKEN }}
         run: |
           set -euo pipefail
-          curl -sSf -X POST "${{ env.BACKEND_PUBLISH_URL }}" \
+
+          # Capture both response body and HTTP status
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ env.BACKEND_PUBLISH_URL }}" \
             -H "Authorization: Bearer ${BACKEND_PUBLISH_TOKEN}" \
             -H "Content-Type: application/json" \
-            --data-binary @"${{ steps.prepare-backend-payload.outputs.payload }}"
+            --data-binary @"${{ steps.prepare-backend-payload.outputs.payload }}")
+
+          status_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          if [[ "$status_code" != "200" ]] && [[ "$status_code" != "201" ]]; then
+            echo "::error::Backend API returned HTTP $status_code"
+            echo "Response body:"
+            echo "$body"
+            exit 1
+          fi
+
+          echo "Successfully published release metadata (HTTP $status_code)"
 
       - name: Upload JSON artifacts
         uses: actions/upload-artifact@v4

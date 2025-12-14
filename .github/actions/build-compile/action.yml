@@ -296,7 +296,7 @@ runs:
         set -euo pipefail
         BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
         LOG_FILE="build-${{ inputs.platform }}-${{ inputs.arch }}.log"
-        
+
         # Debug logging for Linux builds
         if [[ "${{ inputs.platform }}" == "linux" ]]; then
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -318,12 +318,12 @@ runs:
           echo "User: $(whoami)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         fi
-        
+
         echo "[INFO] Starting build — output will be saved to $LOG_FILE"
         # shellcheck disable=SC2086
         $BUILD_CMD 2>&1 | tee "$LOG_FILE"
         BUILD_EXIT_CODE=$?
-        
+
         # Post-build debug logging for Linux
         if [[ "${{ inputs.platform }}" == "linux" ]]; then
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -338,5 +338,5 @@ runs:
           grep -A 20 -B 5 "linuxdeploy" "$LOG_FILE" | tail -50 || echo "  (linuxdeploy not found in log)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         fi
-        
+
         exit $BUILD_EXIT_CODE
