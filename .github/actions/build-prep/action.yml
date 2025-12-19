@@ -105,17 +105,6 @@ runs:
         echo "::notice::Building at commit $CURRENT_SHA"
         echo "::endgroup::"
 
-    - name: Restore production icons
-      working-directory: private-src
-      shell: bash
-      run: |
-        set -euo pipefail
-        if [ -x scripts/restore_prod_icons.sh ]; then
-          bash scripts/restore_prod_icons.sh
-        else
-          echo "::warning::restore_prod_icons.sh missing; skipping icon restore"
-        fi
-
     - name: Capture release version
       if: ${{ inputs.is_release == 'true' }}
       shell: bash

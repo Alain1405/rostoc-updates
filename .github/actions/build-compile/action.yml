@@ -273,6 +273,26 @@ runs:
       shell: bash
       run: scripts/ci/apply_preview_rust_env.sh
 
+    - name: Set variant-specific Tauri config flag
+      shell: bash
+      run: |
+        case "${ROSTOC_APP_VARIANT:-production}" in
+          staging)
+            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
+            ;;
+          dev)
+            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.dev.conf.json" >> "$GITHUB_ENV"
+            ;;
+          production)
+            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
+            ;;
+          *)
+            echo "::warning::Unknown variant '$ROSTOC_APP_VARIANT', defaulting to production"
+            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
+            ;;
+        esac
+        echo "[INFO] TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<empty>}"
+
     - name: Build application
       working-directory: private-src
       shell: bash

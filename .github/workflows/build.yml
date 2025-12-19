@@ -42,8 +42,6 @@ jobs:
       VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
       ROSTOC_APP_VARIANT: ${{ matrix.variant }}
       ROSTOC_UPDATE_CHANNEL: ${{ matrix.variant == 'staging' && 'staging' || 'stable' }}
-      TAURI_BUNDLE_PRODUCT_NAME: ${{ matrix.variant == 'staging' && 'Rostoc Staging' || 'Rostoc' }}
-      TAURI_BUNDLE_IDENTIFIER: ${{ matrix.variant == 'staging' && 'app.rostoc.staging' || 'app.rostoc' }}
       DO_RELEASE_PREFIX: ${{ matrix.variant == 'staging' && 'releases/staging' || 'releases' }}
     timeout-minutes: ${{ matrix.platform == 'linux' && 30 || 50 }}
     outputs:

@@ -5,7 +5,7 @@ This allows shell scripts to use the centralized naming without duplicating logi
 
 Usage:
     python get_artifact_name.py <type> <version> <platform> <arch>
-    
+
 Types:
     archive    - Updater archive (.app.tar.gz, .AppImage.tar.gz)
     installer  - Installer (.dmg, .msi, .AppImage)
@@ -14,10 +14,10 @@ Types:
 Examples:
     python get_artifact_name.py archive 0.2.143 macos aarch64
     # Output: Rostoc-0.2.143-darwin-aarch64.app.tar.gz
-    
+
     python get_artifact_name.py installer 0.2.143 macos aarch64
     # Output: Rostoc_0.2.143_aarch64.dmg
-    
+
     python get_artifact_name.py signature "Rostoc_0.2.143_aarch64.dmg"
     # Output: Rostoc_0.2.143_aarch64.dmg.sig
 """
@@ -28,8 +28,12 @@ from pathlib import Path
 # Add rostoc scripts to path for runtime_config import
 # Try CI path first (private-src/), then local dev path (sibling repo)
 SCRIPT_DIR = Path(__file__).resolve().parent
-ROSTOC_SCRIPTS_CI = SCRIPT_DIR.parents[1] / "private-src" / "scripts"  # rostoc-updates/scripts/ci -> rostoc-updates/ -> private-src/scripts
-ROSTOC_SCRIPTS_LOCAL = SCRIPT_DIR.parents[3] / "rostoc" / "scripts"  # For local development
+ROSTOC_SCRIPTS_CI = (
+    SCRIPT_DIR.parents[1] / "private-src" / "scripts"
+)  # rostoc-updates/scripts/ci -> rostoc-updates/ -> private-src/scripts
+ROSTOC_SCRIPTS_LOCAL = (
+    SCRIPT_DIR.parents[3] / "rostoc" / "scripts"
+)  # For local development
 
 if ROSTOC_SCRIPTS_CI.exists():
     sys.path.insert(0, str(ROSTOC_SCRIPTS_CI))
@@ -53,7 +57,9 @@ else:
             if platform == "macos":
                 return f"Rostoc_{version}_{arch}.dmg"
             elif platform == "windows":
-                norm_arch = "x86" if arch == "i686" else "x64" if arch == "x86_64" else arch
+                norm_arch = (
+                    "x86" if arch == "i686" else "x64" if arch == "x86_64" else arch
+                )
                 return f"Rostoc-{version}-windows-{norm_arch}.msi"
             elif platform == "linux":
                 return f"Rostoc-{version}-linux-{arch}.AppImage"
@@ -75,21 +81,30 @@ def main():
     try:
         if artifact_type == "archive":
             if len(sys.argv) != 5:
-                print("Usage: python get_artifact_name.py archive <version> <platform> <arch>", file=sys.stderr)
+                print(
+                    "Usage: python get_artifact_name.py archive <version> <platform> <arch>",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             version, platform, arch = sys.argv[2], sys.argv[3], sys.argv[4]
             print(ARTIFACT_NAMING.get_updater_archive_name(version, platform, arch))
 
         elif artifact_type == "installer":
             if len(sys.argv) != 5:
-                print("Usage: python get_artifact_name.py installer <version> <platform> <arch>", file=sys.stderr)
+                print(
+                    "Usage: python get_artifact_name.py installer <version> <platform> <arch>",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             version, platform, arch = sys.argv[2], sys.argv[3], sys.argv[4]
             print(ARTIFACT_NAMING.get_installer_name(version, platform, arch))
 
         elif artifact_type == "signature":
             if len(sys.argv) != 3:
-                print("Usage: python get_artifact_name.py signature <artifact_name>", file=sys.stderr)
+                print(
+                    "Usage: python get_artifact_name.py signature <artifact_name>",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             artifact_name = sys.argv[2]
             print(ARTIFACT_NAMING.get_signature_name(artifact_name))
