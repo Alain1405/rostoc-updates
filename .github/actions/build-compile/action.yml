@@ -47,10 +47,17 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+
+        # Add --mode development for staging builds to enable devtools
+        MODE_FLAG=""
+        if [ "${ROSTOC_APP_VARIANT:-production}" == "staging" ]; then
+          MODE_FLAG="--mode development"
+        fi
+
         case "${{ inputs.platform }}" in
           macos)
             {
-              echo "build_command=python scripts/build.py --locked"
+              echo "build_command=python scripts/build.py --locked $MODE_FLAG"
               echo "artifact_extension=tar.gz"
               echo "test_smoke=true"
               if [ "${{ inputs.arch }}" == "x86_64" ]; then
@@ -65,12 +72,12 @@ runs:
           windows)
             {
               if [ "${{ inputs.arch }}" == "x86_64" ]; then
-                echo "build_command=python scripts/build.py --locked --bundles msi"
+                echo "build_command=python scripts/build.py --locked --bundles msi $MODE_FLAG"
                 echo "target=x86_64-pc-windows-msvc"
                 echo "py_url_fragment=windows-x64"
               else
                 # For 32-bit Windows, pass --target to Tauri CLI so WiX creates 32-bit MSI
-                echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc"
+                echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc $MODE_FLAG"
                 echo "target=i686-pc-windows-msvc"
                 echo "py_url_fragment=windows-x86"
               fi
@@ -80,7 +87,7 @@ runs:
             ;;
           linux)
             {
-              echo "build_command=python scripts/build.py --locked --bundles appimage"
+              echo "build_command=python scripts/build.py --locked --bundles appimage $MODE_FLAG"
               echo "artifact_extension=AppImage"
               echo "test_smoke=true"
               echo "target=x86_64-unknown-linux-gnu"

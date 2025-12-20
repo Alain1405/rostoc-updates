@@ -116,22 +116,30 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
+        VARIANT: ${{ inputs.variant }}
       run: |
         set -euo pipefail
         TARBALL="${{ steps.locate-macos.outputs.tarball }}"
         SIGNATURE="${{ steps.locate-macos.outputs.signature }}"
 
+        # Determine product name prefix based on variant
+        if [ "${VARIANT}" == "staging" ]; then
+          PRODUCT_NAME="Rostoc-staging"
+        else
+          PRODUCT_NAME="Rostoc"
+        fi
+
         # Create updates directory
         mkdir -p "../updates/macos"
 
-        # Copy artifacts with version-tagged names
-        TARBALL_NAME="Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz"
+        # Copy artifacts with version-tagged names (preserving variant in name)
+        TARBALL_NAME="${PRODUCT_NAME}-${VERSION}-darwin-${ARCH}.app.tar.gz"
         cp "$TARBALL" "../updates/macos/$TARBALL_NAME"
         cp "$SIGNATURE" "../updates/macos/${TARBALL_NAME}.sig"
 
         # Also copy as latest for convenience
-        cp "$TARBALL" "../updates/macos/Rostoc.app.tar.gz"
-        cp "$SIGNATURE" "../updates/macos/Rostoc.app.tar.gz.sig"
+        cp "$TARBALL" "../updates/macos/${PRODUCT_NAME}.app.tar.gz"
+        cp "$SIGNATURE" "../updates/macos/${PRODUCT_NAME}.app.tar.gz.sig"
 
         # Copy DMG if present (will be replaced after notarization)
         SEARCH_DIRS=()
@@ -150,9 +158,12 @@ runs:
         done
 
         if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
-          DMG_NAME="Rostoc_${VERSION}_${ARCH}.dmg"
+          # Use underscore for DMG name to match Tauri convention
+          # But preserve variant: Rostoc-staging_0.2.94_aarch64.dmg for staging
+          DMG_NAME="${PRODUCT_NAME}_${VERSION}_${ARCH}.dmg"
           DMG_SIZE=$(du -h "${DMG_PATH}" | cut -f1)
           echo "[INFO] Found DMG at ${DMG_PATH} (${DMG_SIZE}), copying to updates as ${DMG_NAME}"
+          echo "[INFO] Variant: ${VARIANT}, Product name: ${PRODUCT_NAME}"
           cp -v "${DMG_PATH}" "../updates/macos/${DMG_NAME}"
           ls -lh "../updates/macos/${DMG_NAME}"
         else
@@ -170,12 +181,15 @@ runs:
           date -u +"%Y-%m-%dT%H:%M:%SZ"
           echo "version=${VERSION}"
           echo "git_sha=$(git rev-parse --short HEAD)"
+          echo "variant=${VARIANT}"
         } > "../updates/version.txt"
 
         # Generate checksums using helper script from rostoc-updates repo
         bash ../.github/scripts/generate-checksums.sh "../updates/macos"
 
         echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
+        echo "dmg_name=${DMG_NAME:-}" >> "$GITHUB_OUTPUT"
+        echo "product_name=${PRODUCT_NAME}" >> "$GITHUB_OUTPUT"
 
     - name: '[macOS] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'macos' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -190,6 +204,9 @@ runs:
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
         RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
+        PRODUCT_NAME: ${{ steps.prepare-macos.outputs.product_name }}
+        TARBALL_NAME: ${{ steps.prepare-macos.outputs.tarball_name }}
+        DMG_NAME: ${{ steps.prepare-macos.outputs.dmg_name }}
       run: |
         set -euo pipefail
 
@@ -201,46 +218,48 @@ runs:
 
         RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
         echo "[INFO] Uploading macOS binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
+        echo "[INFO] Product name: ${PRODUCT_NAME}"
+        echo "[INFO] Tarball: ${TARBALL_NAME}"
+        echo "[INFO] DMG: ${DMG_NAME}"
 
         # Load checksums for verification
         echo "[INFO] Loading checksums from checksums.txt"
-        TARBALL_CHECKSUM=$(grep "Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" "../updates/macos/checksums.txt" | awk '{print $1}')
-        DMG_CHECKSUM=$(grep "Rostoc_${VERSION}_${ARCH}.dmg" "../updates/macos/checksums.txt" | awk '{print $1}')
+        TARBALL_CHECKSUM=$(grep "${TARBALL_NAME}" "../updates/macos/checksums.txt" | awk '{print $1}')
 
-        echo "[INFO] Expected checksums:"
-        echo "  Tarball: ${TARBALL_CHECKSUM}"
-        echo "  DMG: ${DMG_CHECKSUM}"
+        echo "[INFO] Expected tarball checksum: ${TARBALL_CHECKSUM}"
 
         # Upload macOS artifacts
         echo "[INFO] Uploading tarball..."
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz" \
+          "../updates/macos/${TARBALL_NAME}" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${TARBALL_NAME}" \
           --acl public-read
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/macos/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-darwin-${ARCH}.app.tar.gz.sig" \
+          "../updates/macos/${TARBALL_NAME}.sig" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${TARBALL_NAME}.sig" \
           --acl public-read
 
         # Upload DMG if present
-        if [ -f "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" ]; then
+        if [ -n "${DMG_NAME}" ] && [ -f "../updates/macos/${DMG_NAME}" ]; then
           echo "[INFO] Uploading unsigned DMG (will be replaced after notarization)"
-          echo "[INFO] DMG checksum before upload: ${DMG_CHECKSUM}"
           
-          DMG_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc_${VERSION}_${ARCH}.dmg"
+          DMG_CHECKSUM=$(grep "${DMG_NAME}" "../updates/macos/checksums.txt" | awk '{print $1}')
+          echo "[INFO] Expected DMG checksum: ${DMG_CHECKSUM}"
+          
+          DMG_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${DMG_NAME}"
           
           aws s3 cp \
             --endpoint-url "${SPACES_ENDPOINT}" \
-            "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
+            "../updates/macos/${DMG_NAME}" \
             "${DMG_S3_URL}" \
             --acl public-read
           
           # Verify upload using helper script from rostoc-updates repo
           bash ../.github/scripts/verify-s3-upload.sh \
-            "../updates/macos/Rostoc_${VERSION}_${ARCH}.dmg" \
+            "../updates/macos/${DMG_NAME}" \
             "${DMG_S3_URL}" \
             "${DMG_CHECKSUM}" \
             "${SPACES_ENDPOINT}"
@@ -288,9 +307,11 @@ runs:
       shell: pwsh
       env:
         VERSION: ${{ inputs.version }}
+        VARIANT: ${{ inputs.variant }}
       run: |
         $ErrorActionPreference = 'Stop'
         $version = $env:VERSION
+        $variant = $env:VARIANT
         $artifact = '${{ steps.locate-windows.outputs.artifact }}'
         $signature = '${{ steps.locate-windows.outputs.signature }}'
         $arch = '${{ inputs.arch }}'
@@ -305,22 +326,27 @@ runs:
         $windowsDir = Join-Path $updatesRoot 'windows'
         New-Item -ItemType Directory -Path $windowsDir -Force | Out-Null
 
+        # Determine product name based on variant
+        $productName = if ($variant -eq 'staging') { 'Rostoc-staging' } else { 'Rostoc' }
+
         # Determine architecture label for filename
         $archLabel = if ($arch -eq 'i686') { 'x86' } else { 'x64' }
 
-        # Copy artifacts with version-tagged names
+        # Copy artifacts with version-tagged names (preserving variant in name)
         $extension = [System.IO.Path]::GetExtension($artifact)
-        $msiName = "Rostoc-${version}-windows-${archLabel}${extension}"
+        $msiName = "${productName}-${version}-windows-${archLabel}${extension}"
         Copy-Item $artifact (Join-Path $windowsDir $msiName) -Force
         Copy-Item $signature (Join-Path $windowsDir "${msiName}.sig") -Force
 
         # Also copy as latest for convenience
-        $latestName = "Rostoc-windows-${archLabel}${extension}"
+        $latestName = "${productName}-windows-${archLabel}${extension}"
         Copy-Item $artifact (Join-Path $windowsDir $latestName) -Force
         Copy-Item $signature (Join-Path $windowsDir "${latestName}.sig") -Force
 
         Write-Host "[INFO] Windows artifacts staged: $msiName"
+        Write-Host "[INFO] Variant: $variant, Product name: $productName"
         "msi_name=$msiName" >> $env:GITHUB_OUTPUT
+        "product_name=$productName" >> $env:GITHUB_OUTPUT
 
     - name: '[Windows] Generate checksums'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
@@ -343,9 +369,10 @@ runs:
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
         RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
+        MSI_NAME: ${{ steps.prepare-windows.outputs.msi_name }}
+        PRODUCT_NAME: ${{ steps.prepare-windows.outputs.product_name }}
       run: |
         set -euo pipefail
-        ARCH_LABEL=$([ "$ARCH" = "i686" ] && echo "x86" || echo "x64")
 
         # Install AWS CLI if not present
         if ! command -v aws &> /dev/null; then
@@ -355,35 +382,37 @@ runs:
 
         RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
         echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
+        echo "[INFO] Product name: ${PRODUCT_NAME}"
+        echo "[INFO] MSI: ${MSI_NAME}"
 
         # Load checksums for verification
         echo "[INFO] Loading checksums from checksums.txt"
-        MSI_CHECKSUM=$(grep "Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" "../updates/windows/checksums.txt" | awk '{print $1}')
+        MSI_CHECKSUM=$(grep "${MSI_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
 
         echo "[INFO] Expected checksum:"
         echo "  MSI: ${MSI_CHECKSUM}"
 
         # Upload Windows artifacts
         echo "[INFO] Uploading MSI..."
-        MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi"
+        MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}"
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+          "../updates/windows/${MSI_NAME}" \
           "${MSI_S3_URL}" \
           --acl public-read
 
         # Verify MSI upload using helper script from rostoc-updates repo
         bash ../.github/scripts/verify-s3-upload.sh \
-          "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi" \
+          "../updates/windows/${MSI_NAME}" \
           "${MSI_S3_URL}" \
           "${MSI_CHECKSUM}" \
           "${SPACES_ENDPOINT}"
 
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/windows/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-windows-${ARCH_LABEL}.msi.sig" \
+          "../updates/windows/${MSI_NAME}.sig" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}.sig" \
           --acl public-read
 
         echo "[INFO] ✅ Windows upload complete"
@@ -427,6 +456,7 @@ runs:
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
+        VARIANT: ${{ inputs.variant }}
       run: |
         set -euo pipefail
         APPIMAGE="${{ steps.locate-linux.outputs.appimage }}"
@@ -440,21 +470,30 @@ runs:
           exit 1
         fi
 
+        # Determine product name based on variant
+        if [ "${VARIANT}" == "staging" ]; then
+          PRODUCT_NAME="Rostoc-staging"
+        else
+          PRODUCT_NAME="Rostoc"
+        fi
+
         # Create Linux updates directory
         mkdir -p "../updates/linux"
 
-        # Copy AppImage with version-tagged name
-        APPIMAGE_NAME="Rostoc-${VERSION}-x86_64.AppImage"
+        # Copy AppImage with version-tagged name (preserving variant in name)
+        APPIMAGE_NAME="${PRODUCT_NAME}-${VERSION}-x86_64.AppImage"
         cp "$APPIMAGE" "../updates/linux/$APPIMAGE_NAME"
 
         # Also copy as latest for convenience
-        cp "$APPIMAGE" "../updates/linux/Rostoc-x86_64.AppImage"
+        cp "$APPIMAGE" "../updates/linux/${PRODUCT_NAME}-x86_64.AppImage"
 
         # Generate checksums
         (cd "../updates/linux" && sha256sum ./*.AppImage > checksums.txt)
 
         echo "[INFO] Linux artifacts staged: $APPIMAGE_NAME"
+        echo "[INFO] Variant: ${VARIANT}, Product name: ${PRODUCT_NAME}"
         echo "appimage_name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
+        echo "product_name=${PRODUCT_NAME}" >> "$GITHUB_OUTPUT"
 
     - name: '[Linux] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'linux' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -468,6 +507,8 @@ runs:
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
         RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
+        APPIMAGE_NAME: ${{ steps.prepare-linux.outputs.appimage_name }}
+        PRODUCT_NAME: ${{ steps.prepare-linux.outputs.product_name }}
       run: |
         set -euo pipefail
 
@@ -479,12 +520,14 @@ runs:
 
         RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
         echo "[INFO] Uploading Linux binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
+        echo "[INFO] Product name: ${PRODUCT_NAME}"
+        echo "[INFO] AppImage: ${APPIMAGE_NAME}"
 
         # Upload Linux AppImage
         aws s3 cp \
           --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/linux/Rostoc-${VERSION}-x86_64.AppImage" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/Rostoc-${VERSION}-x86_64.AppImage" \
+          "../updates/linux/${APPIMAGE_NAME}" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${APPIMAGE_NAME}" \
           --acl public-read
 
         echo "[INFO] ✅ Linux upload complete"
