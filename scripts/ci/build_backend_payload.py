@@ -339,9 +339,21 @@ def main() -> None:
         )
         assets.extend(platform_assets)
 
+    # Allow publishing without Linux (optional platform)
+    # Require at least one macOS or Windows asset
+    has_required_platform = any(
+        asset["platform"] in ["macos", "windows"] for asset in assets
+    )
+
     if not assets:
         raise SystemExit(
             "No release assets discovered; refusing to publish empty payload"
+        )
+
+    if not has_required_platform:
+        print("Warning: No macOS or Windows assets found (required platforms)")
+        raise SystemExit(
+            "No assets from required platforms (macOS, Windows); refusing to publish"
         )
 
     payload = {

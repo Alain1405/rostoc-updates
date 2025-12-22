@@ -62,6 +62,14 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Debug - List downloaded artifacts
+        run: |
+          echo "=== Artifacts directory structure ==="
+          ls -laR artifacts/ || echo "artifacts/ directory not found"
+          echo ""
+          echo "=== Checking for updates subdirectory ==="
+          ls -la artifacts/updates/ || echo "artifacts/updates/ directory not found"
+
       - name: Consolidate platform artifacts
         run: |
           set -euo pipefail
@@ -69,24 +77,41 @@ jobs:
           mkdir -p macos-artifacts windows-artifacts linux-artifacts
 
           ROOT="artifacts"
+          echo "[DEBUG] Initial ROOT: ${ROOT}"
           if [ -d "${ROOT}/updates" ]; then
             ROOT="${ROOT}/updates"
+            echo "[DEBUG] Found updates subdirectory, ROOT now: ${ROOT}"
           fi
+
+          echo "[DEBUG] Final ROOT directory structure:"
+          ls -la "${ROOT}" || echo "[ERROR] ROOT directory ${ROOT} not found"
+
+          echo ""
+          echo "[DEBUG] Checking for platform subdirectories:"
+          ls -la "${ROOT}/macos" 2>/dev/null || echo "[INFO] No ${ROOT}/macos directory"
+          ls -la "${ROOT}/windows" 2>/dev/null || echo "[INFO] No ${ROOT}/windows directory"
+          ls -la "${ROOT}/linux" 2>/dev/null || echo "[INFO] No ${ROOT}/linux directory"
 
           # Copy any macOS artifacts (all arches) into macos-artifacts
           if compgen -G "${ROOT}/macos/*" > /dev/null; then
+            echo "[INFO] Found macOS artifacts, copying to macos-artifacts/"
             cp -R "${ROOT}"/macos/* macos-artifacts/
+            ls -la macos-artifacts/
           else
             echo "::error::No macOS artifacts found in downloaded payloads"
+            echo "[DEBUG] Listing ROOT to diagnose:"
             ls -la "${ROOT}" || true
             exit 1
           fi
 
           # Copy any Windows artifacts (all arches) into windows-artifacts
           if compgen -G "${ROOT}/windows/*" > /dev/null; then
+            echo "[INFO] Found Windows artifacts, copying to windows-artifacts/"
             cp -R "${ROOT}"/windows/* windows-artifacts/
+            ls -la windows-artifacts/
           else
             echo "::error::No Windows artifacts found in downloaded payloads"
+            echo "[DEBUG] Listing ROOT to diagnose:"
             ls -la "${ROOT}" || true
             exit 1
           fi
@@ -94,7 +119,8 @@ jobs:
           # Copy any Linux artifacts (all arches) into linux-artifacts (optional)
           if compgen -G "${ROOT}/linux/*" > /dev/null; then
             cp -R "${ROOT}"/linux/* linux-artifacts/
-            echo "Linux artifacts found and consolidated"
+            echo "[INFO] Linux artifacts found and consolidated"
+            ls -la linux-artifacts/
           else
             echo "::notice::No Linux artifacts found (optional)"
           fi
@@ -212,6 +238,19 @@ jobs:
         with:
           name: releases-json-${{ env.RELEASE_CHANNEL }}
           path: json-output/*.json
+
+      - name: Upload manifest generation debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-debug-logs-${{ env.RELEASE_CHANNEL }}
+          path: |
+            macos-artifacts/
+            windows-artifacts/
+            linux-artifacts/
+            json-output/
+          retention-days: 7
+          if-no-files-found: warn
 
   publish-to-pages:
     if: inputs.is_release && inputs.release_channel == 'stable'
