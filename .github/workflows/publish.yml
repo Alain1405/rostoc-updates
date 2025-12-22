@@ -64,11 +64,26 @@ jobs:
 
       - name: Debug - List downloaded artifacts
         run: |
-          echo "=== Artifacts directory structure ==="
-          ls -laR artifacts/ || echo "artifacts/ directory not found"
+          echo "=== Artifacts directory structure (top-level) ==="
+          ls -la artifacts/ || echo "artifacts/ directory not found"
           echo ""
-          echo "=== Checking for updates subdirectory ==="
-          ls -la artifacts/updates/ || echo "artifacts/updates/ directory not found"
+          echo "=== Full recursive listing ==="
+          find artifacts/ -type f -o -type d | sort || echo "find failed"
+          echo ""
+          echo "=== Checking for platform subdirectories ==="
+          ls -la artifacts/macos/ 2>/dev/null && echo "✓ artifacts/macos/ exists" || echo "✗ artifacts/macos/ not found"
+          ls -la artifacts/windows/ 2>/dev/null && echo "✓ artifacts/windows/ exists" || echo "✗ artifacts/windows/ not found"
+          ls -la artifacts/linux/ 2>/dev/null && echo "✓ artifacts/linux/ exists" || echo "✗ artifacts/linux/ not found"
+          ls -la artifacts/updates/ 2>/dev/null && echo "✓ artifacts/updates/ exists" || echo "✗ artifacts/updates/ not found"
+          echo ""
+          echo "=== Artifact names that were downloaded (based on pattern) ==="
+          echo "Pattern used: ${{ inputs.release_channel == 'staging' && 'rostoc-updates-staging-*' || 'rostoc-updates-stable-*' }}"
+          echo "Expected artifacts:"
+          echo "  - rostoc-updates-${{ inputs.release_channel || 'stable' }}-macos-aarch64"
+          echo "  - rostoc-updates-${{ inputs.release_channel || 'stable' }}-macos-x86_64"
+          echo "  - rostoc-updates-${{ inputs.release_channel || 'stable' }}-windows-x86_64"
+          echo "  - rostoc-updates-${{ inputs.release_channel || 'stable' }}-windows-i686"
+          echo "  - rostoc-updates-${{ inputs.release_channel || 'stable' }}-linux-x86_64 (optional)"
 
       - name: Consolidate platform artifacts
         run: |
@@ -78,10 +93,18 @@ jobs:
 
           ROOT="artifacts"
           echo "[DEBUG] Initial ROOT: ${ROOT}"
+          ls -la "${ROOT}" || true
+
           if [ -d "${ROOT}/updates" ]; then
             ROOT="${ROOT}/updates"
             echo "[DEBUG] Found updates subdirectory, ROOT now: ${ROOT}"
+            ls -la "${ROOT}" || true
           fi
+
+          echo "[DEBUG] Looking for platform directories in: ${ROOT}"
+          ls -la "${ROOT}"/macos 2>/dev/null || echo "[DEBUG] No ${ROOT}/macos directory"
+          ls -la "${ROOT}"/windows 2>/dev/null || echo "[DEBUG] No ${ROOT}/windows directory"
+          ls -la "${ROOT}"/linux 2>/dev/null || echo "[DEBUG] No ${ROOT}/linux directory"
 
           echo "[DEBUG] Final ROOT directory structure:"
           ls -la "${ROOT}" || echo "[ERROR] ROOT directory ${ROOT} not found"
@@ -116,13 +139,13 @@ jobs:
             exit 1
           fi
 
-          # Copy any Linux artifacts (all arches) into linux-artifacts (optional)
+          # Copy any Linux artifacts (all arches) into linux-artifacts (optional - failures expected)
           if compgen -G "${ROOT}/linux/*" > /dev/null; then
             cp -R "${ROOT}"/linux/* linux-artifacts/
-            echo "[INFO] Linux artifacts found and consolidated"
+            echo "[INFO] ✅ Linux artifacts found and consolidated"
             ls -la linux-artifacts/
           else
-            echo "::notice::No Linux artifacts found (optional)"
+            echo "::notice::No Linux artifacts found (optional platform)"
           fi
 
       - name: Download pending notarizations metadata
@@ -140,41 +163,8 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
-      - name: Generate unified JSON manifests
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ env.RELEASE_VERSION }}"
-          echo "Generating releases.json and latest.json for version ${VERSION}"
-
-          # Get submission ID from the build output or pending file
-          SUBMISSION_ID=""
-          if [[ -f "private-src/pending-notarizations.csv" ]]; then
-            SUBMISSION_ID=$(tail -n 1 private-src/pending-notarizations.csv | cut -d',' -f1)
-            echo "[INFO] Found notarization submission ID: ${SUBMISSION_ID}"
-          fi
-
-          # Determine variant from release channel
-          VARIANT="${{ env.RELEASE_CHANNEL }}"
-
-          # Run the unified JSON generation script
-          DO_SPACES_CDN_URL="${{ secrets.DO_SPACES_CDN_URL }}" \
-          bash private-src/scripts/ci/generate_releases_json.sh \
-            "${VERSION}" \
-            "macos-artifacts" \
-            "windows-artifacts" \
-            "json-output" \
-            "${SUBMISSION_ID}" \
-            "${VARIANT}"
-
-          echo "Generated JSON files:"
-          ls -lh json-output/
-          echo ""
-          echo "=== releases.json (first release entry) ==="
-          jq '.releases[0]' json-output/releases.json
-          echo ""
-          echo "=== latest.json ==="
-          cat json-output/latest.json
+      # NOTE: Local manifest generation removed - backend generates manifests dynamically
+      # via database queries and serves them through API endpoints
 
       - name: Detect backend publish token
         id: detect-backend-token
@@ -196,13 +186,13 @@ jobs:
         id: prepare-backend-payload
         run: |
           set -euo pipefail
+          # NOTE: Removed --manifest and --releases args - build_backend_payload.py
+          # now generates manifest_payload inline (backend generates manifests dynamically)
           python scripts/ci/build_backend_payload.py \
             --version "${{ env.RELEASE_VERSION }}" \
             --channel "${{ env.RELEASE_CHANNEL }}" \
             --build-sha "${{ env.BUILD_SHA }}" \
             --cdn-base "${{ env.DO_SPACES_CDN_URL }}" \
-            --manifest json-output/latest.json \
-            --releases json-output/releases.json \
             --mac-root macos-artifacts \
             --windows-root windows-artifacts \
             --linux-root linux-artifacts
@@ -233,12 +223,6 @@ jobs:
 
           echo "Successfully published release metadata (HTTP $status_code)"
 
-      - name: Upload JSON artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: releases-json-${{ env.RELEASE_CHANNEL }}
-          path: json-output/*.json
-
       - name: Upload manifest generation debug logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -248,74 +232,9 @@ jobs:
             macos-artifacts/
             windows-artifacts/
             linux-artifacts/
-            json-output/
           retention-days: 7
           if-no-files-found: warn
 
-  publish-to-pages:
-    if: inputs.is_release && inputs.release_channel == 'stable'
-    needs: generate-releases-json
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-      actions: write
-    environment:
-      name: github-pages
-      url: https://alain1405.github.io/rostoc-updates/
-    steps:
-      - name: Checkout updates repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download JSON manifests
-        uses: actions/download-artifact@v4
-        with:
-          name: releases-json-${{ inputs.release_channel }}
-          path: updates
-
-      - name: Prepare Pages deployment
-        run: |
-          # Copy JSON manifests and metadata files (binaries are served from Spaces)
-          mkdir -p _site
-          cp updates/*.json _site/ 2>/dev/null || true
-          cp updates/version.txt _site/ 2>/dev/null || true
-
-          # Ensure GitHub Pages keeps running without Jekyll
-          touch _site/.nojekyll
-
-      - name: Upload artifact for Pages
-        uses: actions/upload-pages-artifact@v3
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Summary
-        run: |
-          {
-            echo "## 🚀 Deployment Complete"
-            echo ""
-            VERSION="${{ needs.generate-releases-json.outputs.version }}"
-            echo "**Version:** ${VERSION}"
-            echo "**Updates URL:** https://alain1405.github.io/rostoc-updates/latest.json"
-            echo "**Build Matrix:** macOS (M1, Intel), Windows (x64, x86), Linux (AppImage)"
-            echo "**Artifacts:**"
-            echo "- macOS artifact: macos/Rostoc.app.tar.gz"
-            echo "- Windows artifact: windows/Rostoc_*.msi"
-            echo "**Pages URL:** https://alain1405.github.io/rostoc-updates/"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Enable stapler workflow schedule
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          echo "Ensuring stapler workflow is enabled for notarization follow-up"
-          curl -s -X PUT \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/Alain1405/rostoc-updates/actions/workflows/staple-notarized-dmg.yml/enable >/dev/null
-          echo "Stapler workflow enabled"
+  # NOTE: GitHub Pages publishing removed - backend now serves manifests dynamically
+  # via API endpoints. Manifests are generated from database queries, not static files.
+  # Desktop app and updater consume: https://api.rostoc.co/api/updates/<channel>/latest/<target>-<arch>/<version>/

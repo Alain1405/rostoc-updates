@@ -19,21 +19,27 @@ else:
     # Fallback for when running without rostoc repo
     class ARTIFACT_NAMING:
         @staticmethod
-        def get_updater_archive_name(version: str, platform: str, arch: str) -> str:
+        def get_updater_archive_name(
+            version: str, platform: str, arch: str, channel: str = "stable"
+        ) -> str:
+            variant_prefix = "Rostoc-staging" if channel == "staging" else "Rostoc"
             if platform == "macos":
-                return f"Rostoc-{version}-darwin-{arch}.app.tar.gz"
-            return f"Rostoc-{version}-{platform}-{arch}.tar.gz"
+                return f"{variant_prefix}-{version}-darwin-{arch}.app.tar.gz"
+            return f"{variant_prefix}-{version}-{platform}-{arch}.tar.gz"
 
         @staticmethod
-        def get_installer_name(version: str, platform: str, arch: str) -> str:
+        def get_installer_name(
+            version: str, platform: str, arch: str, channel: str = "stable"
+        ) -> str:
+            variant_prefix = "Rostoc-staging" if channel == "staging" else "Rostoc"
             if platform == "macos":
-                return f"Rostoc_{version}_{arch}.dmg"
+                return f"{variant_prefix}_{version}_{arch}.dmg"
             elif platform == "windows":
                 norm_arch = (
                     "x64" if arch == "x86_64" else "x86" if arch == "i686" else arch
                 )
-                return f"Rostoc-{version}-windows-{norm_arch}.msi"
-            return f"Rostoc-{version}-{platform}-{arch}.AppImage"
+                return f"{variant_prefix}-{version}-windows-{norm_arch}.msi"
+            return f"{variant_prefix}-{version}-{platform}-{arch}.AppImage"
 
         @staticmethod
         def get_signature_name(artifact: str) -> str:
@@ -159,8 +165,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--channel", default="stable")
     parser.add_argument("--build-sha", required=True)
     parser.add_argument("--cdn-base", default="")
-    parser.add_argument("--manifest", required=True, type=Path)
-    parser.add_argument("--releases", required=True, type=Path)
+    # NOTE: Removed --manifest and --releases args - backend generates manifests dynamically
     parser.add_argument("--mac-root", default=Path("macos-artifacts"), type=Path)
     parser.add_argument("--windows-root", default=Path("windows-artifacts"), type=Path)
     parser.add_argument("--linux-root", default=Path("linux-artifacts"), type=Path)
@@ -216,17 +221,22 @@ def process_platform_artifacts(
 
     platform_entry = (release_entry.get("platforms", {}) or {}).get(platform_key, {})
 
-    print(f"\n=== Processing {platform} {arch} ===")
+    print(f"\n=== Processing {platform} {arch} (channel: {channel}) ===")
 
     # Process updater archive (if exists)
-    archive_name = ARTIFACT_NAMING.get_updater_archive_name(version, platform, arch)
+    archive_name = ARTIFACT_NAMING.get_updater_archive_name(
+        version, platform, arch, channel
+    )
+    print(f"Looking for updater archive: {archive_name}")
     archive_path = find_first(artifact_root, archive_name)
     archive_sig = find_first(
         artifact_root, ARTIFACT_NAMING.get_signature_name(archive_name)
     )
 
     if archive_path:
-        print(f"Found updater archive: {archive_name}")
+        print(f"✓ Found updater archive: {archive_path.relative_to(artifact_root)}")
+    else:
+        print(f"✗ Updater archive not found: {archive_name}")
         asset = build_asset(
             source=archive_path,
             version=version,
@@ -244,14 +254,17 @@ def process_platform_artifacts(
             assets.append(asset)
 
     # Process installer (if exists)
-    installer_name = ARTIFACT_NAMING.get_installer_name(version, platform, arch)
+    installer_name = ARTIFACT_NAMING.get_installer_name(
+        version, platform, arch, channel
+    )
+    print(f"Looking for installer: {installer_name}")
     installer_path = find_first(artifact_root, installer_name)
     installer_sig = find_first(
         artifact_root, ARTIFACT_NAMING.get_signature_name(installer_name)
     )
 
     if installer_path:
-        print(f"Found installer: {installer_name}")
+        print(f"✓ Found installer: {installer_path.relative_to(artifact_root)}")
         installer_meta = platform_entry.get("installer", {})
 
         extra = {"artifact": "installer"}
@@ -277,6 +290,8 @@ def process_platform_artifacts(
         )
         if asset:
             assets.append(asset)
+    else:
+        print(f"✗ Installer not found: {installer_name}")
 
     return assets
 
@@ -284,14 +299,18 @@ def process_platform_artifacts(
 def main() -> None:
     args = parse_args()
 
-    if not args.manifest.exists():
-        raise SystemExit(f"Manifest payload file missing: {args.manifest}")
-    if not args.releases.exists():
-        raise SystemExit(f"Releases manifest file missing: {args.releases}")
+    # Build minimal manifest_payload inline (backend generates full manifests dynamically)
+    manifest_payload = {
+        "version": args.version,
+        "notes": f"Release {args.version}",
+        "pub_date": None,  # Backend will set this
+    }
 
-    manifest_payload = load_json(args.manifest)
-    releases_data = load_json(args.releases)
-    release_entry = (releases_data.get("releases") or [{}])[0]
+    # Backend doesn't need the full releases.json entry - just basic metadata
+    release_entry = {
+        "version": args.version,
+        "pub_date": None,
+    }
 
     # Load stored checksums from all artifact roots
     mac_checksums = load_checksums(args.mac_root)
@@ -304,8 +323,8 @@ def main() -> None:
 
     assets: list[Dict[str, Any]] = []
 
-    # Define all possible platform/architecture combinations to check
-    # These match the build matrix in the CI workflow
+    # Define all platform/architecture combinations to check
+    # Linux is optional (handled by workflow matrix continue-on-error)
     platform_configs = [
         # macOS builds
         ("macos", "aarch64", args.mac_root, mac_checksums),
@@ -313,10 +332,9 @@ def main() -> None:
         # Windows builds
         ("windows", "x86_64", args.windows_root, windows_checksums),
         ("windows", "i686", args.windows_root, windows_checksums),
-        # Linux builds
+        # Linux builds (optional)
         ("linux", "x86_64", args.linux_root, linux_checksums),
         ("linux", "aarch64", args.linux_root, linux_checksums),
-        # Note: You'll need to add --linux-root argument if Linux builds are included
     ]
 
     # Process each platform/architecture combination
