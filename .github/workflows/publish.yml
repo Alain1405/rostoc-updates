@@ -128,6 +128,9 @@ jobs:
             echo "[INFO] Found notarization submission ID: ${SUBMISSION_ID}"
           fi
 
+          # Determine variant from release channel
+          VARIANT="${{ env.RELEASE_CHANNEL }}"
+
           # Run the unified JSON generation script
           DO_SPACES_CDN_URL="${{ secrets.DO_SPACES_CDN_URL }}" \
           bash private-src/scripts/ci/generate_releases_json.sh \
@@ -135,7 +138,8 @@ jobs:
             "macos-artifacts" \
             "windows-artifacts" \
             "json-output" \
-            "${SUBMISSION_ID}"
+            "${SUBMISSION_ID}" \
+            "${VARIANT}"
 
           echo "Generated JSON files:"
           ls -lh json-output/
