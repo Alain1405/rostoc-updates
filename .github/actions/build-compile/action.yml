@@ -140,6 +140,7 @@ runs:
         # Tauri v2 + WebKit 4.1 dependencies for AppImage
         # libfuse2 is required by AppImage tools (linuxdeploy is itself an AppImage)
         # librsvg2-dev and libayatana-appindicator3-dev are required for proper GTK bundling
+        # libwebp-dev is required for image processing support
         sudo apt-get install -y \
           libssl-dev \
           libffi-dev \
@@ -150,6 +151,7 @@ runs:
           libjavascriptcoregtk-4.1-dev \
           librsvg2-dev \
           libayatana-appindicator3-dev \
+          libwebp-dev \
           patchelf \
           pkg-config \
           libx11-6 \
