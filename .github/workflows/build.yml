@@ -36,10 +36,10 @@ jobs:
     env:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       SENTRY_SEND_DEFAULT_PII: ${{ secrets.SENTRY_SEND_DEFAULT_PII }}
-      SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
+      SENTRY_ENVIRONMENT: ${{ inputs.is_release && matrix.variant || 'ci' }}
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
       VITE_SENTRY_SEND_DEFAULT_PII: ${{ secrets.VITE_SENTRY_SEND_DEFAULT_PII }}
-      VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && 'production' || 'ci' }}
+      VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && matrix.variant || 'ci' }}
       ROSTOC_APP_VARIANT: ${{ matrix.variant }}
       ROSTOC_UPDATE_CHANNEL: ${{ matrix.variant == 'staging' && 'staging' || 'stable' }}
       DO_RELEASE_PREFIX: ${{ matrix.variant == 'staging' && 'releases/staging' || 'releases' }}
