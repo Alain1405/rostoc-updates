@@ -48,16 +48,20 @@ runs:
       run: |
         set -euo pipefail
 
-        # Add --mode development for staging builds to enable devtools
+        # Add --mode development and --features devtools for staging builds
+        # --mode development: Enables TanStack Router DevTools (Vite MODE=development)
+        # --features devtools: Enables Tauri WebView DevTools (right-click inspect)
         MODE_FLAG=""
+        FEATURES_FLAG=""
         if [ "${ROSTOC_APP_VARIANT:-production}" == "staging" ]; then
           MODE_FLAG="--mode development"
+          FEATURES_FLAG="--features devtools"
         fi
 
         case "${{ inputs.platform }}" in
           macos)
             {
-              echo "build_command=python scripts/build.py --locked $MODE_FLAG"
+              echo "build_command=python scripts/build.py --locked $MODE_FLAG $FEATURES_FLAG"
               echo "artifact_extension=tar.gz"
               echo "test_smoke=true"
               if [ "${{ inputs.arch }}" == "x86_64" ]; then
@@ -72,12 +76,12 @@ runs:
           windows)
             {
               if [ "${{ inputs.arch }}" == "x86_64" ]; then
-                echo "build_command=python scripts/build.py --locked --bundles msi $MODE_FLAG"
+                echo "build_command=python scripts/build.py --locked --bundles msi $MODE_FLAG $FEATURES_FLAG"
                 echo "target=x86_64-pc-windows-msvc"
                 echo "py_url_fragment=windows-x64"
               else
                 # For 32-bit Windows, pass --target to Tauri CLI so WiX creates 32-bit MSI
-                echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc $MODE_FLAG"
+                echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc $MODE_FLAG $FEATURES_FLAG"
                 echo "target=i686-pc-windows-msvc"
                 echo "py_url_fragment=windows-x86"
               fi
@@ -87,7 +91,7 @@ runs:
             ;;
           linux)
             {
-              echo "build_command=python scripts/build.py --locked --bundles appimage $MODE_FLAG"
+              echo "build_command=python scripts/build.py --locked --bundles appimage $MODE_FLAG $FEATURES_FLAG"
               echo "artifact_extension=AppImage"
               echo "test_smoke=true"
               echo "target=x86_64-unknown-linux-gnu"
