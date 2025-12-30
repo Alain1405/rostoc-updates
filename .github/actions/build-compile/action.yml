@@ -53,9 +53,13 @@ runs:
         # --features devtools: Enables Tauri WebView DevTools (right-click inspect)
         MODE_FLAG=""
         FEATURES_FLAG=""
+        CONFIG_FLAG=""
         if [ "${ROSTOC_APP_VARIANT:-production}" == "staging" ]; then
           MODE_FLAG="--mode development"
           FEATURES_FLAG="--features devtools"
+          CONFIG_FLAG="--config src-tauri/tauri.staging.conf.json"
+          # Export for build.py to pass to generate_python_config.py
+          echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
         fi
 
         case "${{ inputs.platform }}" in
