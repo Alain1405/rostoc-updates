@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Checkout updates repo
         uses: actions/checkout@v4
+        with:
+          ref: main # Always use latest scripts, regardless of triggering ref
 
       - name: Checkout main source repository
         uses: actions/checkout@v4
