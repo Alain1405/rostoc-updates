@@ -310,6 +310,8 @@ runs:
       working-directory: private-src
       shell: bash
       env:
+        # Variant configuration (must be set for Rust compile-time option_env! macro)
+        ROSTOC_APP_VARIANT: ${{ env.ROSTOC_APP_VARIANT }}
         TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.tauri_signing_private_key }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.tauri_signing_private_key_password }}
         APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
@@ -332,6 +334,16 @@ runs:
         set -euo pipefail
         BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
         LOG_FILE="build-${{ inputs.platform }}-${{ inputs.arch }}.log"
+
+        # Debug variant configuration (all platforms)
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "[DEBUG] Variant Configuration"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "ROSTOC_APP_VARIANT=${ROSTOC_APP_VARIANT:-<not set>}"
+        echo "TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<not set>}"
+        echo "MODE_FLAG extracted: ${{ steps.platform_config.outputs.build_command }}" | grep -o '\-\-mode [^ ]*' || echo "  (no --mode flag)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
 
         # Debug logging for Linux builds
         if [[ "${{ inputs.platform }}" == "linux" ]]; then

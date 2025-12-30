@@ -235,8 +235,6 @@ def process_platform_artifacts(
 
     if archive_path:
         print(f"✓ Found updater archive: {archive_path.relative_to(artifact_root)}")
-    else:
-        print(f"✗ Updater archive not found: {archive_name}")
         asset = build_asset(
             source=archive_path,
             version=version,
@@ -252,6 +250,8 @@ def process_platform_artifacts(
         )
         if asset:
             assets.append(asset)
+    else:
+        print(f"✗ Updater archive not found: {archive_name}")
 
     # Process installer (if exists)
     installer_name = ARTIFACT_NAMING.get_installer_name(
