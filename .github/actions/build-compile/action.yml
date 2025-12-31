@@ -213,6 +213,20 @@ runs:
           scripts/ci/stamp_dev_version.sh
         fi
 
+    - name: '[macOS] Generate Python config (before runtime staging)'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -n "${TAURI_CONFIG_FLAG:-}" ]; then
+          echo "[INFO] Generating Python config with overlay: $TAURI_CONFIG_FLAG"
+          python3 scripts/generate_python_config.py --config "$TAURI_CONFIG_FLAG"
+        else
+          echo "[INFO] Generating Python config (production)"
+          python3 scripts/generate_python_config.py
+        fi
+
     - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
