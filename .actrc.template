@@ -1,0 +1,31 @@
+# Act Configuration
+# Copy this to .actrc to use these defaults
+# (This file is a template - .actrc is gitignored)
+
+# Use larger runner image (closer to GitHub's ubuntu-latest)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Bind mount workspace (faster than checkout)
+--bind
+
+# Reuse containers between runs (speeds up subsequent runs)
+--reuse
+
+# Use container architecture matching host
+--container-architecture linux/amd64
+
+# Artifact server path for testing artifact upload/download
+--artifact-server-path /tmp/act-artifacts
+
+# Verbose output for debugging
+# Uncomment for more detailed logs:
+# --verbose
+
+# Remote name (if using act with GitHub)
+--remote-name origin
+
+# Detect event (auto-detect trigger event from git)
+--detect-event
+
+# Environment file (optional - for common env vars)
+# --env-file .env.act

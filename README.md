@@ -115,6 +115,36 @@ If the token is missing the workflow simply records a summary note and skips the
 
 ## 🛠 Local tooling
 
-- Install workflow linters: `brew install actionlint`
-- Format workflow YAML: `make format`
-- Lint workflow logic: `make lint`
+### Quick Start
+
+```bash
+# Install dependencies (one-time setup)
+brew install actionlint  # Workflow linting
+brew install act         # Local workflow testing
+
+# Basic workflow
+make format              # Format workflow YAML
+make lint                # Lint workflows + shell scripts
+```
+
+### Local CI Testing
+
+**Before pushing to GitHub**, test your CI changes locally to get instant feedback:
+
+```bash
+# Test individual scripts (30 seconds)
+make test-local          # List available scripts
+make test-script SCRIPT=generate_and_verify_config.sh
+
+# Test with different environments
+ROSTOC_APP_VARIANT=staging make test-script SCRIPT=stage_and_verify_runtime.sh
+
+# Test workflows with Act (5-10 minutes)
+make setup-act           # One-time setup
+act -l                   # List available workflows
+act -W .github/workflows/setup.yml -n  # Dry-run
+```
+
+**Full documentation**: See [docs/LOCAL_CI_TESTING.md](./docs/LOCAL_CI_TESTING.md) and [docs/LOCAL_CI_TESTING_CHEATSHEET.md](./docs/LOCAL_CI_TESTING_CHEATSHEET.md)
+
+**Why local testing?** GitHub CI takes 30-50 minutes per run. Local testing gives feedback in 30 seconds to 5 minutes—that's **6-100x faster iteration**! 🚀

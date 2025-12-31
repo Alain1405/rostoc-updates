@@ -1,0 +1,43 @@
+# Local testing artifacts
+.secrets
+.actrc
+.act/
+
+# Temporary test workspaces
+/tmp/ci-test-workspace/
+
+# Act artifacts and cache
+act-artifacts/
+.cache/act/
+
+# macOS
+.DS_Store
+*.dmg
+*.tar.gz
+
+# Logs
+*.log
+failed_logs.txt
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+.pnpm-store/
+
+# Build artifacts (local testing only)
+/tmp/
+/build/
