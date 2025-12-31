@@ -132,11 +132,28 @@ actionlint -verbose
 - Deprecated action usage
 - Missing required inputs/outputs
 
-## Strategy 3: Act (Docker-based Workflow Runner)
+## Strategy 3: Act (Docker-based Workflow Runner) - ⚠️ LIMITED VALUE FOR THIS REPO
 
-**Best for**: Testing complete workflow execution with job dependencies.
+**Best for**: Testing platform-agnostic workflows only.
 
-### Installation
+**⚠️ IMPORTANT LIMITATION**: Your CI pipeline requires `macos-15` and `windows-2022` runners for building the desktop app. **Act cannot simulate these runners** because it only supports Linux containers via Docker. This means **you cannot test your main build workflow with Act**.
+
+### What Act CAN Test ✅
+
+- Setup/validation workflows (e.g., `setup.yml`)
+- Dispatcher workflows (trigger logic)
+- GitHub Pages deployment
+- Status reporting jobs
+- Platform-agnostic scripts
+
+### What Act CANNOT Test ❌
+
+- **Build workflow** (`build.yml`) - Requires native macOS/Windows runners
+- **Composite actions** with platform-specific steps (code signing, DMG/MSI creation)
+- **Notarization workflows** - macOS-specific
+- **Architecture-specific builds** - Needs actual hardware
+
+### Installation (Optional)
 ```bash
 brew install act
 
@@ -144,46 +161,49 @@ brew install act
 # https://www.docker.com/products/docker-desktop/
 ```
 
-### Basic Usage
+### Basic Usage - Platform-Agnostic Workflows Only
 
 ```bash
 cd /Users/alainscialoja/code/new-coro/rostoc-updates
 
-# List available workflows
-act -l
+# ✅ Test setup workflow (no platform-specific code)
+act workflow_call -W .github/workflows/setup.yml \
+  --input ref=main \
+  --input is_release=false \
+  --secret-file .secrets
 
-# Dry-run to see what would execute
-act -n
+# ✅ Test dispatcher (just checks trigger logic)
+act workflow_dispatch -W .github/workflows/ci-dispatch.yml -n
 
-# Run a specific workflow (without secrets)
-act -W .github/workflows/setup.yml
-
-# Run with secrets file
-echo "PRIVATE_REPO_SSH_KEY=fake-key-for-testing" > .secrets
-act -W .github/workflows/setup.yml --secret-file .secrets
-
-# Run specific job from workflow
-act -j set-status -W .github/workflows/setup.yml
-
-# Use larger runner image (closer to GitHub runners)
-act -P ubuntu-latest=catthehacker/ubuntu:act-latest
+# ❌ Build workflow will fail (needs macOS/Windows)
+# act -W .github/workflows/build.yml  # Don't bother - will fail immediately
 ```
 
-### Limitations on Apple Silicon
+### Why Act Is Not Recommended for This Repo
 
-1. **macOS runner not available**: `act` uses Docker, which runs Linux containers. You cannot test `runs-on: macos-15` jobs directly.
+Your workflow matrix from `build.yml`:
+```yaml
+runs-on: ${{ matrix.os }}
+# Uses: macos-15, macos-15-intel, windows-2022, ubuntu-latest
+```
 
-2. **Platform-specific steps will fail**: Steps like:
-   - macOS code signing
-   - DMG creation
-   - Windows MSI building
-   - Architecture-specific toolchain setup
+**Act limitation**: Can only simulate `ubuntu-latest`. The macOS and Windows jobs that comprise your primary build targets cannot be tested.
 
-3. **Workaround**: Test only platform-agnostic parts:
-   - Setup jobs (checkout, environment setup)
-   - Validation scripts
-   - Status reporting
-   - GitHub API interactions
+**Better alternatives**:
+1. **Direct script testing** (30 sec) - Test CI scripts without Docker
+2. **Native macOS builds** (20 min) - Test actual ARM64 builds on your M1/M2
+3. **Static linting** (5 sec) - Catch YAML/shell errors immediately
+
+### Recommendation
+
+**Skip Act for this repository.** The overhead of installing and configuring Act provides minimal value since 80% of your CI (the actual builds) cannot be tested with it. Focus on:
+
+```bash
+# Fastest iteration cycle for this repo:
+make format && make lint              # 5 seconds
+./scripts/ci/test_locally.sh <script> # 30 seconds
+python scripts/build.py --locked       # 20 min (native build)
+```
 
 ### Recommended Act Configuration
 
