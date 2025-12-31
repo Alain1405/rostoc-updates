@@ -236,144 +236,35 @@ runs:
     - name: Generate Python config (before runtime staging)
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::🔧 Generating Python config from Tauri config"
-        echo "[DEBUG] PWD: $(pwd)"
-        echo "[DEBUG] ROSTOC_APP_VARIANT: ${ROSTOC_APP_VARIANT:-<not set>}"
-        echo "[DEBUG] TAURI_CONFIG_FLAG: ${TAURI_CONFIG_FLAG:-<not set>}"
-
-        if [ -n "${TAURI_CONFIG_FLAG:-}" ]; then
-          echo "[INFO] Generating Python config with overlay: $TAURI_CONFIG_FLAG"
-          python3 scripts/generate_python_config.py --config "$TAURI_CONFIG_FLAG"
-        else
-          echo "[INFO] Generating Python config (production)"
-          python3 scripts/generate_python_config.py
-        fi
-
-        # Verify file was created
-        CONFIG_PATH="src-tauri/src-python/rostoc/generated_config.py"
-        if [ -f "$CONFIG_PATH" ]; then
-          echo "[DEBUG] ✅ generated_config.py created at: $CONFIG_PATH"
-          echo "[DEBUG] File size: $(wc -c < "$CONFIG_PATH") bytes"
-          echo "[DEBUG] Contents preview:"
-          head -20 "$CONFIG_PATH" | sed 's/^/  /'
-        else
-          echo "::error::❌ generated_config.py was NOT created at expected path: $CONFIG_PATH"
-          exit 1
-        fi
-        echo "::endgroup::"
+      run: scripts/ci/generate_and_verify_config.sh
 
     - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::🐍 Staging Python runtime"
-        echo "[INFO] Pre-staging Python runtime to ensure stable file attributes before signing"
+      run: scripts/ci/stage_and_verify_runtime.sh
 
-        # Verify generated_config.py exists before staging
-        CONFIG_PATH="src-tauri/src-python/rostoc/generated_config.py"
-        if [ -f "$CONFIG_PATH" ]; then
-          echo "[DEBUG] ✅ generated_config.py exists before staging"
-        else
-          echo "::error::❌ generated_config.py missing before staging! This will cause fallback to production values."
-          exit 1
-        fi
-
-        python3 scripts/bundle_runtime.py --target=release --stage-only
-
-        # Verify file was included in staged runtime
-        STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
-        if [ -f "$STAGED_CONFIG" ]; then
-          echo "[DEBUG] ✅ generated_config.py included in staged runtime"
-          echo "[DEBUG] Staged file size: $(wc -c < "$STAGED_CONFIG") bytes"
-        else
-          echo "::error::❌ generated_config.py NOT found in staged runtime at: $STAGED_CONFIG"
-          echo "[DEBUG] Listing rostoc package contents:"
-          ls -la "build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/" || true
-          exit 1
-        fi
-
-        echo "[INFO] Runtime staging complete - files are now stable for Tauri's signing"
-        echo "::endgroup::"
-
-    - name: '[macOS] Sign Python binaries in staging (before sync to src-tauri)'
+    - name: '[macOS] Sign Python binaries and libraries (before Tauri build)'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
       env:
         APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
-      run: |
-        set -euo pipefail
-        echo "[INFO] Signing Python binaries and libraries in build/runtime_staging/pyembed/python"
-        echo "[INFO] These will be synced to src-tauri/ by build.py, preserving signatures"
-
-        # Sign all executables in bin/
-        if [ -d "build/runtime_staging/pyembed/python/bin" ]; then
-          find build/runtime_staging/pyembed/python/bin -type f \( -perm +111 -o -name "python*" \) | while read -r binary; do
-            if file "$binary" | grep -q "Mach-O"; then
-              echo "  Signing: $(basename "$binary")"
-              codesign --force --sign "$APPLE_SIGNING_IDENTITY" \
-                --timestamp \
-                --options runtime \
-                "$binary" || echo "    Warning: failed to sign $binary"
-            fi
-          done
-        fi
-
-        # Sign all dylibs and .so files in lib/
-        if [ -d "build/runtime_staging/pyembed/python/lib" ]; then
-          find build/runtime_staging/pyembed/python/lib -type f \( -name "*.dylib" -o -name "*.so" \) | while read -r lib; do
-            echo "  Signing: $(basename "$lib")"
-            codesign --force --sign "$APPLE_SIGNING_IDENTITY" \
-              --timestamp \
-              --options runtime \
-              "$lib" || echo "    Warning: failed to sign $lib"
-          done
-        fi
-
-        echo "[INFO] Python runtime signing complete in staging area"
+      run: scripts/ci/sign_python_runtime.sh
 
     - name: '[macOS] Verify generated_config.py after signing'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::🔍 Verifying generated_config.py persistence"
-        STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
-        if [ -f "$STAGED_CONFIG" ]; then
-          echo "[DEBUG] ✅ generated_config.py still present after signing"
-        else
-          echo "::error::❌ generated_config.py disappeared after signing!"
-          exit 1
-        fi
-        echo "::endgroup::"
+      run: scripts/ci/verify_config_after_signing.sh
 
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
-        REF="${{ github.ref }}"
-
-        if [[ "$REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
-          TAG_VERSION="${BASH_REMATCH[1]}"
-          echo "[INFO] Tag version: $TAG_VERSION"
-          echo "[INFO] Code version: $VERSION"
-
-          if [ "$TAG_VERSION" != "$VERSION" ]; then
-            echo "::error::Version mismatch! Tag is v$TAG_VERSION but tauri.conf.json has $VERSION"
-            exit 1
-          fi
-          echo "[INFO] ✅ Version validation passed"
-        else
-          echo "::warning::Not a version tag, skipping validation"
-        fi
+      env:
+        GITHUB_REF: ${{ github.ref }}
+      run: scripts/ci/validate_release_version.sh
 
     - name: Build application
       working-directory: private-src
@@ -399,69 +290,4 @@ runs:
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}
         OUTPUT: ${{ inputs.platform == 'linux' && '2' || '' }}
         VERBOSE: ${{ inputs.platform == 'linux' && '1' || '' }}
-      run: |
-        set -euo pipefail
-        BUILD_CMD="${{ steps.platform_config.outputs.build_command }}"
-        LOG_FILE="build-${{ inputs.platform }}-${{ inputs.arch }}.log"
-
-        # Debug variant configuration (all platforms)
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "[DEBUG] Variant Configuration"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "ROSTOC_APP_VARIANT=${ROSTOC_APP_VARIANT:-<not set>}"
-        echo "TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<not set>}"
-        echo "MODE_FLAG extracted: ${{ steps.platform_config.outputs.build_command }}" | grep -o '\-\-mode [^ ]*' || echo "  (no --mode flag)"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo ""
-
-        # Debug logging for Linux builds
-        if [[ "${{ inputs.platform }}" == "linux" ]]; then
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "[DEBUG] Linux AppImage Build Environment"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN:-<not set>}"
-          echo "NO_STRIP=${NO_STRIP:-<not set>}"
-          echo "OUTPUT=${OUTPUT:-<not set>}"
-          echo "VERBOSE=${VERBOSE:-<not set>}"
-          echo ""
-          echo "FUSE installations:"
-          dpkg -l | grep -i fuse || echo "  No FUSE packages found"
-          echo ""
-          echo "FUSE version: $(fusermount3 --version 2>&1 || echo 'fusermount3 not available')"
-          echo "fusermount version: $(fusermount --version 2>&1 || echo 'fusermount not available')"
-          echo ""
-          echo "Available disk space: $(df -h . | tail -1 | awk '{print $4}')"
-          echo "Kernel: $(uname -r)"
-          echo "User: $(whoami)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        fi
-
-        echo "[INFO] Starting build — output will be saved to $LOG_FILE"
-        # shellcheck disable=SC2086
-        $BUILD_CMD 2>&1 | tee "$LOG_FILE"
-        BUILD_EXIT_CODE=$?
-
-        # Post-build debug logging for Linux
-        if [[ "${{ inputs.platform }}" == "linux" ]]; then
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "[DEBUG] Linux AppImage Build Results (exit code: $BUILD_EXIT_CODE)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Checking for AppImage artifacts in target directories..."
-          find target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in target/"
-          find src-tauri/target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in src-tauri/target/"
-          
-          echo ""
-          echo "Last 100 lines of build log (to capture linuxdeploy errors):"
-          tail -100 "$LOG_FILE" || echo "  (Could not read log file)"
-          
-          echo ""
-          echo "Searching for error patterns in build log:"
-          grep -i "error\|failed\|linuxdeploy" "$LOG_FILE" | tail -30 || echo "  (No error patterns found)"
-          
-          echo ""
-          echo "AppImage build directory contents:"
-          find src-tauri/target -type d -name "appimage" -exec sh -c 'echo "Contents of {}"; ls -lah "{}" 2>/dev/null || echo "  (directory not accessible)"' \; || echo "  (No appimage directory found)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        fi
-
-        exit $BUILD_EXIT_CODE
+      run: scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"
