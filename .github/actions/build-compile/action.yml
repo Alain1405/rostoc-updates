@@ -213,12 +213,36 @@ runs:
           scripts/ci/stamp_dev_version.sh
         fi
 
-    - name: '[macOS] Generate Python config (before runtime staging)'
-      if: ${{ inputs.platform == 'macos' }}
+    - name: Set variant-specific Tauri config flag
+      shell: bash
+      run: |
+        case "${ROSTOC_APP_VARIANT:-production}" in
+          staging)
+            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
+            ;;
+          dev)
+            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.dev.conf.json" >> "$GITHUB_ENV"
+            ;;
+          production)
+            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
+            ;;
+          *)
+            echo "::warning::Unknown variant '$ROSTOC_APP_VARIANT', defaulting to production"
+            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
+            ;;
+        esac
+        echo "[INFO] TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<empty>}"
+
+    - name: Generate Python config (before runtime staging)
       working-directory: private-src
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::🔧 Generating Python config from Tauri config"
+        echo "[DEBUG] PWD: $(pwd)"
+        echo "[DEBUG] ROSTOC_APP_VARIANT: ${ROSTOC_APP_VARIANT:-<not set>}"
+        echo "[DEBUG] TAURI_CONFIG_FLAG: ${TAURI_CONFIG_FLAG:-<not set>}"
+        
         if [ -n "${TAURI_CONFIG_FLAG:-}" ]; then
           echo "[INFO] Generating Python config with overlay: $TAURI_CONFIG_FLAG"
           python3 scripts/generate_python_config.py --config "$TAURI_CONFIG_FLAG"
@@ -226,6 +250,19 @@ runs:
           echo "[INFO] Generating Python config (production)"
           python3 scripts/generate_python_config.py
         fi
+        
+        # Verify file was created
+        CONFIG_PATH="src-tauri/src-python/rostoc/generated_config.py"
+        if [ -f "$CONFIG_PATH" ]; then
+          echo "[DEBUG] ✅ generated_config.py created at: $CONFIG_PATH"
+          echo "[DEBUG] File size: $(wc -c < "$CONFIG_PATH") bytes"
+          echo "[DEBUG] Contents preview:"
+          head -20 "$CONFIG_PATH" | sed 's/^/  /'
+        else
+          echo "::error::❌ generated_config.py was NOT created at expected path: $CONFIG_PATH"
+          exit 1
+        fi
+        echo "::endgroup::"
 
     - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
       if: ${{ inputs.platform == 'macos' }}
@@ -233,9 +270,34 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::🐍 Staging Python runtime"
         echo "[INFO] Pre-staging Python runtime to ensure stable file attributes before signing"
+        
+        # Verify generated_config.py exists before staging
+        CONFIG_PATH="src-tauri/src-python/rostoc/generated_config.py"
+        if [ -f "$CONFIG_PATH" ]; then
+          echo "[DEBUG] ✅ generated_config.py exists before staging"
+        else
+          echo "::error::❌ generated_config.py missing before staging! This will cause fallback to production values."
+          exit 1
+        fi
+        
         python3 scripts/bundle_runtime.py --target=release --stage-only
+        
+        # Verify file was included in staged runtime
+        STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
+        if [ -f "$STAGED_CONFIG" ]; then
+          echo "[DEBUG] ✅ generated_config.py included in staged runtime"
+          echo "[DEBUG] Staged file size: $(wc -c < "$STAGED_CONFIG") bytes"
+        else
+          echo "::error::❌ generated_config.py NOT found in staged runtime at: $STAGED_CONFIG"
+          echo "[DEBUG] Listing rostoc package contents:"
+          ls -la "build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/" || true
+          exit 1
+        fi
+        
         echo "[INFO] Runtime staging complete - files are now stable for Tauri's signing"
+        echo "::endgroup::"
 
     - name: '[macOS] Sign Python binaries in staging (before sync to src-tauri)'
       if: ${{ inputs.platform == 'macos' }}
@@ -249,7 +311,23 @@ runs:
         echo "[INFO] These will be synced to src-tauri/ by build.py, preserving signatures"
 
         # Sign all executables in bin/
-        if [ -d "build/runtime_staging/pyembed/python/bin" ]; then
+        if ['[macOS] Verify generated_config.py after signing'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::🔍 Verifying generated_config.py persistence"
+        STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
+        if [ -f "$STAGED_CONFIG" ]; then
+          echo "[DEBUG] ✅ generated_config.py still present after signing"
+        else
+          echo "::error::❌ generated_config.py disappeared after signing!"
+          exit 1
+        fi
+        echo "::endgroup::"
+
+    - name:  -d "build/runtime_staging/pyembed/python/bin" ]; then
           find build/runtime_staging/pyembed/python/bin -type f \( -perm +111 -o -name "python*" \) | while read -r binary; do
             if file "$binary" | grep -q "Mach-O"; then
               echo "  Signing: $(basename "$binary")"
@@ -288,27 +366,7 @@ runs:
           echo "[INFO] Tag version: $TAG_VERSION"
           echo "[INFO] Code version: $VERSION"
 
-          if [[ "$TAG_VERSION" != "$VERSION" ]]; then
-            echo "::error::Version mismatch! Tag is $REF (version $TAG_VERSION) but tauri.conf.json has version $VERSION"
-            exit 1
-          fi
-
-          echo "✅ Version validation passed: $VERSION matches tag $REF"
-        else
-          echo "[WARN] Not building from a version tag (ref: $REF), skipping version validation"
-        fi
-
-    - name: Apply preview build tuning (no-release)
-      if: ${{ inputs.is_release != 'true' }}
-      working-directory: private-src
-      shell: bash
-      run: scripts/ci/apply_preview_rust_env.sh
-
-    - name: Set variant-specific Tauri config flag
-      shell: bash
-      run: |
-        case "${ROSTOC_APP_VARIANT:-production}" in
-          staging)
+          ifaging)
             echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
             ;;
           dev)
