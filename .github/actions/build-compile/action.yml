@@ -242,7 +242,7 @@ runs:
         echo "[DEBUG] PWD: $(pwd)"
         echo "[DEBUG] ROSTOC_APP_VARIANT: ${ROSTOC_APP_VARIANT:-<not set>}"
         echo "[DEBUG] TAURI_CONFIG_FLAG: ${TAURI_CONFIG_FLAG:-<not set>}"
-        
+
         if [ -n "${TAURI_CONFIG_FLAG:-}" ]; then
           echo "[INFO] Generating Python config with overlay: $TAURI_CONFIG_FLAG"
           python3 scripts/generate_python_config.py --config "$TAURI_CONFIG_FLAG"
@@ -250,7 +250,7 @@ runs:
           echo "[INFO] Generating Python config (production)"
           python3 scripts/generate_python_config.py
         fi
-        
+
         # Verify file was created
         CONFIG_PATH="src-tauri/src-python/rostoc/generated_config.py"
         if [ -f "$CONFIG_PATH" ]; then
@@ -272,7 +272,7 @@ runs:
         set -euo pipefail
         echo "::group::🐍 Staging Python runtime"
         echo "[INFO] Pre-staging Python runtime to ensure stable file attributes before signing"
-        
+
         # Verify generated_config.py exists before staging
         CONFIG_PATH="src-tauri/src-python/rostoc/generated_config.py"
         if [ -f "$CONFIG_PATH" ]; then
@@ -281,9 +281,9 @@ runs:
           echo "::error::❌ generated_config.py missing before staging! This will cause fallback to production values."
           exit 1
         fi
-        
+
         python3 scripts/bundle_runtime.py --target=release --stage-only
-        
+
         # Verify file was included in staged runtime
         STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
         if [ -f "$STAGED_CONFIG" ]; then
@@ -295,7 +295,7 @@ runs:
           ls -la "build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/" || true
           exit 1
         fi
-        
+
         echo "[INFO] Runtime staging complete - files are now stable for Tauri's signing"
         echo "::endgroup::"
 
@@ -311,23 +311,7 @@ runs:
         echo "[INFO] These will be synced to src-tauri/ by build.py, preserving signatures"
 
         # Sign all executables in bin/
-        if ['[macOS] Verify generated_config.py after signing'
-      if: ${{ inputs.platform == 'macos' }}
-      working-directory: private-src
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::🔍 Verifying generated_config.py persistence"
-        STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
-        if [ -f "$STAGED_CONFIG" ]; then
-          echo "[DEBUG] ✅ generated_config.py still present after signing"
-        else
-          echo "::error::❌ generated_config.py disappeared after signing!"
-          exit 1
-        fi
-        echo "::endgroup::"
-
-    - name:  -d "build/runtime_staging/pyembed/python/bin" ]; then
+        if [ -d "build/runtime_staging/pyembed/python/bin" ]; then
           find build/runtime_staging/pyembed/python/bin -type f \( -perm +111 -o -name "python*" \) | while read -r binary; do
             if file "$binary" | grep -q "Mach-O"; then
               echo "  Signing: $(basename "$binary")"
@@ -351,6 +335,22 @@ runs:
         fi
 
         echo "[INFO] Python runtime signing complete in staging area"
+
+    - name: '[macOS] Verify generated_config.py after signing'
+      if: ${{ inputs.platform == 'macos' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::🔍 Verifying generated_config.py persistence"
+        STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
+        if [ -f "$STAGED_CONFIG" ]; then
+          echo "[DEBUG] ✅ generated_config.py still present after signing"
+        else
+          echo "::error::❌ generated_config.py disappeared after signing!"
+          exit 1
+        fi
+        echo "::endgroup::"
 
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}
