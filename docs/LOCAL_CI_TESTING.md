@@ -184,6 +184,57 @@ This catches:
       This will likely fail in CI. Consider using: ../scripts/ci/stage.sh
 ```
 
+### Environment Variable Handling Tests (New - Regression Prevention!)
+
+**Common Issue**: Using `${VAR:?}` for variables that can be intentionally empty causes "parameter null or not set" errors.
+
+**Example that caused CI failure (2026-01-01)**:
+```bash
+# WRONG: Fails when TAURI_CONFIG_FLAG is empty (which is correct for production)
+TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:?TAURI_CONFIG_FLAG is required}
+
+# CORRECT: Allows empty values for production builds
+TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG?TAURI_CONFIG_FLAG must be set}
+```
+
+**The difference:**
+- `${VAR:?msg}` - Fails if VAR is **unset OR empty** (strict)
+- `${VAR?msg}` - Fails if VAR is **unset**, allows empty (flexible)
+
+**Always run before pushing**:
+```bash
+make test-env
+```
+
+This catches:
+- ✅ Incorrect use of `:?` for variables that can be empty
+- ✅ Validates scripts handle empty env vars correctly
+- ✅ Provides best practices reminder for contributors
+
+**Output example**:
+```
+📄 Checking: execute_build.sh
+   ❌ Line 7: TAURI_CONFIG_FLAG uses :? but can be empty in production
+      Pattern: TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:?...}
+      Fix: Change ${TAURI_CONFIG_FLAG:?} to ${TAURI_CONFIG_FLAG?} (remove colon)
+   ✓ Line 6: ROSTOC_APP_VARIANT correctly requires non-empty value
+
+ℹ️  For CI scripts:
+   - Use :? for vars that must have a value (GITHUB_TOKEN, etc.)
+   - Use ? for vars that can be empty (TAURI_CONFIG_FLAG in prod)
+   - Document in comments when empty is intentional
+```
+
+**Variables known to be empty in some contexts:**
+- `TAURI_CONFIG_FLAG` - Empty for production builds (no config overlay)
+- `DEV_VERSION_SUFFIX` - Empty for release builds
+- `DEBUG_FLAG` - May be empty for production builds
+   ℹ️  Line 211: scripts/ci/stamp_dev_version.sh found only in private repo
+      Will be available during CI when private repo is checked out
+   ⚠️  Line 245: scripts/ci/stage.sh uses repo-relative path but workflow has working-directory
+      This will likely fail in CI. Consider using: ../scripts/ci/stage.sh
+```
+
 ## Strategy 3: Act (Docker-based Workflow Runner) - ⚠️ LIMITED VALUE FOR THIS REPO
 
 **Best for**: Testing platform-agnostic workflows only.

@@ -7,8 +7,8 @@ Fast commands for testing CI changes locally before pushing to GitHub.
 ```bash
 cd /Users/alainscialoja/code/new-coro/rostoc-updates
 
-# Format + Lint (catches 80% of issues)
-make format && make lint
+# Pre-push validation (catches most issues)
+make format && make lint && make validate-paths && make test-env
 ```
 
 ## 📝 Test Individual Scripts (30 seconds)
@@ -84,7 +84,7 @@ python scripts/build.py --locked --mode development --features devtools
 ### Test Workflow Changes
 ```bash
 vim .github/workflows/build.yml
-make format && make lint
+make format && make lint && make validate-paths && make test-env
 git commit -am "test: Workflow change"
 ```
 
@@ -94,6 +94,21 @@ vim scripts/ci/new_script.sh
 chmod +x scripts/ci/new_script.sh
 shellcheck scripts/ci/new_script.sh
 ./scripts/ci/test_locally.sh new_script.sh
+
+# Test env var handling
+make test-env
+```
+
+### Validate Before Push (Critical!)
+```bash
+# Full validation suite
+make format         # Fix YAML formatting
+make lint           # Catch syntax errors
+make validate-paths # Catch script path bugs (working-directory issues)
+make test-env       # Catch env var bugs (empty value handling)
+
+# Or run all at once
+make format && make lint && make validate-paths && make test-env
 ```
 
 ### Test Python Script

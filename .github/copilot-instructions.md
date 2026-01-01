@@ -34,14 +34,25 @@ This is the **public workflow runner** for Rostoc desktop builds. The private `a
 
 ## Code Quality & Linting
 
-### Before Committing Workflow Changes
+### Before Committing Any Changes
 
-**Always run these commands** after editing any `.github/workflows/*.yml` file:
+**Always run the complete test suite** after editing workflows, scripts, or CI files:
 
 ```bash
-make format  # Format YAML with Prettier
-make lint    # Validate workflows with actionlint + shellcheck
+# Complete validation suite (recommended)
+make format && make lint && make validate-paths && make test-env
+
+# Or run individually if debugging
+make format          # Format YAML with Prettier
+make lint            # Validate workflows with actionlint + shellcheck
+make validate-paths  # Catch script path bugs (working-directory issues)
+make test-env        # Catch env var bugs (empty value handling)
 ```
+
+**What each test prevents:**
+- `format` & `lint` - Syntax errors, shellcheck issues
+- `validate-paths` - Script paths broken by `working-directory` (Dec 31, 2025 bug)
+- `test-env` - Incorrect `${VAR:?}` usage for empty-allowed vars (Jan 1, 2026 bug)
 
 ### Linting Rules
 
@@ -107,6 +118,14 @@ The `build-and-publish.yml` reusable workflow inherits these and uses `actions: 
 2. **Stale Pages cache**: The disable step in `staple-notarized-dmg.yml` clones the git repo instead of querying Pages URL to avoid caching lag
 3. **Unquoted variables in shell**: Will fail shellcheck; always quote expansions and redirects
 4. **Heredocs in YAML**: Avoid `<<EOF` syntax; use grouped echo statements with braces instead
+5. **Script path bugs**: Using `working-directory` changes script path resolution - always run `make validate-paths` before committing
+6. **Empty env vars**: Use `${VAR?}` not `${VAR:?}` for vars that can be empty (e.g., `TAURI_CONFIG_FLAG` in production) - caught by `make test-env`
+
+## Testing & Documentation
+
+- **Testing guide**: [docs/LOCAL_CI_TESTING.md](../docs/LOCAL_CI_TESTING.md)
+- **Quick reference**: [docs/LOCAL_CI_TESTING_CHEATSHEET.md](../docs/LOCAL_CI_TESTING_CHEATSHEET.md)
+- **Env var testing**: [docs/ENV_VAR_TESTING_SUMMARY.md](../docs/ENV_VAR_TESTING_SUMMARY.md)
 
 ## Branch Protection
 

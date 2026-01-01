@@ -121,9 +121,13 @@ If the token is missing the workflow simply records a summary note and skips the
 # Install dependencies (one-time setup)
 brew install actionlint  # Workflow linting
 
-# Basic workflow - PRIMARY STRATEGY
+# Pre-push validation checklist - RECOMMENDED WORKFLOW
 make format              # Format workflow YAML
 make lint                # Lint workflows + shell scripts
+make validate-paths      # Catch script path bugs (working-directory issues)
+make test-env            # Catch env var bugs (empty value handling)
+
+# Test individual scripts
 make test-script SCRIPT=<name>  # Test CI scripts directly
 ```
 
@@ -132,33 +136,41 @@ make test-script SCRIPT=<name>  # Test CI scripts directly
 **Before pushing to GitHub**, test your CI changes locally to get instant feedback:
 
 ```bash
+# 🚀 Pre-push checklist (run all validations)
+make format && make lint && make validate-paths && make test-env
+
 # Test individual scripts (30 seconds) - PRIMARY METHOD
 make test-local          # List available scripts
 make test-script SCRIPT=generate_and_verify_config.sh
 
 # Test with different environments
 ROSTOC_APP_VARIANT=staging make test-script SCRIPT=stage_and_verify_runtime.sh
-
-# Validate workflow syntax (5 seconds)
-make format && make lint
-
-# ⚡ NEW: Validate script paths (catches common CI bug)
-make validate-paths
 ```
 
-**🐛 Common CI Bug Prevented**: The `validate-paths` check catches script path issues that break when workflows use `working-directory`. This exact issue caused a full CI failure on 2025-12-31 - now preventable with one command!
+**🐛 Common CI Bugs Prevented**:
 
-**Example**:
-```yaml
-# ❌ Breaks if working-directory: private-src
-run: scripts/ci/my_script.sh
+1. **Script path issues** (`make validate-paths`): Catches relative paths that break when workflows use `working-directory`. Prevented full CI failure on 2025-12-31.
 
-# ✅ Works correctly
-run: ../scripts/ci/my_script.sh
-```
+   ```yaml
+   # ❌ Breaks if working-directory: private-src
+   run: scripts/ci/my_script.sh
+   
+   # ✅ Works correctly
+   run: ../scripts/ci/my_script.sh
+   ```
+
+2. **Empty environment variables** (`make test-env`): Catches incorrect use of `${VAR:?}` for variables that can be empty. Prevented CI failure on 2026-01-01.
+
+   ```bash
+   # ❌ Fails when TAURI_CONFIG_FLAG is empty (production builds)
+   TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:?required}
+   
+   # ✅ Allows empty values
+   TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG?required}
+   ```
 
 **⚠️ Note on Act**: Act cannot test the build workflow because it requires `macos-15` and `windows-2022` runners, which Act doesn't support (it only simulates Linux). For this repo, **direct script testing + native builds** provide faster and more accurate validation than Act.
 
-**Full documentation**: See [docs/LOCAL_CI_TESTING.md](./docs/LOCAL_CI_TESTING.md) and [docs/LOCAL_CI_TESTING_CHEATSHEET.md](./docs/LOCAL_CI_TESTING_CHEATSHEET.md)
+**Full documentation**: See [docs/LOCAL_CI_TESTING.md](./docs/LOCAL_CI_TESTING.md), [docs/LOCAL_CI_TESTING_CHEATSHEET.md](./docs/LOCAL_CI_TESTING_CHEATSHEET.md), and [docs/ENV_VAR_TESTING_SUMMARY.md](./docs/ENV_VAR_TESTING_SUMMARY.md)
 
-**Why local testing?** GitHub CI takes 30-50 minutes per run. Local testing gives feedback in 30 seconds to 5 minutes—that's **6-100x faster iteration**! 🚀
+**Why local testing?** GitHub CI takes 30-50 minutes per run. Local testing gives feedback in 5-30 seconds—that's **60-600x faster iteration**! 🚀

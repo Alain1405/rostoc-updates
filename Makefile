@@ -1,4 +1,4 @@
-.PHONY: format lint lint-ci test-local test-script validate-paths setup-act help
+.PHONY: format lint lint-ci test-local test-script test-env test-env-regression validate-paths setup-act help
 
 WORKFLOW_FILES := $(shell find .github -name '*.yml' -o -name '*.yaml')
 
@@ -10,6 +10,12 @@ lint:
 
 validate-paths:
 	@./scripts/ci/validate_workflow_paths.sh
+
+test-env:
+	@./scripts/ci/test_env_handling.sh
+
+test-env-regression:
+	@./scripts/ci/test_env_regression.sh
 
 lint-ci:
 	actionlint -color -shellcheck shellcheck
@@ -90,6 +96,8 @@ help:
 	@echo "  make lint                Lint workflows with actionlint"
 	@echo "  make lint-ci             Lint workflows with colored output (CI mode)"
 	@echo "  make validate-paths      Validate script paths in workflows (catches path bugs)"
+	@echo "  make test-env            Test environment variable handling (regression test)"
+	@echo "  make test-env-regression Run specific regression test for TAURI_CONFIG_FLAG bug"
 	@echo ""
 	@echo "Local Testing (PRIMARY STRATEGY):"
 	@echo "  make test-local          List all available CI scripts"
@@ -101,9 +109,14 @@ help:
 	@echo "Examples:"
 	@echo "  make test-script SCRIPT=generate_and_verify_config.sh"
 	@echo "  make validate-paths      # Check script paths before pushing"
+	@echo "  make test-env            # Test env var handling (prevents 'parameter null' errors)"
+	@echo "  make test-env-regression # Verify TAURI_CONFIG_FLAG fix (2026-01-01 bug)"
 	@echo ""
-	@echo "💡 Always run 'make validate-paths' before pushing workflow changes!"
-	@echo "   This catches the common issue of wrong relative paths breaking CI."
+	@echo "💡 Pre-push checklist:"
+	@echo "   make validate-paths     # Catch path bugs"
+	@echo "   make test-env           # Catch env var bugs"
+	@echo "   make lint               # Catch syntax errors"
+	@echo ""
 	@echo "  ROSTOC_APP_VARIANT=staging make test-script SCRIPT=stage_and_verify_runtime.sh"
 	@echo ""
 	@echo "⚠️  Note: Act cannot test build workflows (requires macOS/Windows runners)"
