@@ -1,4 +1,4 @@
-.PHONY: format lint lint-ci test-local test-script setup-act help
+.PHONY: format lint lint-ci test-local test-script validate-paths setup-act help
 
 WORKFLOW_FILES := $(shell find .github -name '*.yml' -o -name '*.yaml')
 
@@ -7,6 +7,9 @@ format:
 
 lint:
 	actionlint
+
+validate-paths:
+	@./scripts/ci/validate_workflow_paths.sh
 
 lint-ci:
 	actionlint -color -shellcheck shellcheck
@@ -86,6 +89,7 @@ help:
 	@echo "  make format              Format workflow YAML files with Prettier"
 	@echo "  make lint                Lint workflows with actionlint"
 	@echo "  make lint-ci             Lint workflows with colored output (CI mode)"
+	@echo "  make validate-paths      Validate script paths in workflows (catches path bugs)"
 	@echo ""
 	@echo "Local Testing (PRIMARY STRATEGY):"
 	@echo "  make test-local          List all available CI scripts"
@@ -96,6 +100,10 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test-script SCRIPT=generate_and_verify_config.sh"
+	@echo "  make validate-paths      # Check script paths before pushing"
+	@echo ""
+	@echo "💡 Always run 'make validate-paths' before pushing workflow changes!"
+	@echo "   This catches the common issue of wrong relative paths breaking CI."
 	@echo "  ROSTOC_APP_VARIANT=staging make test-script SCRIPT=stage_and_verify_runtime.sh"
 	@echo ""
 	@echo "⚠️  Note: Act cannot test build workflows (requires macOS/Windows runners)"

@@ -16,15 +16,19 @@ fi
 
 python3 scripts/bundle_runtime.py --target=release --stage-only
 
+# Detect Python version dynamically
+PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+echo "[DEBUG] Detected Python version: ${PY_VERSION}"
+
 # Verify file was included in staged runtime
-STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
+STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python${PY_VERSION}/site-packages/rostoc/generated_config.py"
 if [ -f "$STAGED_CONFIG" ]; then
   echo "[DEBUG] ✅ generated_config.py included in staged runtime"
   echo "[DEBUG] Staged file size: $(wc -c < "$STAGED_CONFIG") bytes"
 else
   echo "::error::❌ generated_config.py NOT found in staged runtime at: $STAGED_CONFIG"
-  echo "[DEBUG] Listing rostoc package contents:"
-  ls -la "build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/" || true
+  echo "[DEBUG] Listing Python lib directories:"
+  find build/runtime_staging/pyembed/python/lib -name "rostoc" -type d || true
   exit 1
 fi
 

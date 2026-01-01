@@ -141,6 +141,20 @@ ROSTOC_APP_VARIANT=staging make test-script SCRIPT=stage_and_verify_runtime.sh
 
 # Validate workflow syntax (5 seconds)
 make format && make lint
+
+# ⚡ NEW: Validate script paths (catches common CI bug)
+make validate-paths
+```
+
+**🐛 Common CI Bug Prevented**: The `validate-paths` check catches script path issues that break when workflows use `working-directory`. This exact issue caused a full CI failure on 2025-12-31 - now preventable with one command!
+
+**Example**:
+```yaml
+# ❌ Breaks if working-directory: private-src
+run: scripts/ci/my_script.sh
+
+# ✅ Works correctly
+run: ../scripts/ci/my_script.sh
 ```
 
 **⚠️ Note on Act**: Act cannot test the build workflow because it requires `macos-15` and `windows-2022` runners, which Act doesn't support (it only simulates Linux). For this repo, **direct script testing + native builds** provide faster and more accurate validation than Act.

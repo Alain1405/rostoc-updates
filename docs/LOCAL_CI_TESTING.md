@@ -110,7 +110,7 @@ cat "$GITHUB_STEP_SUMMARY"
 
 ## Strategy 2: Static Analysis & Linting (Already Implemented)
 
-**Best for**: Catching syntax errors, shellcheck issues, and workflow schema problems.
+**Best for**: Catching syntax errors, shellcheck issues, workflow schema problems, and script path bugs.
 
 ```bash
 cd /Users/alainscialoja/code/new-coro/rostoc-updates
@@ -120,6 +120,9 @@ make format
 
 # Lint workflows + shell scripts embedded in YAML
 make lint
+
+# Validate script paths (CRITICAL - catches path bugs)
+make validate-paths
 
 # Manually run actionlint for detailed output
 actionlint -verbose
@@ -131,6 +134,55 @@ actionlint -verbose
 - Shell script linting (via shellcheck integration)
 - Deprecated action usage
 - Missing required inputs/outputs
+- **Script path validation** (detects relative path issues)
+
+### Script Path Validation (New - Critical!)
+
+**Common Issue**: Workflows that use `working-directory` can break script paths.
+
+**Example that caused CI failure (2025-12-31)**:
+```yaml
+# Workflow runs in private-src/ directory
+working-directory: private-src
+
+# This path breaks - looks for private-src/scripts/ci/script.sh
+run: scripts/ci/my_script.sh
+
+# Correct path - goes up one level to find rostoc-updates/scripts/ci/
+run: ../scripts/ci/my_script.sh
+```
+
+**Understanding Dual-Repo Script Locations:**
+
+This repo has scripts in **two locations** during CI:
+1. **Public repo scripts** (`rostoc-updates/scripts/ci/`): Helper scripts for builds, signing, etc.
+2. **Private repo scripts** (`rostoc/scripts/ci/`): Product-specific scripts like `stamp_dev_version.sh`
+
+During CI, the private repo is checked out into `private-src/`, so:
+- When `working-directory: private-src` is set, scripts without `../` prefix resolve to **private repo**
+- When no working-directory is set, scripts resolve to **public repo** (rostoc-updates)
+
+**Always run before pushing**:
+```bash
+make validate-paths
+```
+
+This catches:
+- ✅ Scripts that don't exist in either repo
+- ✅ Relative paths that break with `working-directory`
+- ✅ Unused scripts that can be removed
+- ✅ Inconsistent path patterns
+- ✅ Scripts only available in private repo (informational)
+
+**Output example**:
+```
+📄 Checking: .github/actions/build-compile/action.yml
+   ✓ Line 239: scripts/ci/generate_and_verify_config.sh (repo-relative, found)
+   ℹ️  Line 211: scripts/ci/stamp_dev_version.sh found only in private repo
+      Will be available during CI when private repo is checked out
+   ⚠️  Line 245: scripts/ci/stage.sh uses repo-relative path but workflow has working-directory
+      This will likely fail in CI. Consider using: ../scripts/ci/stage.sh
+```
 
 ## Strategy 3: Act (Docker-based Workflow Runner) - ⚠️ LIMITED VALUE FOR THIS REPO
 

@@ -159,13 +159,15 @@ act -W .github/workflows/setup.yml --secret-file .secrets
 
 ```bash
 # The golden trio (run before EVERY push)
-make format  # Prettier YAML formatting
-make lint    # actionlint + shellcheck
-make test    # Python tests (if applicable)
+make format          # Prettier YAML formatting
+make lint            # actionlint + shellcheck
+make validate-paths  # Check script paths (prevents CI path issues)
 
 # All in one command
-make format && make lint && make test
+make format && make lint && make validate-paths
 ```
+
+**💡 Pro Tip**: The `validate-paths` check catches the common issue of script paths breaking when workflows use `working-directory`. This exact issue caused a full CI failure on 2025-12-31.
 
 ## 🐛 Debugging Tools
 
