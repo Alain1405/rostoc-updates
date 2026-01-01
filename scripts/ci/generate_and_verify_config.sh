@@ -2,6 +2,7 @@
 # Generate Python config from Tauri config and verify file presence
 set -euo pipefail
 
+# TAURI_CONFIG_FLAG can be empty for production builds (no overlay config)
 TAURI_CONFIG_FLAG="${TAURI_CONFIG_FLAG:-}"
 ROSTOC_APP_VARIANT="${ROSTOC_APP_VARIANT:-production}"
 

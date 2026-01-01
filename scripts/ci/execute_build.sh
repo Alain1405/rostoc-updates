@@ -4,7 +4,8 @@ set -euo pipefail
 
 # Required env vars
 : "${ROSTOC_APP_VARIANT:?}"
-: "${TAURI_CONFIG_FLAG:?}"
+# TAURI_CONFIG_FLAG can be empty for production builds
+: "${TAURI_CONFIG_FLAG+x}"
 
 # Inputs from GitHub Actions
 PLATFORM="${1:?Platform required (macos, windows, linux)}"
