@@ -236,13 +236,13 @@ runs:
     - name: Generate Python config (before runtime staging)
       working-directory: private-src
       shell: bash
-      run: scripts/ci/generate_and_verify_config.sh
+      run: ../scripts/ci/generate_and_verify_config.sh
 
     - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
-      run: scripts/ci/stage_and_verify_runtime.sh
+      run: ../scripts/ci/stage_and_verify_runtime.sh
 
     - name: '[macOS] Sign Python binaries and libraries (before Tauri build)'
       if: ${{ inputs.platform == 'macos' }}
@@ -250,13 +250,13 @@ runs:
       shell: bash
       env:
         APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
-      run: scripts/ci/sign_python_runtime.sh
+      run: ../scripts/ci/sign_python_runtime.sh
 
     - name: '[macOS] Verify generated_config.py after signing'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
-      run: scripts/ci/verify_config_after_signing.sh
+      run: ../scripts/ci/verify_config_after_signing.sh
 
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}
@@ -264,7 +264,7 @@ runs:
       shell: bash
       env:
         GITHUB_REF: ${{ github.ref }}
-      run: scripts/ci/validate_release_version.sh
+      run: ../scripts/ci/validate_release_version.sh
 
     - name: Build application
       working-directory: private-src
@@ -290,4 +290,4 @@ runs:
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}
         OUTPUT: ${{ inputs.platform == 'linux' && '2' || '' }}
         VERBOSE: ${{ inputs.platform == 'linux' && '1' || '' }}
-      run: scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"
+      run: ../scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"

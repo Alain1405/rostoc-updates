@@ -120,11 +120,11 @@ If the token is missing the workflow simply records a summary note and skips the
 ```bash
 # Install dependencies (one-time setup)
 brew install actionlint  # Workflow linting
-brew install act         # Local workflow testing
 
-# Basic workflow
+# Basic workflow - PRIMARY STRATEGY
 make format              # Format workflow YAML
 make lint                # Lint workflows + shell scripts
+make test-script SCRIPT=<name>  # Test CI scripts directly
 ```
 
 ### Local CI Testing
@@ -132,18 +132,18 @@ make lint                # Lint workflows + shell scripts
 **Before pushing to GitHub**, test your CI changes locally to get instant feedback:
 
 ```bash
-# Test individual scripts (30 seconds)
+# Test individual scripts (30 seconds) - PRIMARY METHOD
 make test-local          # List available scripts
 make test-script SCRIPT=generate_and_verify_config.sh
 
 # Test with different environments
 ROSTOC_APP_VARIANT=staging make test-script SCRIPT=stage_and_verify_runtime.sh
 
-# Test workflows with Act (5-10 minutes)
-make setup-act           # One-time setup
-act -l                   # List available workflows
-act -W .github/workflows/setup.yml -n  # Dry-run
+# Validate workflow syntax (5 seconds)
+make format && make lint
 ```
+
+**⚠️ Note on Act**: Act cannot test the build workflow because it requires `macos-15` and `windows-2022` runners, which Act doesn't support (it only simulates Linux). For this repo, **direct script testing + native builds** provide faster and more accurate validation than Act.
 
 **Full documentation**: See [docs/LOCAL_CI_TESTING.md](./docs/LOCAL_CI_TESTING.md) and [docs/LOCAL_CI_TESTING_CHEATSHEET.md](./docs/LOCAL_CI_TESTING_CHEATSHEET.md)
 

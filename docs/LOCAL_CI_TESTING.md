@@ -705,28 +705,34 @@ bash -x scripts/ci/my_script.sh
 
 ## Summary: Recommended Fast Iteration Workflow
 
+**For this repository (platform-specific builds), skip Act and use:**
+
 ```bash
 # 1. Edit script/workflow (1 min)
 vim scripts/ci/my_script.sh
 
-# 2. Quick format + lint (30 sec)
+# 2. Quick format + lint (5-30 sec)
 make format && make lint
 
-# 3. Direct test (30 sec)
-bash -x scripts/ci/my_script.sh
+# 3. Direct script test (30 sec)
+make test-script SCRIPT=my_script.sh
 
-# 4. Integration test with act (5 min) - OPTIONAL
-act -W .github/workflows/setup.yml -n
+# 4. SKIP Act - It cannot test build workflows (requires macOS/Windows)
 
-# 5. Push to feature branch (avoid main)
+# 5. Optional: Native build test in rostoc repo (20 min)
+cd /Users/alainscialoja/code/new-coro/rostoc
+. .venv/bin/activate
+python scripts/build.py --locked --mode development
+
+# 6. Push to feature branch (avoid main)
 git checkout -b test/my-change
-git commit -am "test: New CI script"
+git commit -am "test: CI script change"
 git push origin test/my-change
 
-# 6. Monitor on GitHub (30-50 min for full build)
+# 7. Monitor on GitHub (30-50 min for full build) - final validation only
 gh run watch
 
-# 7. Iterate on failures by going back to step 1
+# 8. Iterate on failures by going back to step 1
 ```
 
 This workflow reduces iteration time from 30-50 minutes (full GitHub CI) to **1-5 minutes** for most changes, giving you 6-10x faster feedback cycles.
