@@ -245,7 +245,6 @@ This catches:
 
 - Setup/validation workflows (e.g., `setup.yml`)
 - Dispatcher workflows (trigger logic)
-- GitHub Pages deployment
 - Status reporting jobs
 - Platform-agnostic scripts
 

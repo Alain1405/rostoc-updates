@@ -54,9 +54,6 @@ act -W .github/workflows/setup.yml --input is_release=false -n
 
 # ❌ Cannot test build workflow (needs macOS/Windows)
 # act -W .github/workflows/build.yml  # Will fail
-
-# ✅ Test Pages deployment
-act -j deploy -W .github/workflows/deploy-pages.yml -n
 ```
 
 **Recommendation**: Skip Act for this repo—use direct script testing + native builds instead.
