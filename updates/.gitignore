@@ -1,0 +1,10 @@
+# Build artifacts - generated during CI, never committed
+# Backend serves manifests dynamically via API
+macos/
+windows/
+linux/
+*.json
+version.txt
+
+# Keep only the static HTML index
+!index.html

@@ -1,2 +1,0 @@
-eb1bea2d302bef17d9079837d27510ca95366242e417bc2f9ff57bf5e83472e2  ./Rostoc-0.2.101-darwin-aarch64.app.tar.gz
-eb1bea2d302bef17d9079837d27510ca95366242e417bc2f9ff57bf5e83472e2  ./Rostoc.app.tar.gz
