@@ -125,6 +125,7 @@ jobs:
           codesign -dv --verbose=4 "$DMG_PATH" 2>&1 | head -n 20 || true
 
       - name: Upload stapled DMG to Spaces
+        id: upload
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
@@ -144,20 +145,19 @@ jobs:
             pip install --quiet awscli
           fi
 
-          # Extract S3 path from URL
-          # Format: https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.122/Rostoc_0.2.122_aarch64.dmg
-          # or: https://sgp1.digitaloceanspaces.com/rostoc-releases/releases/v0.2.122/Rostoc_0.2.122_aarch64.dmg
+          # Extract bucket and key from URL
+          # Format: https://BUCKET.sgp1.cdn.digitaloceanspaces.com/KEY
+          # Example: https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/staging/v0.2.181/Rostoc-staging_0.2.181_x86_64.dmg
+          # CRITICAL: Extract bucket from hostname subdomain (rostoc-releases), not from path
 
-          if [[ "$UPLOAD_URL" =~ ^https://[^/]+/([^/]+/.+)$ ]]; then
-            S3_PATH="${BASH_REMATCH[1]}"
+          if [[ "$UPLOAD_URL" =~ ^https://([^.]+)\.sgp1\.cdn\.digitaloceanspaces\.com/(.+)$ ]]; then
+            BUCKET="${BASH_REMATCH[1]}"
+            KEY="${BASH_REMATCH[2]}"
           else
-            echo "::error::Could not parse S3 path from upload URL: $UPLOAD_URL"
+            echo "::error::Could not parse bucket and key from upload URL: $UPLOAD_URL"
+            echo "::error::Expected format: https://BUCKET.sgp1.cdn.digitaloceanspaces.com/KEY"
             exit 1
           fi
-
-          # Extract bucket name from path
-          BUCKET=$(echo "$S3_PATH" | cut -d'/' -f1)
-          KEY=$(echo "$S3_PATH" | cut -d'/' -f2-)
 
           echo "[INFO] Bucket: $BUCKET"
           echo "[INFO] Key: $KEY"
@@ -188,13 +188,16 @@ jobs:
           JOB_ID="${{ inputs.job_id }}"
           CALLBACK_URL="${{ inputs.backend_callback_url }}/${JOB_ID}/stapled"
 
-          # Determine status
-          if [[ "${{ steps.staple.outcome }}" == "success" ]]; then
+          # Determine status - BOTH stapling AND upload must succeed
+          if [[ "${{ steps.staple.outcome }}" == "success" && "${{ steps.upload.outcome }}" == "success" ]]; then
             STATUS="success"
             MESSAGE="DMG stapled and uploaded successfully via CI"
-          else
+          elif [[ "${{ steps.staple.outcome }}" != "success" ]]; then
             STATUS="failed"
             MESSAGE="Stapling failed in CI: ${{ steps.staple.outcome }}"
+          else
+            STATUS="failed"
+            MESSAGE="Upload failed in CI: ${{ steps.upload.outcome }}"
           fi
 
           echo "[INFO] Notifying backend: $CALLBACK_URL"
@@ -222,11 +225,14 @@ jobs:
             echo "**Job ID:** ${{ inputs.job_id }}"
             echo "**Version:** ${{ inputs.version }}"
             echo "**Architecture:** ${{ inputs.arch }}"
-            echo "**Status:** ${{ steps.staple.outcome }}"
+            echo "**Stapling:** ${{ steps.staple.outcome }}"
+            echo "**Upload:** ${{ steps.upload.outcome }}"
             echo ""
-            if [[ "${{ steps.staple.outcome }}" == "success" ]]; then
+            if [[ "${{ steps.staple.outcome }}" == "success" && "${{ steps.upload.outcome }}" == "success" ]]; then
               echo "✅ Stapled DMG uploaded successfully"
-            else
+            elif [[ "${{ steps.staple.outcome }}" != "success" ]]; then
               echo "❌ Stapling failed - check logs above"
+            else
+              echo "❌ Upload failed - check logs above"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

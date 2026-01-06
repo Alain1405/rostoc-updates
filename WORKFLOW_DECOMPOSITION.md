@@ -180,19 +180,24 @@ jobs:
     with: { ref, commit_sha, is_release }
     secrets: inherit
 
-  publish:
+  publish-production:
     if: inputs.is_release
     needs: build
     uses: ./.github/workflows/publish.yml
-    with: { ref, commit_sha, is_release, release_channel, backend_publish_url }
+    with: { ref, commit_sha, is_release, release_channel: 'stable' }
+    secrets: inherit
+
+  publish-staging:
+    if: inputs.is_release
+    needs: build
+    uses: ./.github/workflows/publish.yml
+    with: { ref, commit_sha, is_release, release_channel: 'staging' }
     secrets: inherit
 
   finalize:
     if: always()
-    needs: [build, publish]
+    needs: [build, publish-production, publish-staging]
     uses: ./.github/workflows/finalize.yml
-    with: { commit_sha, is_release, build_result: needs.build.result }
-    secrets: inherit
 ```
 
 **Benefits:**
@@ -274,7 +279,18 @@ jobs:
 
 ---
 
-**Status:** ✅ Complete and validated  
-**Date:** 2025  
+**Status:** ✅ Complete, validated, and production-ready  
+**Date:** January 6, 2026  
 **Reviewer:** GitHub Copilot  
-**Testing:** actionlint validation passed
+**Testing:** 
+- ✅ actionlint validation passed (all workflows)
+- ✅ Script path validation passed
+- ✅ platform-config.sh tested with all platform/arch combinations
+- ✅ YAML formatting verified
+- ✅ Windows .msi.zip updater archive fix validated
+
+**Recent Improvements (2026-01-06):**
+- Cleaned up platform-config.sh (removed unused functions, improved error handling)
+- Fixed Windows MSI.ZIP updater archive detection and upload
+- Enhanced CI logging for better debugging
+- Validated all workflows pass production-ready refactoring checklist

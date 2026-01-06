@@ -276,29 +276,60 @@ runs:
       run: |
         $ErrorActionPreference = 'Stop'
         $searchRoots = @('target', 'src-tauri/target')
-        $candidates = @()
+
+        # Find MSI installer
+        $msiCandidates = @()
         foreach ($root in $searchRoots) {
           if (-not (Test-Path -LiteralPath $root)) { continue }
           $found = Get-ChildItem -Path $root -Recurse -File -Filter '*.msi' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
-          if ($found) { $candidates += $found }
+          if ($found) { $msiCandidates += $found }
         }
-        $msi = $candidates | Select-Object -First 1
+        $msi = $msiCandidates | Select-Object -First 1
         if (-not $msi) {
           throw 'MSI artifact not found under target/ or src-tauri/target/'
         }
-        $sigPath = "$($msi.FullName).sig"
-        if (-not (Test-Path $sigPath)) {
+
+        # Find MSI signature
+        $msiSigPath = "$($msi.FullName).sig"
+        if (-not (Test-Path $msiSigPath)) {
           $sigCandidate = Get-ChildItem -Path $msi.DirectoryName -Filter "$($msi.BaseName)*.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($sigCandidate) {
-            $sigPath = $sigCandidate.FullName
+            $msiSigPath = $sigCandidate.FullName
           } else {
             throw "Signature file not found for $($msi.Name)"
           }
         }
+
+        # Find MSI.ZIP updater archive (Tauri creates this for auto-updates)
+        $msiZipCandidates = @()
+        foreach ($root in $searchRoots) {
+          if (-not (Test-Path -LiteralPath $root)) { continue }
+          $found = Get-ChildItem -Path $root -Recurse -File -Filter '*.msi.zip' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+          if ($found) { $msiZipCandidates += $found }
+        }
+        $msiZip = $msiZipCandidates | Select-Object -First 1
+        if (-not $msiZip) {
+          Write-Host "::warning::MSI.ZIP updater archive not found - Tauri auto-updates will not work for Windows"
+          Write-Host "[WARN] No .msi.zip file found. This is required for Tauri auto-updater."
+          Write-Host "[WARN] Ensure createUpdaterArtifacts: true is set in tauri.conf.json"
+        } else {
+          Write-Host "[INFO] Located MSI.ZIP updater archive: $($msiZip.FullName)"
+          "archive=$($msiZip.FullName)" >> $env:GITHUB_OUTPUT
+          
+          # Find signature for MSI.ZIP
+          $msiZipSigPath = "$($msiZip.FullName).sig"
+          if (-not (Test-Path $msiZipSigPath)) {
+            Write-Host "::warning::Signature file not found for MSI.ZIP updater archive"
+          } else {
+            Write-Host "[INFO] Located MSI.ZIP signature: $msiZipSigPath"
+            "archive_signature=$msiZipSigPath" >> $env:GITHUB_OUTPUT
+          }
+        }
+
         "artifact=$($msi.FullName)" >> $env:GITHUB_OUTPUT
-        "signature=$sigPath" >> $env:GITHUB_OUTPUT
-        Write-Host "[INFO] Located MSI: $($msi.FullName)"
-        Write-Host "[INFO] Located signature: $sigPath"
+        "signature=$msiSigPath" >> $env:GITHUB_OUTPUT
+        Write-Host "[INFO] Located MSI installer: $($msi.FullName)"
+        Write-Host "[INFO] Located MSI signature: $msiSigPath"
 
     - name: '[Windows] Prepare update bundle'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
@@ -314,6 +345,8 @@ runs:
         $variant = $env:VARIANT
         $artifact = '${{ steps.locate-windows.outputs.artifact }}'
         $signature = '${{ steps.locate-windows.outputs.signature }}'
+        $archive = '${{ steps.locate-windows.outputs.archive }}'
+        $archiveSignature = '${{ steps.locate-windows.outputs.archive_signature }}'
         $arch = '${{ inputs.arch }}'
 
         if ([string]::IsNullOrWhiteSpace($version)) { throw 'Version missing' }
@@ -332,29 +365,47 @@ runs:
         # Determine architecture label for filename
         $archLabel = if ($arch -eq 'i686') { 'x86' } else { 'x64' }
 
-        # Copy artifacts with version-tagged names (preserving variant in name)
+        # Copy MSI installer artifacts with version-tagged names
         $extension = [System.IO.Path]::GetExtension($artifact)
         $msiName = "${productName}-${version}-windows-${archLabel}${extension}"
         Copy-Item $artifact (Join-Path $windowsDir $msiName) -Force
         Copy-Item $signature (Join-Path $windowsDir "${msiName}.sig") -Force
 
-        # Also copy as latest for convenience
+        # Also copy MSI as latest for convenience
         $latestName = "${productName}-windows-${archLabel}${extension}"
         Copy-Item $artifact (Join-Path $windowsDir $latestName) -Force
         Copy-Item $signature (Join-Path $windowsDir "${latestName}.sig") -Force
 
-        Write-Host "[INFO] Windows artifacts staged: $msiName"
+        Write-Host "[INFO] Windows MSI installer staged: $msiName"
+
+        # Copy MSI.ZIP updater archive if present (required for Tauri auto-updater)
+        if (-not [string]::IsNullOrWhiteSpace($archive) -and (Test-Path $archive)) {
+          $archiveName = "${productName}-${version}-windows-${archLabel}.msi.zip"
+          Copy-Item $archive (Join-Path $windowsDir $archiveName) -Force
+          Write-Host "[INFO] Windows MSI.ZIP updater archive staged: $archiveName"
+          "archive_name=$archiveName" >> $env:GITHUB_OUTPUT
+          
+          if (-not [string]::IsNullOrWhiteSpace($archiveSignature) -and (Test-Path $archiveSignature)) {
+            Copy-Item $archiveSignature (Join-Path $windowsDir "${archiveName}.sig") -Force
+            Write-Host "[INFO] Windows MSI.ZIP signature staged: ${archiveName}.sig"
+          } else {
+            Write-Host "::warning::MSI.ZIP signature not found - updater may not work"
+          }
+          
+          # Also copy as latest for convenience
+          $latestArchiveName = "${productName}-windows-${archLabel}.msi.zip"
+          Copy-Item $archive (Join-Path $windowsDir $latestArchiveName) -Force
+          if (-not [string]::IsNullOrWhiteSpace($archiveSignature) -and (Test-Path $archiveSignature)) {
+            Copy-Item $archiveSignature (Join-Path $windowsDir "${latestArchiveName}.sig") -Force
+          }
+        } else {
+          Write-Host "::warning::MSI.ZIP updater archive not found - Windows auto-updates will not work!"
+          Write-Host "[WARN] The backend will only have the MSI installer, not the updater archive"
+        }
+
         Write-Host "[INFO] Variant: $variant, Product name: $productName"
         "msi_name=$msiName" >> $env:GITHUB_OUTPUT
         "product_name=$productName" >> $env:GITHUB_OUTPUT
-
-    - name: '[Windows] Generate checksums'
-      if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
-      working-directory: private-src
-      shell: bash
-      run: |
-        set -euo pipefail
-        bash ../.github/scripts/generate-checksums.sh "../updates/windows"
 
     - name: '[Windows] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -370,6 +421,7 @@ runs:
         ARCH: ${{ inputs.arch }}
         RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
         MSI_NAME: ${{ steps.prepare-windows.outputs.msi_name }}
+        ARCHIVE_NAME: ${{ steps.prepare-windows.outputs.archive_name }}
         PRODUCT_NAME: ${{ steps.prepare-windows.outputs.product_name }}
       run: |
         set -euo pipefail
@@ -383,9 +435,76 @@ runs:
         RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
         echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
         echo "[INFO] Product name: ${PRODUCT_NAME}"
-        echo "[INFO] MSI: ${MSI_NAME}"
+        echo "[INFO] MSI installer: ${MSI_NAME}"
+        echo "[INFO] MSI.ZIP archive: ${ARCHIVE_NAME:-not found}"
 
         # Load checksums for verification
+        echo "[INFO] Loading checksums from checksums.txt"
+        MSI_CHECKSUM=$(grep "${MSI_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
+
+        echo "[INFO] Expected MSI checksum: ${MSI_CHECKSUM}"
+
+        # Upload MSI installer
+        echo "[INFO] Uploading MSI installer..."
+        MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}"
+
+        aws s3 cp \
+          --endpoint-url "${SPACES_ENDPOINT}" \
+          "../updates/windows/${MSI_NAME}" \
+          "${MSI_S3_URL}" \
+          --acl public-read
+
+        # Verify MSI upload using helper script from rostoc-updates repo
+        bash ../.github/scripts/verify-s3-upload.sh \
+          "../updates/windows/${MSI_NAME}" \
+          "${MSI_S3_URL}" \
+          "${MSI_CHECKSUM}" \
+          "${SPACES_ENDPOINT}"
+
+        aws s3 cp \
+          --endpoint-url "${SPACES_ENDPOINT}" \
+          "../updates/windows/${MSI_NAME}.sig" \
+          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}.sig" \
+          --acl public-read
+
+        # Upload MSI.ZIP updater archive if present (required for auto-updates)
+        if [ -n "${ARCHIVE_NAME:-}" ] && [ -f "../updates/windows/${ARCHIVE_NAME}" ]; then
+          echo "[INFO] Uploading MSI.ZIP updater archive..."
+          
+          ARCHIVE_CHECKSUM=$(grep "${ARCHIVE_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
+          echo "[INFO] Expected archive checksum: ${ARCHIVE_CHECKSUM}"
+          
+          ARCHIVE_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${ARCHIVE_NAME}"
+          
+          aws s3 cp \
+            --endpoint-url "${SPACES_ENDPOINT}" \
+            "../updates/windows/${ARCHIVE_NAME}" \
+            "${ARCHIVE_S3_URL}" \
+            --acl public-read
+          
+          # Verify archive upload
+          bash ../.github/scripts/verify-s3-upload.sh \
+            "../updates/windows/${ARCHIVE_NAME}" \
+            "${ARCHIVE_S3_URL}" \
+            "${ARCHIVE_CHECKSUM}" \
+            "${SPACES_ENDPOINT}"
+          
+          # Upload signature if present
+          if [ -f "../updates/windows/${ARCHIVE_NAME}.sig" ]; then
+            aws s3 cp \
+              --endpoint-url "${SPACES_ENDPOINT}" \
+              "../updates/windows/${ARCHIVE_NAME}.sig" \
+              "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${ARCHIVE_NAME}.sig" \
+              --acl public-read
+            echo "[INFO] ✅ MSI.ZIP archive and signature uploaded"
+          else
+            echo "::warning::MSI.ZIP signature not found"
+            echo "[INFO] ✅ MSI.ZIP archive uploaded (signature missing)"
+          fi
+        else
+          echo "::warning::MSI.ZIP updater archive not found - Windows auto-updates will NOT work"
+          echo "[WARN] Only MSI installer uploaded. Backend will not be able to serve Windows updates."
+        fir verification
         echo "[INFO] Loading checksums from checksums.txt"
         MSI_CHECKSUM=$(grep "${MSI_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
 

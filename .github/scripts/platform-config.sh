@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Initialize platform-specific configuration based on matrix variables
 # Outputs build command, artifact extension, target, and other platform-specific settings
+#
+# Usage: eval $(./platform-config.sh <platform> <arch>)
+# This script outputs KEY=VALUE pairs suitable for eval or GitHub Actions outputs
 
 set -euo pipefail
 
@@ -8,79 +11,14 @@ PLATFORM="${1:-}"
 ARCH="${2:-}"
 
 if [ -z "$PLATFORM" ] || [ -z "$ARCH" ]; then
-  echo "Usage: $0 <platform> <arch>"
-  echo "Platforms: macos, windows, linux"
-  echo "Architectures: aarch64 (macOS), x86_64 (all), x86 (Windows), i686 (Windows)"
+  echo "Usage: $0 <platform> <arch>" >&2
+  echo "Platforms: macos, windows, linux" >&2
+  echo "Architectures: aarch64 (macOS), x86_64 (all platforms), i686 (Windows 32-bit)" >&2
   exit 1
 fi
 
-# Artifact naming functions (centralized)
-normalize_arch() {
-  local platform="$1"
-  local arch="$2"
-  
-  case "$platform" in
-    windows)
-      case "$arch" in
-        i686) echo "x86" ;;
-        x86_64) echo "x64" ;;
-        *) echo "$arch" ;;
-      esac
-      ;;
-    *)
-      echo "$arch"
-      ;;
-  esac
-}
-
-get_updater_archive_name() {
-  local version="$1"
-  local platform="$2"
-  local arch="$3"
-  
-  case "$platform" in
-    macos)
-      echo "Rostoc-${version}-darwin-${arch}.app.tar.gz"
-      ;;
-    linux)
-      echo "Rostoc-${version}-linux-${arch}.AppImage.tar.gz"
-      ;;
-    *)
-      echo "::error::Unsupported platform for updater archive: $platform" >&2
-      return 1
-      ;;
-  esac
-}
-
-get_installer_name() {
-  local version="$1"
-  local platform="$2"
-  local arch="$3"
-  
-  case "$platform" in
-    macos)
-      echo "Rostoc_${version}_${arch}.dmg"
-      ;;
-    windows)
-      local norm_arch
-      norm_arch=$(normalize_arch "$platform" "$arch")
-      echo "Rostoc-${version}-windows-${norm_arch}.msi"
-      ;;
-    linux)
-      echo "Rostoc-${version}-linux-${arch}.AppImage"
-      ;;
-    *)
-      echo "::error::Unsupported platform for installer: $platform" >&2
-      return 1
-      ;;
-  esac
-}
-
-get_signature_name() {
-  local artifact="$1"
-  echo "${artifact}.sig"
-}
-
+# Output configuration key-value pairs
+# These are consumed by GitHub Actions or can be eval'd in bash
 case "$PLATFORM" in
   macos)
     {
@@ -121,7 +59,7 @@ case "$PLATFORM" in
     }
     ;;
   *)
-    echo "::error::Unknown platform: $PLATFORM"
+    echo "::error::Unknown platform: $PLATFORM" >&2
     exit 1
     ;;
 esac
