@@ -114,6 +114,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          variant: ${{ matrix.variant }}
           is_release: ${{ inputs.is_release }}
           apple_signing_identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           apple_team_id: ${{ secrets.APPLE_TEAM_ID }}

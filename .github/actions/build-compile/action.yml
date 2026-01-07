@@ -8,6 +8,9 @@ inputs:
   arch:
     description: 'Architecture being built (aarch64, x86_64, i686)'
     required: true
+  variant:
+    description: 'Build variant (production, staging)'
+    required: true
   is_release:
     description: 'Whether this is a release build'
     required: false
@@ -288,7 +291,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: diagnostics-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_number }}
+        name: diagnostics-${{ inputs.variant }}-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_number }}
         path: private-src/diagnostics-*.md
         retention-days: 14
         if-no-files-found: warn
@@ -328,7 +331,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: fingerprint-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_number }}
+        name: fingerprint-${{ inputs.variant }}-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_number }}
         path: private-src/build-fingerprint.txt
         retention-days: 30
         if-no-files-found: warn
