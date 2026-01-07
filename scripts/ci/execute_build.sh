@@ -54,6 +54,17 @@ ${BUILD_COMMAND} 2>&1 | tee "${LOG_FILE}"
 # CRITICAL: Use PIPESTATUS[0] to get build command exit code, not tee's exit code
 BUILD_EXIT_CODE=${PIPESTATUS[0]}
 
+# Debug: Print captured exit codes
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "[DEBUG] Pipeline Exit Codes"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PIPESTATUS array: ${PIPESTATUS[*]}"
+echo "BUILD_EXIT_CODE (from PIPESTATUS[0]): ${BUILD_EXIT_CODE}"
+echo "Current \$? (last command): $?"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
 # Extract and highlight errors if build failed
 if [[ ${BUILD_EXIT_CODE} -ne 0 ]]; then
   ERROR_LOG="errors-${PLATFORM}-${ARCH}.txt"
@@ -187,5 +198,12 @@ if [[ "${PLATFORM}" == "linux" ]]; then
   find src-tauri/target -type d -name "appimage" -exec sh -c 'echo "Contents of {}"; ls -lah "{}" 2>/dev/null || echo "  (directory not accessible)"' \; || echo "  (No appimage directory found)"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "[DEBUG] Script Exit"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Exiting with BUILD_EXIT_CODE: ${BUILD_EXIT_CODE}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 exit "${BUILD_EXIT_CODE}"
