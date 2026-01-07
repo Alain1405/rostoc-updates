@@ -134,19 +134,19 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
           SIZE=$(stat -f%z "$artifact" 2>/dev/null || stat -c%s "$artifact" 2>/dev/null || echo "0")
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "- \`$(basename "$artifact")\` (${SIZE_MB} MB)"
-        done
+        done || true
       elif [[ "${PLATFORM}" == "windows" ]]; then
         find src-tauri/target -name "*.msi" -o -name "*.msi.zip" 2>/dev/null | while read -r artifact; do
           SIZE=$(stat -c%s "$artifact" 2>/dev/null || echo "0")
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "- \`$(basename "$artifact")\` (${SIZE_MB} MB)"
-        done
+        done || true
       elif [[ "${PLATFORM}" == "linux" ]]; then
         find src-tauri/target -name "*.AppImage" 2>/dev/null | while read -r artifact; do
           SIZE=$(stat -c%s "$artifact" 2>/dev/null || echo "0")
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "- \`$(basename "$artifact")\` (${SIZE_MB} MB)"
-        done
+        done || true
       fi
     else
       echo "### ❌ Build Failed"
