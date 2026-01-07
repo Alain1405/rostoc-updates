@@ -1,0 +1,86 @@
+{
+  "production": [
+    {
+      "variant": "production",
+      "os": "macos-15",
+      "platform": "macos",
+      "arch": "aarch64",
+      "name": "macOS ARM64 (M1)",
+      "is_optional": false
+    },
+    {
+      "variant": "production",
+      "os": "windows-2022",
+      "platform": "windows",
+      "arch": "x86_64",
+      "name": "Windows x64",
+      "is_optional": false
+    },
+    {
+      "variant": "production",
+      "os": "macos-15-intel",
+      "platform": "macos",
+      "arch": "x86_64",
+      "name": "macOS Intel x86-64",
+      "is_optional": true
+    },
+    {
+      "variant": "production",
+      "os": "windows-2022",
+      "platform": "windows",
+      "arch": "i686",
+      "name": "Windows x86 (32-bit)",
+      "is_optional": true
+    },
+    {
+      "variant": "production",
+      "os": "ubuntu-latest",
+      "platform": "linux",
+      "arch": "x86_64",
+      "name": "Linux AppImage x86-64",
+      "is_optional": true
+    }
+  ],
+  "staging": [
+    {
+      "variant": "staging",
+      "os": "macos-15",
+      "platform": "macos",
+      "arch": "aarch64",
+      "name": "macOS ARM64 (M1) — Staging",
+      "is_optional": false
+    },
+    {
+      "variant": "staging",
+      "os": "windows-2022",
+      "platform": "windows",
+      "arch": "x86_64",
+      "name": "Windows x64 — Staging",
+      "is_optional": false
+    },
+    {
+      "variant": "staging",
+      "os": "macos-15-intel",
+      "platform": "macos",
+      "arch": "x86_64",
+      "name": "macOS Intel x86-64 — Staging",
+      "is_optional": true
+    },
+    {
+      "variant": "staging",
+      "os": "windows-2022",
+      "platform": "windows",
+      "arch": "i686",
+      "name": "Windows x86 (32-bit) — Staging",
+      "is_optional": true
+    },
+    {
+      "variant": "staging",
+      "os": "ubuntu-latest",
+      "platform": "linux",
+      "arch": "x86_64",
+      "name": "Linux AppImage x86-64 — Staging",
+      "is_optional": true
+    }
+  ]
+}

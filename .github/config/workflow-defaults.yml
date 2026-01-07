@@ -1,0 +1,44 @@
+# Centralized Workflow Configuration
+# Single source of truth for constants used across CI workflows
+
+# Repository configuration
+repositories:
+  private: alain1405/rostoc
+  updates: alain1405/rostoc-updates
+
+# Timeout configuration (minutes)
+timeouts:
+  setup: 25
+  build_linux: 30
+  build_macos: 50
+  build_windows: 50
+  publish: 20
+  finalize: 5
+
+# Backend API configuration
+backend:
+  default_url: https://api.rostoc.co/api/updates/publish/
+  timeout_seconds: 30
+
+# CDN configuration
+cdn:
+  spaces_url: https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com
+  
+# Version control
+version:
+  file: version.txt
+  updates_dir: updates
+
+# Loki configuration
+loki:
+  max_batch_lines: 1000
+  max_line_length: 32000
+  compression: true
+
+# Status contexts
+status:
+  ci_context: rostoc-updates/ci
+  release_context: rostoc-updates/release
+
+# Build matrix configurations
+# Note: Actual matrix is in separate JSON file for better maintainability
