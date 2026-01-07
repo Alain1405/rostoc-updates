@@ -241,19 +241,33 @@ jobs:
 
           # Read log file and send to Loki
           # Loki API: https://grafana.com/docs/loki/latest/api/#push-log-entries-to-loki
-          TIMESTAMP=$(date -u +%s)000000000  # nanoseconds
+          BASE_TIMESTAMP=$(date -u +%s)000000000  # nanoseconds
 
-          # Escape log content for JSON
-          LOG_CONTENT=$(cat "$LOG_FILE" | jq -Rs .)
+          # Convert each log line to Loki format: [timestamp, line]
+          # Increment timestamp by 1ns per line to maintain ordering
+          VALUES="["
+          FIRST=true
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            # Escape line for JSON
+            ESCAPED_LINE=$(printf '%s' "$line" | jq -Rs .)
+            
+            if [[ "$FIRST" == "true" ]]; then
+              FIRST=false
+            else
+              VALUES+=","
+            fi
+            
+            VALUES+="[\"$BASE_TIMESTAMP\",$ESCAPED_LINE]"
+            BASE_TIMESTAMP=$((BASE_TIMESTAMP + 1))
+          done < "$LOG_FILE"
+          VALUES+="]"
 
           PAYLOAD=$(cat <<EOF
           {
             "streams": [
               {
                 "stream": $LABELS,
-                "values": [
-                  ["$TIMESTAMP", $LOG_CONTENT]
-                ]
+                "values": $VALUES
               }
             ]
           }
