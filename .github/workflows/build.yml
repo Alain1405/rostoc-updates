@@ -203,6 +203,15 @@ jobs:
         shell: bash
         run: echo "version=${{ steps.prep.outputs.version }}" >> "$GITHUB_OUTPUT"
 
+      # --- DEBUG MODE: SSH into runner on failure ---
+      - name: Setup tmate session (debug mode)
+        if: failure() && contains(github.event.head_commit.message, '[debug]')
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+        with:
+          limit-access-to-actor: true
+          detached: true
+
       # --- Notify on failure ---
       - name: Notify build failure (Slack)
         if: failure()

@@ -32,6 +32,121 @@ This is the **public workflow runner** for Rostoc desktop builds. The private `a
 - **Stapler workflow**: Self-disables when no pending notarizations remain
 - **Legacy releases**: Pending releases without `submission_id` are marked as invalid on first stapler run
 
+### Interactive Debugging with tmate
+
+**Purpose**: SSH into a failed CI runner to debug interactively, test fixes, and inspect filesystem state.
+
+**When to use**:
+- Complex build failures that need live investigation
+- Testing fixes without re-running entire 30-50 minute CI pipeline
+- Inspecting environment state, filesystem, or installed tools
+- Debugging platform-specific issues on actual runner hardware
+
+**How to trigger**:
+
+1. **Add `[debug]` to commit message**:
+   ```bash
+   git commit -m "fix: Debug build failure [debug]"
+   git push origin your-branch
+   ```
+
+2. **Wait for build to fail**:
+   - The workflow must fail for tmate to activate
+   - Go to: https://github.com/Alain1405/rostoc-updates/actions
+   - Find your workflow run
+
+3. **Get SSH connection string**:
+   - Open the failed job (e.g., "macOS ARM64 (M1)")
+   - Expand the "Setup tmate session (debug mode)" step
+   - Copy the SSH command shown in logs:
+     ```
+     ssh <random-id>@nyc1.tmate.io
+     ```
+
+4. **Connect and debug**:
+   ```bash
+   # Connect via SSH (from your terminal)
+   ssh <random-id>@nyc1.tmate.io
+   
+   # Now you're on the GitHub Actions runner!
+   # Navigate to the build directory
+   cd private-src
+   
+   # Inspect failed build state
+   ls -la src-tauri/target/release/bundle/
+   
+   # Check logs
+   cat build-*.log
+   
+   # Re-run build commands manually
+   pnpm tauri build
+   
+   # Test fixes
+   vim src-tauri/Cargo.toml
+   cargo build --release
+   
+   # Exit when done
+   exit
+   ```
+
+**Security**:
+- `limit-access-to-actor: true` ensures only YOU can connect (GitHub actor who triggered the workflow)
+- 30-minute timeout automatically disconnects after inactivity
+- `detached: true` keeps session alive even if you disconnect temporarily
+
+**Tips**:
+- The runner has all dependencies already installed (Node, Rust, Python, etc.)
+- Your SSH session starts in the workspace root
+- Private repo is checked out in `private-src/`
+- You can modify files, re-run commands, and test fixes live
+- GitHub Actions environment variables are available (`echo $GITHUB_*`)
+- When you're done debugging, just type `exit` or wait for 30-min timeout
+
+**Debugging with Copilot assistance**:
+When connected to tmate session, you can:
+1. Copy error messages and ask Copilot for solutions
+2. Get Copilot to generate commands to run in the SSH session
+3. Paste Copilot-suggested fixes directly into files
+4. Verify fixes work before committing
+
+**Example workflow**:
+```bash
+# 1. Trigger debug session
+git commit -m "test: Debug codesign failure [debug]"
+git push
+
+# 2. Wait for failure, then connect
+ssh abc123@nyc1.tmate.io
+
+# 3. In the session
+cd private-src
+cat codesign-*.log  # Inspect logs
+security find-identity -v  # Check certificates
+
+# 4. Ask Copilot: "I'm in a tmate session and codesign failed with errSecInternalComponent"
+# Copilot suggests: security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db
+
+# 5. Test the fix
+security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db
+pnpm tauri build  # Re-run build
+
+# 6. If it works, exit and apply fix to CI scripts
+exit
+```
+
+**Limitations**:
+- Only triggers on failure (not on success)
+- Only on builds where commit message contains `[debug]`
+- Costs GitHub Actions minutes while session is active (30 min max)
+- Runner will be destroyed after session ends
+
+**Removing `[debug]` mode**:
+Once you've identified and fixed the issue, push without `[debug]`:
+```bash
+git commit -m "fix: Apply codesign unlock fix"
+git push  # No [debug] tag - runs normally without tmate
+```
+
 ## Code Quality & Linting
 
 ### Before Committing Any Changes
@@ -111,6 +226,118 @@ permissions:
 ```
 
 The `build-and-publish.yml` reusable workflow inherits these and uses `actions: write` to re-enable the stapler schedule after releasing.
+
+## Retrieving Build Context (GitHub SHA and Rostoc Version)
+
+### From GitHub UI
+
+**Workflow Run → Commit:**
+1. Go to workflow run: `https://github.com/Alain1405/rostoc-updates/actions/runs/<RUN_ID>`
+2. Look for "triggered by commit" link in the header
+3. Or check the "Summary" section for commit SHA and message
+
+**Commit SHA:** Displayed as first 7 characters (e.g., `7f0b205`) with full SHA in URL
+
+### Using GitHub CLI
+
+```bash
+# Get workflow run details including commit SHA
+gh run view <RUN_ID> --repo Alain1405/rostoc-updates --json headSha,headBranch,workflowName,conclusion,createdAt
+
+# Example output shows:
+# "headSha": "7f0b2054a6346563be8bce2462fac0df5e331a67"
+# "headBranch": "main"
+
+# Get commit details from SHA
+gh api repos/Alain1405/rostoc-updates/commits/7f0b2054a6346563be8bce2462fac0df5e331a67 --jq '.commit.message'
+
+# Get the rostoc version that was built (from the private repo commit)
+gh api repos/Alain1405/rostoc/commits/<SHA>/contents/package.json --jq '.content' | base64 -d | jq -r '.version'
+```
+
+### Using GitHub MCP Tools
+
+```python
+# Get workflow run with commit SHA
+mcp_github_github_actions_get(
+    method='get_workflow_run',
+    owner='Alain1405',
+    repo='rostoc-updates',
+    resource_id='20758186226'
+)
+# Returns: head_sha, head_branch, workflow_name, conclusion
+
+# Get commit message and author
+mcp_github_github_get_commit(
+    owner='Alain1405',
+    repo='rostoc-updates',
+    ref='7f0b2054a6346563be8bce2462fac0df5e331a67'
+)
+
+# Get rostoc version from package.json in private repo
+mcp_github_github_get_file_contents(
+    owner='Alain1405',
+    repo='rostoc',
+    path='package.json',
+    ref='main'  # or specific commit SHA
+)
+# Parse JSON to extract: .version
+```
+
+### Rostoc Version Sources
+
+**Primary source:** `package.json` in private `rostoc` repo
+```bash
+# Local
+cat /path/to/rostoc/package.json | jq -r '.version'
+
+# From GitHub
+gh api repos/Alain1405/rostoc/contents/package.json --jq '.content' | base64 -d | jq -r '.version'
+```
+
+**Also available in:**
+- `src-tauri/tauri.conf.json` → `.version`
+- `src-tauri/Cargo.toml` → `[package] version`
+- Build artifacts (stamped during CI): DMG/MSI filename includes version
+
+### Correlating CI Run → Rostoc Version
+
+**For Release Builds:**
+1. Git tag = rostoc version: `git tag --points-at <COMMIT_SHA>`
+2. Tag format: `v0.2.183` → rostoc version `0.2.183`
+
+**For Dev/CI Builds:**
+1. Get commit SHA from workflow run (see above)
+2. Check out private repo at that SHA: `cd rostoc && git checkout <SHA>`
+3. Read version: `jq -r '.version' package.json`
+
+**From Build Logs:**
+```bash
+# Search for version stamp in logs
+gh run view <RUN_ID> --log | grep -i "version"
+gh run view <RUN_ID> --log | grep -i "Building Rostoc"
+
+# Look for lines like:
+# "Building Rostoc v0.2.183"
+# "Version: 0.2.183-dev.123"
+```
+
+### Quick Reference Commands
+
+```bash
+# Get everything about a workflow run
+gh run view 20758186226 --repo Alain1405/rostoc-updates
+
+# Get commit that triggered it
+gh run view 20758186226 --json headSha --jq '.headSha'
+
+# Get rostoc version from that commit
+SHA=$(gh run view 20758186226 --json headSha --jq '.headSha')
+gh api repos/Alain1405/rostoc/contents/package.json?ref=$SHA --jq '.content' | base64 -d | jq -r '.version'
+
+# Get commit message
+gh api repos/Alain1405/rostoc-updates/commits/$SHA --jq '.commit.message'
+```
 
 ## Common Pitfalls
 
