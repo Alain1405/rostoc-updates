@@ -202,7 +202,8 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
-    - name: Stamp build version
+    - name: Stamp build version (dev builds only)
+      if: env.RELEASE_VERSION == ''
       working-directory: private-src
       shell: bash
       env:
@@ -210,19 +211,8 @@ runs:
         GITHUB_RUN_NUMBER: ${{ github.run_number }}
       run: |
         set -euo pipefail
-        if [[ -n "${RELEASE_VERSION:-}" ]]; then
-          scripts/ci/stamp_dev_version.sh --version "$RELEASE_VERSION"
-        else
-          scripts/ci/stamp_dev_version.sh
-        fi
-
-    - name: Pre-populate Cargo cache (prevent race condition)
-      working-directory: private-src
-      shell: bash
-      run: |
-        echo "Pre-fetching Cargo dependencies to populate cache..."
-        cargo fetch --locked
-        echo "Cargo cache populated successfully"
+        # Dev builds: generate unique version and update Cargo.lock
+        scripts/ci/stamp_dev_version.sh
 
     - name: Set variant-specific Tauri config flag
       shell: bash
