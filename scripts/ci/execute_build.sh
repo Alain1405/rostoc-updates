@@ -15,20 +15,20 @@ BUILD_COMMAND="${3:?Build command required}"
 LOG_FILE="build-${PLATFORM}-${ARCH}.log"
 
 # Debug variant configuration (all platforms)
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "[DEBUG] Variant Configuration"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "ROSTOC_APP_VARIANT=${ROSTOC_APP_VARIANT}"
 echo "TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG}"
 echo "MODE_FLAG extracted: ${BUILD_COMMAND}" | grep -o '\-\-mode [^ ]*' || echo "  (no --mode flag)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo ""
 
 # Debug logging for Linux builds
 if [[ "${PLATFORM}" == "linux" ]]; then
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
   echo "[DEBUG] Linux AppImage Build Environment"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
   echo "APPIMAGE_EXTRACT_AND_RUN=${APPIMAGE_EXTRACT_AND_RUN:-<not set>}"
   echo "NO_STRIP=${NO_STRIP:-<not set>}"
   echo "OUTPUT=${OUTPUT:-<not set>}"
@@ -45,7 +45,7 @@ if [[ "${PLATFORM}" == "linux" ]]; then
   echo "Available disk space: $(df -h . | tail -1 | awk '{print $4}')"
   echo "Kernel: $(uname -r)"
   echo "User: $(whoami)"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
 fi
 
 echo "[INFO] Starting build — output will be saved to ${LOG_FILE}"
@@ -56,13 +56,13 @@ BUILD_EXIT_CODE=${PIPESTATUS[0]}
 
 # Debug: Print captured exit codes
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "[DEBUG] Pipeline Exit Codes"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "PIPESTATUS array: ${PIPESTATUS[*]}"
 echo "BUILD_EXIT_CODE (from PIPESTATUS[0]): ${BUILD_EXIT_CODE}"
 echo "Current \$? (last command): $?"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo ""
 
 # Extract and highlight errors if build failed
@@ -98,17 +98,17 @@ if [[ ${BUILD_EXIT_CODE} -ne 0 ]]; then
   } > "${ERROR_LOG}"
   
   echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
   echo "[ERROR] Build failed. Error summary saved to ${ERROR_LOG}"
   cat "${ERROR_LOG}"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
   
   # Analyze errors and suggest solutions
   if [[ -f "../.github/scripts/analyze-error.sh" ]]; then
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "============================================================"
     echo "[INFO] Analyzing errors for known patterns..."
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "============================================================"
     bash "../.github/scripts/analyze-error.sh" "${ERROR_LOG}" || true
   fi
 fi
@@ -178,9 +178,9 @@ fi
 
 # Post-build debug logging for Linux
 if [[ "${PLATFORM}" == "linux" ]]; then
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
   echo "[DEBUG] Linux AppImage Build Results (exit code: ${BUILD_EXIT_CODE})"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
   echo "Checking for AppImage artifacts in target directories..."
   find target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in target/"
   find src-tauri/target -name "*.AppImage" 2>/dev/null || echo "  No AppImage found in src-tauri/target/"
@@ -196,14 +196,14 @@ if [[ "${PLATFORM}" == "linux" ]]; then
   echo ""
   echo "AppImage build directory contents:"
   find src-tauri/target -type d -name "appimage" -exec sh -c 'echo "Contents of {}"; ls -lah "{}" 2>/dev/null || echo "  (directory not accessible)"' \; || echo "  (No appimage directory found)"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "============================================================"
 fi
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "[DEBUG] Script Exit"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 echo "Exiting with BUILD_EXIT_CODE: ${BUILD_EXIT_CODE}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "============================================================"
 
 exit "${BUILD_EXIT_CODE}"
