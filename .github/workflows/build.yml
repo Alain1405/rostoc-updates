@@ -266,13 +266,13 @@ jobs:
           scripts/ci/ship_logs_to_loki.sh "$LOG_FILE" "$LABELS"
 
       # --- DEBUG MODE: SSH into runner on failure ---
-      - name: Setup tmate session (debug mode)
+      - name: Setup upterm session (debug mode)
         if: failure() && contains(github.event.head_commit.message, '[debug]')
-        uses: mxschmitt/action-tmate@v3
+        uses: owenthereal/action-upterm@v1
         timeout-minutes: 30
         with:
           limit-access-to-actor: true
-          detached: true
+          wait-timeout-minutes: 30
 
       # --- Notify on failure ---
       - name: Notify build failure (Slack)
