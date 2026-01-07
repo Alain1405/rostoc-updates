@@ -53,6 +53,45 @@ jobs:
       - name: Checkout repo (actions + workflows)
         uses: actions/checkout@v4
 
+      # --- PRE-FLIGHT CHECKS (fail fast) ---
+      - name: Pre-flight validation
+        shell: bash
+        run: |
+          echo "🔍 Running pre-flight checks..."
+          
+          # Check required secrets are set (without exposing values)
+          MISSING_SECRETS=()
+          [[ -z "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]] && MISSING_SECRETS+=("APPLE_SIGNING_IDENTITY")
+          [[ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]] && MISSING_SECRETS+=("TAURI_SIGNING_PRIVATE_KEY")
+          
+          if [[ ${#MISSING_SECRETS[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets: ${MISSING_SECRETS[*]}"
+            exit 1
+          fi
+          
+          # Check disk space upfront
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            AVAILABLE_GB=$(df -g . | tail -1 | awk '{print $4}')
+          else
+            AVAILABLE_GB=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
+          fi
+          
+          if [[ $AVAILABLE_GB -lt 20 ]]; then
+            echo "::error::Insufficient disk space: ${AVAILABLE_GB}GB available, need 20GB minimum"
+            exit 1
+          fi
+          
+          # Check workflow inputs
+          if [[ "${{ inputs.is_release }}" == "true" && -z "${{ inputs.ref }}" ]]; then
+            echo "::error::Release builds require 'ref' input"
+            exit 1
+          fi
+          
+          echo "✅ Pre-flight checks passed"
+          echo "   Disk space: ${AVAILABLE_GB}GB available"
+          echo "   Secrets: Configured"
+          echo "   Build type: ${{ inputs.is_release && 'Release' || 'Development' }}"
+
       # --- Phase 1: Prep (checkout, SSH, toolchains) ---
       - uses: ./.github/actions/build-prep
         id: prep
@@ -83,14 +122,17 @@ jobs:
           tauri_signing_private_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           tauri_signing_private_key_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      # --- Upload build logs (even on failure) ---
-      - name: Upload build logs (pre-tests)
+      # --- Upload build logs IMMEDIATELY (even on failure) ---
+      - name: Upload build logs (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-pre-tests-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}
-          path: private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log
-          retention-days: 7
+          name: build-logs-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            private-src/build-*.log
+            private-src/*.log
+            private-src/errors-*.txt
+          retention-days: 14
           if-no-files-found: warn
 
       # --- Phase 3: Sign & Validate (macOS-specific) ---
@@ -126,8 +168,94 @@ jobs:
           do_spaces_bucket: ${{ secrets.DO_SPACES_BUCKET }}
           do_spaces_endpoint: ${{ secrets.DO_SPACES_ENDPOINT }}
 
+      # --- Upload partial artifacts on failure ---
+      - name: Upload partial artifacts (if build failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: partial-artifacts-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            private-src/src-tauri/target/release/bundle/**/*.dmg
+            private-src/src-tauri/target/release/bundle/**/*.app
+            private-src/src-tauri/target/release/bundle/**/*.msi
+            private-src/src-tauri/target/release/bundle/**/*.msi.zip
+            private-src/src-tauri/target/release/bundle/**/*.AppImage
+            private-src/src-tauri/target/release/bundle/**/*.sig
+            private-src/updates/**/*
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # --- Upload codesigning logs (macOS failures) ---
+      - name: Upload codesign logs (macOS)
+        if: failure() && matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codesign-logs-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            private-src/codesign-*.log
+            private-src/*.codesign
+          retention-days: 7
+          if-no-files-found: ignore
+
       # --- Export version for downstream jobs ---
       - name: Export version
         id: extract_version
         shell: bash
         run: echo "version=${{ steps.prep.outputs.version }}" >> "$GITHUB_OUTPUT"
+
+      # --- Notify on failure ---
+      - name: Notify build failure (Slack)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "❌ Build Failed: ${{ matrix.name }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Build Failed: ${{ matrix.name }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Platform:* ${{ matrix.platform }} ${{ matrix.arch }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Variant:* ${{ matrix.variant }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:* ${{ steps.prep.outputs.version }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:* ${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Quick Access:*\n• <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>\n• Download: `build-logs-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}`\n• Download: `diagnostics-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}`"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Branch:* ${{ github.ref_name }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
