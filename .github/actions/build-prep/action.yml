@@ -101,6 +101,19 @@ runs:
         echo "::notice::Building at commit $CURRENT_SHA"
         echo "::endgroup::"
 
+    - name: Debug Cargo.toml content
+      working-directory: private-src
+      shell: bash
+      run: |
+        echo "::group::Cargo.toml content (first 10 lines)"
+        head -10 src-tauri/Cargo.toml || echo "File not found"
+        echo "::endgroup::"
+        echo "::group::Full path check"
+        ls -la src-tauri/Cargo.toml || echo "File not found"
+        pwd
+        ls -la src-tauri/ || echo "Directory not found"
+        echo "::endgroup::"
+
     - name: Capture release version
       if: ${{ inputs.is_release == 'true' }}
       shell: bash
