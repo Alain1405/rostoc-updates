@@ -202,14 +202,6 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
-    - name: Pre-populate Cargo cache (prevent race condition)
-      working-directory: private-src
-      shell: bash
-      run: |
-        echo "Pre-fetching Cargo dependencies to populate cache..."
-        cargo fetch --locked
-        echo "Cargo cache populated successfully"
-
     - name: Stamp build version
       working-directory: private-src
       shell: bash
@@ -223,6 +215,14 @@ runs:
         else
           scripts/ci/stamp_dev_version.sh
         fi
+
+    - name: Pre-populate Cargo cache (prevent race condition)
+      working-directory: private-src
+      shell: bash
+      run: |
+        echo "Pre-fetching Cargo dependencies to populate cache..."
+        cargo fetch --locked
+        echo "Cargo cache populated successfully"
 
     - name: Set variant-specific Tauri config flag
       shell: bash
