@@ -204,7 +204,28 @@ gh auth status
 docker ps
 ```
 
-## 📚 Full Documentation
+## � Grafana Loki Access
+
+**Recommended**: Use Explore view for line-by-line logs
+
+```bash
+# Quick links
+Explore: https://rostocci.grafana.net/explore
+Logs App: https://rostocci.grafana.net/a/grafana-lokiexplore-app/explore
+
+# Example query (update run_id)
+{run_id="20770977435"}
+
+# Filter by platform
+{platform="macos", arch="aarch64"}
+
+# Search errors
+{run_id="20770977435"} |= "ERROR"
+```
+
+**Available labels**: `run_id`, `platform`, `arch`, `variant`, `status`, `job`, `actor`, `branch`, `commit`, `version`
+
+## �📚 Full Documentation
 
 See [LOCAL_CI_TESTING.md](./LOCAL_CI_TESTING.md) for comprehensive guide.
 

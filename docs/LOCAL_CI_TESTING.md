@@ -846,6 +846,81 @@ This workflow reduces iteration time from 30-50 minutes (full GitHub CI) to **1-
 3. **Document platform-specific limitations**: Add notes as you discover edge cases
 4. **CI feedback loop metrics**: Track how much time local testing saves
 
+## Accessing Grafana Loki Logs
+
+### Quick Access Links
+
+**⚠️ Important**: Use the **Explore** view for proper line-by-line log display. The Logs view shows everything in a single line.
+
+#### Explore View (Recommended)
+**Best for**: Viewing build logs line-by-line, searching specific runs
+
+[Open Grafana Explore](https://rostocci.grafana.net/explore?schemaVersion=1&panes=%7B%22lsb%22%3A%7B%22datasource%22%3A%22grafanacloud-logs%22%2C%22queries%22%3A%5B%7B%22expr%22%3A%22%7Brun_id%3D%5C%2220769602588%5C%22%7D%22%2C%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22grafanacloud-logs%22%7D%2C%22editorMode%22%3A%22code%22%2C%22queryType%22%3A%22range%22%2C%22direction%22%3A%22backward%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%2C%22panelsState%22%3A%7B%22logs%22%3A%7B%22sortOrder%22%3A%22Descending%22%7D%7D%2C%22compact%22%3Afalse%7D%7D&orgId=1)
+
+**Usage**:
+1. Click the link above
+2. Replace `run_id="20769602588"` in the query with your run ID
+3. Adjust time range if needed (default: last 1 hour)
+4. Click "Run query"
+
+**Example queries**:
+```logql
+# Specific run
+{run_id="20770977435"}
+
+# Failed jobs only
+{status="failure"}
+
+# Specific platform
+{platform="macos", arch="aarch64"}
+
+# Search for errors
+{run_id="20770977435"} |= "ERROR"
+```
+
+#### Logs App View (Alternative)
+**Best for**: Overview, dashboards, alerting
+
+[Open Grafana Logs App](https://rostocci.grafana.net/a/grafana-lokiexplore-app/explore?patterns=%5B%5D&from=now-15m&to=now&timezone=browser&var-lineFormat=&var-ds=grafanacloud-logs&var-filters=&var-fields=&var-levels=&var-metadata=&var-jsonFields=&var-all-fields=&var-patterns=&var-lineFilterV2=&var-lineFilters=&var-primary_label=service_name%7C%3D~%7C.%2B&refresh=5s)
+
+⚠️ **Note**: This view shows logs as single entries - use Explore for better readability.
+
+### Common Workflows
+
+**1. Investigate a failed build**:
+```bash
+# Get the run ID from GitHub
+gh run list --repo Alain1405/rostoc-updates --limit 5
+
+# Open Explore with the run_id filter
+# Update the query: {run_id="YOUR_RUN_ID"}
+```
+
+**2. Compare logs across builds**:
+- Open multiple Explore tabs
+- Use different `run_id` filters in each
+- Compare error patterns
+
+**3. Track specific platform issues**:
+```logql
+{platform="windows", variant="production"} |= "error"
+```
+
+### Labels Available
+
+All logs include these labels for filtering:
+- `run_id` - GitHub Actions run ID
+- `run_number` - Sequential run number
+- `platform` - macos, windows, linux
+- `arch` - aarch64, x86_64, i686
+- `variant` - production, staging
+- `status` - success, failure
+- `job` - build, publish, etc.
+- `actor` - GitHub username
+- `branch` - Branch name
+- `commit` - Full commit SHA
+- `version` - Build version
+
 ## Additional Resources
 
 - [Act documentation](https://github.com/nektos/act)
@@ -853,3 +928,4 @@ This workflow reduces iteration time from 30-50 minutes (full GitHub CI) to **1-
 - [actionlint documentation](https://github.com/rhysd/actionlint)
 - [GitHub CLI manual](https://cli.github.com/manual/)
 - [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
+- [Grafana Loki LogQL documentation](https://grafana.com/docs/loki/latest/logql/)

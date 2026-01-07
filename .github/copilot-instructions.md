@@ -239,7 +239,12 @@ All CI builds automatically ship logs to Grafana Cloud for centralized search an
 
 **Grafana Cloud Access:**
 - Stack URL: https://rostocci.grafana.net/
-- Loki datasource: Pre-configured in Grafana Explore
+- **Explore View (Recommended)**: https://rostocci.grafana.net/explore
+  - Best for line-by-line log viewing
+  - Update query: `{run_id="YOUR_RUN_ID"}`
+- Logs App: https://rostocci.grafana.net/a/grafana-lokiexplore-app/explore
+  - Overview and dashboards (logs show as single line)
+- Loki datasource: `grafanacloud-logs` (pre-configured)
 - Log retention: 14 days
 
 **Required Secrets:**
