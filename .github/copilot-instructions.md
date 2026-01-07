@@ -205,6 +205,10 @@ brew install actionlint  # Includes shellcheck dependency
 | `APPLE_ID` | rostoc-updates | Apple ID for notarization |
 | `APPLE_APP_SPECIFIC_PASSWORD` | rostoc-updates | App-specific password for notarytool |
 | `TAURI_SIGNING_PRIVATE_KEY` | rostoc-updates | Tauri updater signing key |
+| `SLACK_WEBHOOK_URL` | rostoc-updates | Slack webhook for build failure notifications |
+| `LOKI_URL` | rostoc-updates | Grafana Cloud Loki push endpoint |
+| `LOKI_USERNAME` | rostoc-updates | Grafana Cloud user ID for Loki |
+| `LOKI_PASSWORD` | rostoc-updates | Grafana Cloud API token for Loki |
 
 ## Key Files
 
@@ -226,6 +230,81 @@ permissions:
 ```
 
 The `build-and-publish.yml` reusable workflow inherits these and uses `actions: write` to re-enable the stapler schedule after releasing.
+
+## CI Logging and Monitoring
+
+### Grafana Loki Log Aggregation
+
+All CI builds automatically ship logs to Grafana Cloud for centralized search and analysis.
+
+**Grafana Cloud Access:**
+- Stack URL: https://rostocci.grafana.net/
+- Loki datasource: Pre-configured in Grafana Explore
+- Log retention: 14 days
+
+**Required Secrets:**
+- `LOKI_URL`: `https://logs-prod-032.grafana.net/loki/api/v1/push`
+- `LOKI_USERNAME`: `1445820`
+- `LOKI_PASSWORD`: API token created via Access Policies → Create Access Policy → select Loki write scope
+
+**Log Labels (use for filtering):**
+```logql
+# Search by platform
+{platform="macos"}
+
+# Search by failure status
+{status="failure"}
+
+# Combine multiple labels
+{platform="windows", variant="staging", status="failure"}
+
+# Search by commit or run
+{commit="abc123"}
+{run_id="12345"}
+
+# Full-text search within logs
+{platform="macos"} |= "error" |= "codesign"
+```
+
+**Common Queries:**
+```logql
+# All failed builds
+{job="build", status="failure"}
+
+# macOS failures only
+{platform="macos", status="failure"}
+
+# Staging variant issues
+{variant="staging"}
+
+# Logs from specific run
+{run_id="20758186226"}
+
+# Pattern match errors
+{job="build"} |~ "(error|failed|panic)"
+```
+
+**Workflow Integration:**
+- Logs ship via direct Loki Push API (https://grafana.com/docs/loki/latest/api/#push-log-entries-to-loki)
+- Runs with `if: always()` - ships on success AND failure
+- Uses `continue-on-error: true` to not break builds if Loki is down
+- Source file: `build-<platform>-<arch>.log` from execute_build.sh
+- 11 labels attached as JSON: platform, arch, variant, version, job, status, run_id, run_number, actor, branch, commit
+- Authentication via HTTP Basic Auth (username:password)
+
+### Slack Notifications
+
+Build failures automatically post to Slack with error context and quick access links.
+
+**Required Secret:**
+- `SLACK_WEBHOOK_URL`: Slack incoming webhook URL
+
+**Notification includes:**
+- Platform/architecture/variant details
+- Error log excerpt (first 500 chars)
+- Direct link to GitHub run
+- Artifact download links (build logs, partial artifacts)
+- tmate debug instructions if `[debug]` was in commit message
 
 ## Retrieving Build Context (GitHub SHA and Rostoc Version)
 

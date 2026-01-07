@@ -58,35 +58,35 @@ jobs:
         shell: bash
         run: |
           echo "🔍 Running pre-flight checks..."
-          
+
           # Check required secrets are set (without exposing values)
           MISSING_SECRETS=()
           [[ -z "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]] && MISSING_SECRETS+=("APPLE_SIGNING_IDENTITY")
           [[ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]] && MISSING_SECRETS+=("TAURI_SIGNING_PRIVATE_KEY")
-          
+
           if [[ ${#MISSING_SECRETS[@]} -gt 0 ]]; then
             echo "::error::Missing required secrets: ${MISSING_SECRETS[*]}"
             exit 1
           fi
-          
+
           # Check disk space upfront
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             AVAILABLE_GB=$(df -g . | tail -1 | awk '{print $4}')
           else
             AVAILABLE_GB=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
           fi
-          
+
           if [[ $AVAILABLE_GB -lt 20 ]]; then
             echo "::error::Insufficient disk space: ${AVAILABLE_GB}GB available, need 20GB minimum"
             exit 1
           fi
-          
+
           # Check workflow inputs
           if [[ "${{ inputs.is_release }}" == "true" && -z "${{ inputs.ref }}" ]]; then
             echo "::error::Release builds require 'ref' input"
             exit 1
           fi
-          
+
           echo "✅ Pre-flight checks passed"
           echo "   Disk space: ${AVAILABLE_GB}GB available"
           echo "   Secrets: Configured"
@@ -204,25 +204,77 @@ jobs:
         run: echo "version=${{ steps.prep.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       # --- Ship logs to Grafana Loki ---
-      - name: Send logs to Loki
+      - name: Send build logs to Loki
         if: always()
-        uses: grafana/loki-github-action@v1
-        with:
-          url: ${{ secrets.LOKI_URL }}
-          username: ${{ secrets.LOKI_USERNAME }}
-          password: ${{ secrets.LOKI_PASSWORD }}
-          source-file: private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log
-          extra-labels: |
-            platform=${{ matrix.platform }}
-            arch=${{ matrix.arch }}
-            variant=${{ matrix.variant }}
-            job=build
-            status=${{ job.status }}
-            run_id=${{ github.run_id }}
-            run_number=${{ github.run_number }}
-            actor=${{ github.actor }}
-            branch=${{ github.ref_name }}
-            commit=${{ github.sha }}
+        continue-on-error: true
+        shell: bash
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
+          LOKI_PASSWORD: ${{ secrets.LOKI_PASSWORD }}
+        run: |
+          LOG_FILE="private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log"
+
+          if [[ ! -f "$LOG_FILE" ]]; then
+            echo "⚠️  Log file not found: $LOG_FILE"
+            exit 0
+          fi
+
+          # Prepare labels as JSON
+          LABELS=$(cat <<EOF
+          {
+            "platform": "${{ matrix.platform }}",
+            "arch": "${{ matrix.arch }}",
+            "variant": "${{ matrix.variant }}",
+            "version": "${{ steps.prep.outputs.version }}",
+            "job": "build",
+            "status": "${{ job.status }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "actor": "${{ github.actor }}",
+            "branch": "${{ github.ref_name }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          )
+
+          # Read log file and send to Loki
+          # Loki API: https://grafana.com/docs/loki/latest/api/#push-log-entries-to-loki
+          TIMESTAMP=$(date -u +%s)000000000  # nanoseconds
+
+          # Escape log content for JSON
+          LOG_CONTENT=$(cat "$LOG_FILE" | jq -Rs .)
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "streams": [
+              {
+                "stream": $LABELS,
+                "values": [
+                  ["$TIMESTAMP", $LOG_CONTENT]
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          # Send to Loki
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -u "${LOKI_USERNAME}:${LOKI_PASSWORD}" \
+            --data-binary "$PAYLOAD" \
+            "${LOKI_URL}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+
+          if [[ "$HTTP_CODE" =~ ^2[0-9]{2}$ ]]; then
+            echo "✅ Logs shipped to Loki (HTTP $HTTP_CODE)"
+          else
+            echo "⚠️  Failed to ship logs to Loki (HTTP $HTTP_CODE)"
+            echo "$RESPONSE" | head -n -1
+          fi
 
       # --- DEBUG MODE: SSH into runner on failure ---
       - name: Setup tmate session (debug mode)

@@ -233,6 +233,106 @@ runs:
         esac
         echo "[INFO] TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<empty>}"
 
+    - name: Capture diagnostic environment info
+      if: always()
+      shell: bash
+      working-directory: private-src
+      run: |
+        {
+          echo "# Build Environment Diagnostics"
+          echo ""
+          echo "**Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "**Runner**: ${{ runner.os }} ${{ runner.arch }}"
+          echo "**Platform**: ${{ inputs.platform }}"
+          echo "**Architecture**: ${{ inputs.arch }}"
+          echo "**Variant**: ${ROSTOC_APP_VARIANT}"
+          echo ""
+          
+          echo "## Disk Space"
+          df -h . || true
+          echo ""
+          
+          echo "## Installed Tools"
+          echo "- Node: $(node --version 2>/dev/null || echo 'not installed')"
+          echo "- pnpm: $(pnpm --version 2>/dev/null || echo 'not installed')"
+          echo "- Rust: $(rustc --version 2>/dev/null || echo 'not installed')"
+          echo "- Python: $(python3 --version 2>/dev/null || echo 'not installed')"
+          echo "- uv: $(uv --version 2>/dev/null || echo 'not installed')"
+          
+          if [[ "${{ inputs.platform }}" == "macos" ]]; then
+            echo "- codesign: $(codesign --version 2>&1 | head -1 || echo 'not available')"
+            echo "- xcrun: $(xcrun --version 2>&1 || echo 'not available')"
+          fi
+          echo ""
+          
+          echo "## Environment Variables"
+          echo '```'
+          env | grep -E '^(ROSTOC|TAURI|SENTRY|GITHUB|RUNNER)' | sort || true
+          echo '```'
+          echo ""
+          
+          echo "## Available Tauri Configs"
+          find src-tauri -maxdepth 1 -name "tauri*.json" -exec basename {} \; | sort
+          echo ""
+          
+          echo "## Python Runtime Status"
+          if [[ -d "build/runtime_staging" ]]; then
+            echo "Runtime staged: YES"
+            find build/runtime_staging -type f -name "python*" -o -name "*.dll" -o -name "*.dylib" 2>/dev/null | head -20
+          else
+            echo "Runtime staged: NO"
+          fi
+        } > diagnostics-${{ inputs.platform }}-${{ inputs.arch }}.md
+
+    - name: Upload diagnostic info
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: diagnostics-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_number }}
+        path: private-src/diagnostics-*.md
+        retention-days: 14
+        if-no-files-found: warn
+
+    - name: Generate build fingerprint
+      shell: bash
+      working-directory: private-src
+      run: |
+        {
+          echo "# Build Fingerprint"
+          echo "timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "platform: ${{ inputs.platform }}"
+          echo "arch: ${{ inputs.arch }}"
+          echo "variant: ${ROSTOC_APP_VARIANT}"
+          echo "runner_os: ${{ runner.os }}"
+          echo "github_sha: ${{ github.sha }}"
+          echo "github_run_number: ${{ github.run_number }}"
+          echo ""
+          echo "# Dependencies"
+          echo "package_json_hash: $(shasum package.json 2>/dev/null | awk '{print $1}' || echo 'N/A')"
+          echo "cargo_lock_hash: $(shasum src-tauri/Cargo.lock 2>/dev/null | awk '{print $1}' || echo 'N/A')"
+          echo "pnpm_lock_hash: $(shasum pnpm-lock.yaml 2>/dev/null | awk '{print $1}' || echo 'N/A')"
+          echo ""
+          echo "# Tool Versions"
+          echo "node: $(node --version 2>/dev/null || echo 'unknown')"
+          echo "rust: $(rustc --version 2>/dev/null || echo 'unknown')"
+          echo "python: $(python3 --version 2>/dev/null || echo 'unknown')"
+          echo ""
+          echo "# Config Selection"
+          echo "tauri_config: ${TAURI_CONFIG_FLAG:-<base>}"
+          if [[ -n "${TAURI_CONFIG_FLAG}" && -f "${TAURI_CONFIG_FLAG}" ]]; then
+            echo "config_hash: $(shasum "${TAURI_CONFIG_FLAG}" 2>/dev/null | awk '{print $1}' || echo 'N/A')"
+          fi
+        } > build-fingerprint.txt
+
+    - name: Upload build fingerprint
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: fingerprint-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_number }}
+        path: private-src/build-fingerprint.txt
+        retention-days: 30
+        if-no-files-found: warn
+
     - name: Generate Python config (before runtime staging)
       working-directory: private-src
       shell: bash
