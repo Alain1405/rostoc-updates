@@ -51,7 +51,8 @@ fi
 echo "[INFO] Starting build — output will be saved to ${LOG_FILE}"
 # shellcheck disable=SC2086
 ${BUILD_COMMAND} 2>&1 | tee "${LOG_FILE}"
-BUILD_EXIT_CODE=$?
+# CRITICAL: Use PIPESTATUS[0] to get build command exit code, not tee's exit code
+BUILD_EXIT_CODE=${PIPESTATUS[0]}
 
 # Extract and highlight errors if build failed
 if [[ ${BUILD_EXIT_CODE} -ne 0 ]]; then
