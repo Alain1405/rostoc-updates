@@ -202,11 +202,13 @@ runs:
       shell: bash
       run: pnpm install --frozen-lockfile
 
-    - name: Debug with upterm (SSH access for cargo troubleshooting)
-      uses: owenthereal/action-upterm@v1
-      with:
-        limit-access-to-actor: true
-        wait-timeout-minutes: 30
+    - name: Pre-populate Cargo cache (prevent race condition)
+      working-directory: private-src
+      shell: bash
+      run: |
+        echo "Pre-fetching Cargo dependencies to populate cache..."
+        cargo fetch --locked
+        echo "Cargo cache populated successfully"
 
     - name: Stamp build version
       working-directory: private-src
