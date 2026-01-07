@@ -216,89 +216,22 @@ runs:
     - name: Set variant-specific Tauri config flag
       shell: bash
       run: |
-        # Determine base config based on variant
         case "${ROSTOC_APP_VARIANT:-production}" in
           staging)
-            BASE_CONFIG="tauri.staging.conf.json"
+            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
             ;;
           dev)
-            BASE_CONFIG="tauri.dev.conf.json"
+            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.dev.conf.json" >> "$GITHUB_ENV"
             ;;
           production)
-            BASE_CONFIG=""  # Use default tauri.conf.json (Tauri auto-loads platform configs)
+            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
             ;;
           *)
             echo "::warning::Unknown variant '$ROSTOC_APP_VARIANT', defaulting to production"
-            BASE_CONFIG=""
+            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
             ;;
         esac
-
-        # Apply platform-specific config for Windows builds
-        # Tauri does NOT auto-load platform configs when using --config flag
-        if [[ "${{ inputs.platform }}" == "windows" ]]; then
-          if [[ -n "$BASE_CONFIG" ]]; then
-            # Use combined variant+platform config for Windows non-production builds
-            # Example: tauri.staging.conf.json -> tauri.staging.windows.conf.json
-            VARIANT=$(basename "$BASE_CONFIG" .conf.json | sed 's/^tauri\.//')
-            PLATFORM_CONFIG="tauri.${VARIANT}.windows.conf.json"
-            if [[ -f "private-src/src-tauri/$PLATFORM_CONFIG" ]]; then
-              echo "TAURI_CONFIG_FLAG=src-tauri/$PLATFORM_CONFIG" >> "$GITHUB_ENV"
-              echo "[INFO] Using Windows-specific config for ${{ inputs.variant }}: $PLATFORM_CONFIG"
-            else
-              echo "::warning::Windows platform config not found: $PLATFORM_CONFIG, falling back to base"
-              echo "TAURI_CONFIG_FLAG=src-tauri/$BASE_CONFIG" >> "$GITHUB_ENV"
-            fi
-          else
-            # Production Windows builds need explicit platform config
-            # Tauri's auto-loading of tauri.windows.conf.json is unreliable
-            PLATFORM_CONFIG="tauri.windows.conf.json"
-            if [[ -f "private-src/src-tauri/$PLATFORM_CONFIG" ]]; then
-              echo "TAURI_CONFIG_FLAG=src-tauri/$PLATFORM_CONFIG" >> "$GITHUB_ENV"
-              echo "[INFO] Using Windows platform config for production: $PLATFORM_CONFIG"
-            else
-              echo "::warning::Windows platform config not found: $PLATFORM_CONFIG"
-              echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
-            fi
-          fi
-        elif [[ -n "$BASE_CONFIG" ]]; then
-          echo "TAURI_CONFIG_FLAG=src-tauri/$BASE_CONFIG" >> "$GITHUB_ENV"
-        else
-          echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
-        fi
-
         echo "[INFO] TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<empty>}"
-
-        # Log the actual Tauri config that will be used
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "[TRACE] Tauri Configuration Selection"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Platform: ${{ inputs.platform }}"
-        echo "Variant: ${{ inputs.variant }}"
-        if [[ -n "${TAURI_CONFIG_FLAG}" ]]; then
-          CONFIG_PATH="private-src/${TAURI_CONFIG_FLAG}"
-          if [[ -f "${CONFIG_PATH}" ]]; then
-            echo "Config file: ${TAURI_CONFIG_FLAG}"
-            echo "Config exists: YES"
-            echo "Config size: $(stat -f%z "${CONFIG_PATH}" 2>/dev/null || stat -c%s "${CONFIG_PATH}" 2>/dev/null || echo 'unknown') bytes"
-            echo ""
-            echo "Config contents (first 50 lines):"
-            head -50 "${CONFIG_PATH}"
-          else
-            echo "Config file: ${TAURI_CONFIG_FLAG}"
-            echo "Config exists: NO (will use base tauri.conf.json)"
-          fi
-        else
-          echo "Config flag: <empty>"
-          echo "Will use: private-src/src-tauri/tauri.conf.json (base config)"
-          if [[ -f "private-src/src-tauri/tauri.conf.json" ]]; then
-            echo "Base config exists: YES"
-            echo ""
-            echo "Base config contents (first 50 lines):"
-            head -50 "private-src/src-tauri/tauri.conf.json"
-          fi
-        fi
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     - name: Generate Python config (before runtime staging)
       working-directory: private-src
