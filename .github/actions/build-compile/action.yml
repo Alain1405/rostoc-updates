@@ -203,7 +203,7 @@ runs:
       run: pnpm install --frozen-lockfile
 
     - name: Debug with upterm (SSH access for cargo troubleshooting)
-      uses: owenthereal/upterm@v4
+      uses: owenthereal/action-upterm@v1
       with:
         limit-access-to-actor: true
         wait-timeout-minutes: 30
