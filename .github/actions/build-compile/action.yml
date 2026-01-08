@@ -160,6 +160,19 @@ runs:
       with:
         arch: x86
 
+    - name: '[Windows] Remove Git usr/bin from PATH to prevent link.exe conflict'
+      if: ${{ inputs.platform == 'windows' }}
+      shell: bash
+      run: |
+        # Git for Windows includes /usr/bin/link.exe (Unix symlink utility)
+        # which conflicts with MSVC's link.exe (C++ linker)
+        # Remove Git's usr/bin and mingw64/bin from PATH to ensure MSVC linker is used
+        # See: https://github.com/Alain1405/rostoc-updates/actions/runs/20814230548/job/59785883822
+        NEW_PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "Git/usr/bin" | grep -v "Git/mingw64/bin" | tr '\n' ':' | sed 's/:$//')
+        echo "PATH=$NEW_PATH" >> $GITHUB_ENV
+        echo "✅ Removed Git usr/bin and mingw64/bin from PATH"
+        echo "Updated PATH (first 500 chars): ${NEW_PATH:0:500}"
+
     - name: '[Linux] Install system dependencies for AppImage'
       if: ${{ inputs.platform == 'linux' }}
       shell: bash
