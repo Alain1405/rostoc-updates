@@ -154,6 +154,12 @@ runs:
         echo "CARGO_BUILD_TARGET=i686-pc-windows-msvc" >> "$GITHUB_ENV"
         echo "✅ CARGO_BUILD_TARGET environment variable set for automatic cross-compilation"
 
+    - name: '[Windows x86] Configure MSVC for 32-bit compilation'
+      if: ${{ inputs.arch == 'i686' && inputs.platform == 'windows' }}
+      uses: egor-tensin/vs-shell@v2
+      with:
+        arch: x86
+
     - name: '[Linux] Install system dependencies for AppImage'
       if: ${{ inputs.platform == 'linux' }}
       shell: bash
@@ -494,8 +500,7 @@ runs:
         UV_PROJECT_ENVIRONMENT: 'shared'
         RUST_TARGET: ${{ steps.platform_config.outputs.target }}
         CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
-        # Skip rosi (and its pandas dependency) on optional 32-bit Windows builds
-        SKIP_ROSI: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' && '1' || '' }}
+        # SKIP_ROSI removed - i686 builds now work with proper MSVC x86 toolchain configuration
         # Linux AppImage workarounds for FUSE and linuxdeploy issues
         APPIMAGE_EXTRACT_AND_RUN: ${{ inputs.platform == 'linux' && '1' || '' }}
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}

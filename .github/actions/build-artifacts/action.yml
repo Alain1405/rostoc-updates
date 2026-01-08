@@ -426,7 +426,7 @@ runs:
 
         echo "[INFO] ✅ Windows MSI and signature uploaded (MSI will be used for auto-updates)"
         echo "[INFO] Tauri v2: MSI file serves as both installer and updater archive"
-        
+
         echo "Uploaded to: ${SPACES_ENDPOINT}/${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/" >> "$GITHUB_STEP_SUMMARY"r verification
         echo "[INFO] Loading checksums from checksums.txt"
         MSI_CHECKSUM=$(grep "${MSI_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
