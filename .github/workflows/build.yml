@@ -31,14 +31,14 @@ jobs:
     steps:
       - name: Checkout for build matrix
         uses: actions/checkout@v4
-        
+
       - name: Load build matrix configuration
         id: load-matrix
         run: |
           # Load both production and staging configurations
           PROD_MATRIX=$(cat .github/config/build-matrix.json | jq -c '.production')
           STAGING_MATRIX=$(cat .github/config/build-matrix.json | jq -c '.staging')
-          
+
           if [[ "${{ inputs.is_release }}" == "true" ]]; then
             # Release builds: both production and staging
             COMBINED_MATRIX=$(jq -s -c 'add' <(echo "$PROD_MATRIX") <(echo "$STAGING_MATRIX"))
@@ -261,7 +261,7 @@ jobs:
           }
           EOF
           )
-          
+
           # Use dedicated script for batched, efficient log shipping
           scripts/ci/ship_logs_to_loki.sh "$LOG_FILE" "$LABELS"
 

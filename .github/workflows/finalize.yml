@@ -32,14 +32,14 @@ jobs:
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## ❌ Release Build Failed
-          
+
           **The release could not be completed because the build step failed.**
-          
+
           ### What happened?
           - Build job result: `${{ inputs.build_result }}`
           - No artifacts were published to the release channels
           - The commit status in the private repo has been marked as failed
-          
+
           ### Next steps:
           1. Check the [build job logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for errors
           2. Common issues:
@@ -48,12 +48,12 @@ jobs:
              - Python runtime staging failures
              - Code signing certificate issues
           3. Fix the issues and trigger a new release build
-          
+
           ### View full logs:
           - [Complete workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           - Download build artifacts (if any were created before failure)
           EOF
-          
+
           echo "::error::Release build failed - build job returned '${{ inputs.build_result }}'"
           exit 1
 
@@ -108,19 +108,19 @@ jobs:
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## ✅ Release Build Successful
-          
+
           **The release has been built and is ready for publishing.**
-          
+
           ### What happened:
           - Build job completed successfully across all platforms
           - Artifacts are available for publishing to release channels
           - Commit status in the private repo has been marked as success
-          
+
           ### Next steps:
           - Artifacts will be published to the backend API
           - DMG files will be notarized and stapled (macOS)
           - Release metadata will be updated
-          
+
           ### View details:
           - [Complete workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           - Check the publish jobs for backend API responses

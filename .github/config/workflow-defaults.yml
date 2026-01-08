@@ -23,7 +23,7 @@ backend:
 # CDN configuration
 cdn:
   spaces_url: https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com
-  
+
 # Version control
 version:
   file: version.txt

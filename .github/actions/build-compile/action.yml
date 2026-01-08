@@ -133,6 +133,17 @@ runs:
           rm -rf src-tauri/pyembed
         fi
 
+    - name: '[Windows x64] Clear stale pyembed (force x86_64 download)'
+      if: ${{ inputs.arch == 'x86_64' && inputs.platform == 'windows' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -d src-tauri/pyembed ]; then
+          echo "[INFO] Removing existing src-tauri/pyembed to avoid i686 leftovers"
+          rm -rf src-tauri/pyembed
+        fi
+
     - name: '[Windows x86] Verify cross-compile capability'
       if: ${{ inputs.arch == 'i686' && inputs.platform == 'windows' }}
       shell: bash
@@ -196,6 +207,54 @@ runs:
             PYTHON_TARGET="x86_64-unknown-linux-gnu" bash scripts/linux/download-py.sh
             ;;
         esac
+
+    - name: Verify embedded Python architecture
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "🔍 Verifying embedded Python architecture matches target: ${{ inputs.arch }}"
+        
+        case "${{ inputs.platform }}" in
+          windows)
+            PYTHON_EXE="src-tauri/pyembed/python/python.exe"
+            ;;
+          *)
+            PYTHON_EXE="src-tauri/pyembed/python/bin/python3"
+            ;;
+        esac
+        
+        if [ ! -f "$PYTHON_EXE" ]; then
+          echo "❌ ERROR: Embedded Python not found at $PYTHON_EXE"
+          echo "Contents of src-tauri/pyembed/:"
+          ls -la src-tauri/pyembed/ || echo "Directory does not exist"
+          exit 1
+        fi
+        
+        # Get Python architecture
+        PYTHON_INFO=$($PYTHON_EXE -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')" 2>&1)
+        MACHINE=$(echo "$PYTHON_INFO" | cut -d',' -f1)
+        IS_64BIT=$(echo "$PYTHON_INFO" | cut -d',' -f2)
+        
+        echo "📊 Embedded Python info:"
+        echo "  - Machine: $MACHINE"
+        echo "  - 64-bit: $IS_64BIT"
+        echo "  - Target arch: ${{ inputs.arch }}"
+        
+        # Validate architecture matches
+        if [ "${{ inputs.arch }}" = "x86_64" ] || [ "${{ inputs.arch }}" = "aarch64" ]; then
+          if [ "$IS_64BIT" != "True" ]; then
+            echo "❌ ERROR: Expected 64-bit Python for ${{ inputs.arch }} target, but got 32-bit!"
+            exit 1
+          fi
+        elif [ "${{ inputs.arch }}" = "i686" ]; then
+          if [ "$IS_64BIT" != "False" ]; then
+            echo "❌ ERROR: Expected 32-bit Python for i686 target, but got 64-bit!"
+            exit 1
+          fi
+        fi
+        
+        echo "✅ Embedded Python architecture matches target"
 
     - name: Install JS dependencies
       working-directory: private-src

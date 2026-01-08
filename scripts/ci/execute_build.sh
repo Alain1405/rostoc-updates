@@ -2,6 +2,25 @@
 # Execute Tauri build with comprehensive logging and platform-specific debugging
 set -euo pipefail
 
+# Helper function: Get file size in MB (cross-platform)
+get_artifact_size_mb() {
+  local file="$1"
+  local size_bytes
+  # Try macOS stat first, fallback to GNU stat
+  size_bytes=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
+  echo $((size_bytes / 1024 / 1024))
+}
+
+# Helper function: List artifacts with sizes for step summary
+list_artifacts() {
+  local pattern="$1"
+  find src-tauri/target/release/bundle -name "$pattern" 2>/dev/null | while read -r artifact; do
+    local size_mb
+    size_mb=$(get_artifact_size_mb "$artifact")
+    echo "- \`$(basename "$artifact")\` (${size_mb} MB)"
+  done || true
+}
+
 # Required env vars
 : "${ROSTOC_APP_VARIANT:?}"
 # TAURI_CONFIG_FLAG can be empty for production builds
@@ -33,8 +52,6 @@ if [[ "${PLATFORM}" == "linux" ]]; then
   echo "NO_STRIP=${NO_STRIP:-<not set>}"
   echo "OUTPUT=${OUTPUT:-<not set>}"
   echo "VERBOSE=${VERBOSE:-<not set>}"
-  echo "OUTPUT=${OUTPUT:-<not set>}"
-  echo "VERBOSE=${VERBOSE:-<not set>}"
   echo ""
   echo "FUSE installations:"
   dpkg -l | grep -i fuse || echo "  No FUSE packages found"
@@ -55,13 +72,14 @@ ${BUILD_COMMAND} 2>&1 | tee "${LOG_FILE}"
 BUILD_EXIT_CODE=${PIPESTATUS[0]}
 
 # Debug: Print captured exit codes
+LAST_CMD_EXIT=$?
 echo ""
 echo "============================================================"
 echo "[DEBUG] Pipeline Exit Codes"
 echo "============================================================"
 echo "PIPESTATUS array: ${PIPESTATUS[*]}"
 echo "BUILD_EXIT_CODE (from PIPESTATUS[0]): ${BUILD_EXIT_CODE}"
-echo "Current \$? (last command): $?"
+echo "Last command exit code: ${LAST_CMD_EXIT}"
 echo "============================================================"
 echo ""
 
@@ -72,7 +90,7 @@ if [[ ${BUILD_EXIT_CODE} -ne 0 ]]; then
     echo "=== ERRORS DETECTED IN BUILD ==="
     echo ""
     
-    # Rust compilation errors
+    # Rust compilation errors (limit to first 100 lines)
     grep -A 5 "^error\[E[0-9]\+\]:" "${LOG_FILE}" 2>/dev/null | head -100 || true
     
     # Rust panic messages
@@ -81,7 +99,7 @@ if [[ ${BUILD_EXIT_CODE} -ne 0 ]]; then
     # Python errors
     grep -A 10 "Traceback (most recent call last):" "${LOG_FILE}" 2>/dev/null || true
     
-    # Tauri errors
+    # Tauri errors (exclude grep separator lines)
     grep -A 5 "Error:" "${LOG_FILE}" 2>/dev/null | grep -v "^--$" || true
     
     # Platform-specific errors
@@ -130,23 +148,13 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
       
       # List created artifacts
       if [[ "${PLATFORM}" == "macos" ]]; then
-        find src-tauri/target/release/bundle -name "*.dmg" -o -name "*.app.tar.gz" 2>/dev/null | while read -r artifact; do
-          SIZE=$(stat -f%z "$artifact" 2>/dev/null || stat -c%s "$artifact" 2>/dev/null || echo "0")
-          SIZE_MB=$((SIZE / 1024 / 1024))
-          echo "- \`$(basename "$artifact")\` (${SIZE_MB} MB)"
-        done || true
+        list_artifacts "*.dmg"
+        list_artifacts "*.app.tar.gz"
       elif [[ "${PLATFORM}" == "windows" ]]; then
-        find src-tauri/target -name "*.msi" -o -name "*.msi.zip" 2>/dev/null | while read -r artifact; do
-          SIZE=$(stat -c%s "$artifact" 2>/dev/null || echo "0")
-          SIZE_MB=$((SIZE / 1024 / 1024))
-          echo "- \`$(basename "$artifact")\` (${SIZE_MB} MB)"
-        done || true
+        list_artifacts "*.msi"
+        list_artifacts "*.msi.zip"
       elif [[ "${PLATFORM}" == "linux" ]]; then
-        find src-tauri/target -name "*.AppImage" 2>/dev/null | while read -r artifact; do
-          SIZE=$(stat -c%s "$artifact" 2>/dev/null || echo "0")
-          SIZE_MB=$((SIZE / 1024 / 1024))
-          echo "- \`$(basename "$artifact")\` (${SIZE_MB} MB)"
-        done || true
+        list_artifacts "*.AppImage"
       fi
     else
       echo "### ❌ Build Failed"
@@ -195,7 +203,11 @@ if [[ "${PLATFORM}" == "linux" ]]; then
   
   echo ""
   echo "AppImage build directory contents:"
-  find src-tauri/target -type d -name "appimage" -exec sh -c 'echo "Contents of {}"; ls -lah "{}" 2>/dev/null || echo "  (directory not accessible)"' \; || echo "  (No appimage directory found)"
+  # Find appimage directories and list their contents safely
+  while IFS= read -r appimage_dir; do
+    echo "Contents of ${appimage_dir}:"
+    ls -lah "${appimage_dir}" 2>/dev/null || echo "  (directory not accessible)"
+  done < <(find src-tauri/target -type d -name "appimage" 2>/dev/null) || echo "  (No appimage directory found)"
   echo "============================================================"
 fi
 
