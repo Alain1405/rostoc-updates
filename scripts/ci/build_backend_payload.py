@@ -191,18 +191,31 @@ def get_arch_mapping(platform: str, build_arch: str) -> str:
 
 
 def get_mime_type(platform: str, kind: str) -> str:
-    """Get MIME type for artifact based on platform and kind."""
+    """
+    Get MIME type for artifact based on platform and kind.
+    
+    Args:
+        platform: Target platform (macos, windows, linux)
+        kind: Asset kind (archive, installer, manifest, checksum)
+        
+    Returns:
+        MIME type string for Content-Type header
+    """
+    # Archive formats vary by platform
     if kind == "archive":
         if platform == "windows":
-            return "application/x-msi"  # Windows MSI is the archive
+            return "application/x-msi"  # Windows MSI serves as archive
         return "application/gzip"  # macOS .app.tar.gz, Linux .tar.gz
 
+    # Platform-specific installer formats
     if platform == "macos":
-        return "application/x-apple-diskimage"
+        return "application/x-apple-diskimage"  # .dmg
     elif platform == "windows":
-        return "application/x-msi"
+        return "application/x-msi"  # .msi
     elif platform == "linux":
-        return "application/x-executable"
+        return "application/x-executable"  # .AppImage
+        
+    # Fallback for unknown types
     return "application/octet-stream"
 
 
@@ -231,7 +244,7 @@ def process_platform_artifacts(
 
     print(f"\n=== Processing {platform} {arch} (channel: {channel}) ===")
 
-    # Process updater archive (if exists)
+    # Process updater archive
     archive_name = ARTIFACT_NAMING.get_updater_archive_name(
         version, platform, arch, channel
     )
@@ -242,7 +255,7 @@ def process_platform_artifacts(
     )
 
     if archive_path:
-        print(f"✓ Found updater archive: {archive_path.relative_to(artifact_root)}")
+        print(f"✅ Found updater archive: {archive_path.relative_to(artifact_root)}")
         asset = build_asset(
             source=archive_path,
             version=version,
@@ -259,14 +272,15 @@ def process_platform_artifacts(
         if asset:
             assets.append(asset)
     else:
-        print(f"✗ Updater archive not found: {archive_name}")
+        print(f"⚠️  Updater archive not found: {archive_name}")
 
     # Process installer
-    # For Windows: MSI serves as both installer and archive, so register it twice with different kinds
+    # Windows: Register MSI as both archive (above) AND installer for dual-purpose serving
+    # macOS/Linux: Separate installer files (DMG, AppImage)
     if platform == "windows":
-        print(f"ℹ️  Windows: Registering MSI as installer (same file as archive above)")
         if archive_path:
-            # Reuse the MSI file, register as installer kind
+            print(f"ℹ️  Windows: Registering MSI as installer (dual-purpose asset)")
+            # Reuse MSI file with installer kind for downloads page
             asset = build_asset(
                 source=archive_path,
                 version=version,
@@ -283,7 +297,7 @@ def process_platform_artifacts(
             if asset:
                 assets.append(asset)
         else:
-            print(f"⚠️  Windows: MSI not found, cannot register as installer")
+            print(f"⚠️  Windows: No MSI found, cannot register installer")
     else:
         installer_name = ARTIFACT_NAMING.get_installer_name(
             version, platform, arch, channel
@@ -295,34 +309,34 @@ def process_platform_artifacts(
         )
 
         if installer_path:
-        print(f"✓ Found installer: {installer_path.relative_to(artifact_root)}")
-        installer_meta = platform_entry.get("installer", {})
+            print(f"✅ Found installer: {installer_path.relative_to(artifact_root)}")
+            installer_meta = platform_entry.get("installer", {})
 
-        extra = {"artifact": "installer"}
-        # Include notarization metadata for macOS
-        if platform == "macos" and installer_meta:
-            if "notarization_status" in installer_meta:
-                extra["notarization_status"] = installer_meta["notarization_status"]
-            if "submission_id" in installer_meta:
-                extra["submission_id"] = installer_meta["submission_id"]
+            extra = {"artifact": "installer"}
+            # Include notarization metadata for macOS
+            if platform == "macos" and installer_meta:
+                if "notarization_status" in installer_meta:
+                    extra["notarization_status"] = installer_meta["notarization_status"]
+                if "submission_id" in installer_meta:
+                    extra["submission_id"] = installer_meta["submission_id"]
 
-        asset = build_asset(
-            source=installer_path,
-            version=version,
-            platform=platform,
-            architecture=backend_arch,
-            kind="installer",
-            cdn_base=cdn_base,
-            channel=channel,
-            signature=installer_sig,
-            mime_type=get_mime_type(platform, "installer"),
-            extra=extra,
-            stored_checksum=checksums.get(installer_name),
-        )
-        if asset:
-            assets.append(asset)
+            asset = build_asset(
+                source=installer_path,
+                version=version,
+                platform=platform,
+                architecture=backend_arch,
+                kind="installer",
+                cdn_base=cdn_base,
+                channel=channel,
+                signature=installer_sig,
+                mime_type=get_mime_type(platform, "installer"),
+                extra=extra,
+                stored_checksum=checksums.get(installer_name),
+            )
+            if asset:
+                assets.append(asset)
         else:
-            print(f"✗ Installer not found: {installer_name}")
+            print(f"⚠️  Installer not found: {installer_name}")
 
     return assets
 
