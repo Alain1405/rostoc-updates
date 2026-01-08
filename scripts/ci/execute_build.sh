@@ -152,7 +152,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
         list_artifacts "*.app.tar.gz"
       elif [[ "${PLATFORM}" == "windows" ]]; then
         list_artifacts "*.msi"
-        list_artifacts "*.msi.zip"
+        list_artifacts "*.exe"
       elif [[ "${PLATFORM}" == "linux" ]]; then
         list_artifacts "*.AppImage"
       fi

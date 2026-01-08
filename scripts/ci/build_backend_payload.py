@@ -25,6 +25,12 @@ else:
             variant_prefix = "Rostoc-staging" if channel == "staging" else "Rostoc"
             if platform == "macos":
                 return f"{variant_prefix}-{version}-darwin-{arch}.app.tar.gz"
+            elif platform == "windows":
+                # Windows: MSI file is used directly as updater archive (Tauri v2)
+                norm_arch = (
+                    "x64" if arch == "x86_64" else "x86" if arch == "i686" else arch
+                )
+                return f"{variant_prefix}-{version}-windows-{norm_arch}.msi"
             return f"{variant_prefix}-{version}-{platform}-{arch}.tar.gz"
 
         @staticmethod
@@ -187,7 +193,9 @@ def get_arch_mapping(platform: str, build_arch: str) -> str:
 def get_mime_type(platform: str, kind: str) -> str:
     """Get MIME type for artifact based on platform and kind."""
     if kind == "archive":
-        return "application/gzip"
+        if platform == "windows":
+            return "application/x-msi"  # Windows MSI is the archive
+        return "application/gzip"  # macOS .app.tar.gz, Linux .tar.gz
 
     if platform == "macos":
         return "application/x-apple-diskimage"
@@ -253,17 +261,40 @@ def process_platform_artifacts(
     else:
         print(f"✗ Updater archive not found: {archive_name}")
 
-    # Process installer (if exists)
-    installer_name = ARTIFACT_NAMING.get_installer_name(
-        version, platform, arch, channel
-    )
-    print(f"Looking for installer: {installer_name}")
-    installer_path = find_first(artifact_root, installer_name)
-    installer_sig = find_first(
-        artifact_root, ARTIFACT_NAMING.get_signature_name(installer_name)
-    )
+    # Process installer
+    # For Windows: MSI serves as both installer and archive, so register it twice with different kinds
+    if platform == "windows":
+        print(f"ℹ️  Windows: Registering MSI as installer (same file as archive above)")
+        if archive_path:
+            # Reuse the MSI file, register as installer kind
+            asset = build_asset(
+                source=archive_path,
+                version=version,
+                platform=platform,
+                architecture=backend_arch,
+                kind="installer",
+                cdn_base=cdn_base,
+                channel=channel,
+                signature=archive_sig,
+                mime_type=get_mime_type(platform, "installer"),
+                extra={"artifact": "installer"},
+                stored_checksum=checksums.get(archive_name),
+            )
+            if asset:
+                assets.append(asset)
+        else:
+            print(f"⚠️  Windows: MSI not found, cannot register as installer")
+    else:
+        installer_name = ARTIFACT_NAMING.get_installer_name(
+            version, platform, arch, channel
+        )
+        print(f"Looking for installer: {installer_name}")
+        installer_path = find_first(artifact_root, installer_name)
+        installer_sig = find_first(
+            artifact_root, ARTIFACT_NAMING.get_signature_name(installer_name)
+        )
 
-    if installer_path:
+        if installer_path:
         print(f"✓ Found installer: {installer_path.relative_to(artifact_root)}")
         installer_meta = platform_entry.get("installer", {})
 
@@ -290,8 +321,8 @@ def process_platform_artifacts(
         )
         if asset:
             assets.append(asset)
-    else:
-        print(f"✗ Installer not found: {installer_name}")
+        else:
+            print(f"✗ Installer not found: {installer_name}")
 
     return assets
 
