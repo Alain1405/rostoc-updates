@@ -17,14 +17,17 @@ fi
 python3 scripts/bundle_runtime.py --target=release --stage-only
 
 # Verify file was included in staged runtime (platform-specific paths)
-if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-  # Windows: Lib/site-packages (capital L)
+# Use RUNNER_OS from GitHub Actions for reliable platform detection
+if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+  # Windows: Lib/site-packages (capital L, no python3.x subdirectory)
   STAGED_CONFIG="build/runtime_staging/pyembed/python/Lib/site-packages/rostoc/generated_config.py"
   ROSTOC_PKG_DIR="build/runtime_staging/pyembed/python/Lib/site-packages/rostoc/"
+  echo "[DEBUG] Platform: Windows (using Lib/ path)"
 else
   # Unix/macOS: lib/python3.13/site-packages
   STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
   ROSTOC_PKG_DIR="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/"
+  echo "[DEBUG] Platform: Unix/macOS (using lib/python3.13/ path)"
 fi
 
 if [ -f "$STAGED_CONFIG" ]; then
