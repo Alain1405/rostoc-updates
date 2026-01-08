@@ -16,15 +16,24 @@ fi
 
 python3 scripts/bundle_runtime.py --target=release --stage-only
 
-# Verify file was included in staged runtime
-STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
+# Verify file was included in staged runtime (platform-specific paths)
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
+  # Windows: Lib/site-packages (capital L)
+  STAGED_CONFIG="build/runtime_staging/pyembed/python/Lib/site-packages/rostoc/generated_config.py"
+  ROSTOC_PKG_DIR="build/runtime_staging/pyembed/python/Lib/site-packages/rostoc/"
+else
+  # Unix/macOS: lib/python3.13/site-packages
+  STAGED_CONFIG="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/generated_config.py"
+  ROSTOC_PKG_DIR="build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/"
+fi
+
 if [ -f "$STAGED_CONFIG" ]; then
   echo "[DEBUG] ✅ generated_config.py included in staged runtime"
   echo "[DEBUG] Staged file size: $(wc -c < "$STAGED_CONFIG") bytes"
 else
   echo "::error::❌ generated_config.py NOT found in staged runtime at: $STAGED_CONFIG"
   echo "[DEBUG] Listing rostoc package contents:"
-  ls -la "build/runtime_staging/pyembed/python/lib/python3.13/site-packages/rostoc/" || true
+  ls -la "$ROSTOC_PKG_DIR" || echo "[DEBUG] Directory does not exist: $ROSTOC_PKG_DIR"
   exit 1
 fi
 
