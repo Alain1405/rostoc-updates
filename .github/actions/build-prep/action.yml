@@ -132,11 +132,12 @@ runs:
       with:
         node-version: '20'
 
-    - name: Setup Python 3.11 (default x64)
-      if: ${{ !(inputs.platform == 'windows' && inputs.arch == 'i686') }}
+    - name: Setup Python 3.11 (Windows x64)
+      if: ${{ inputs.platform == 'windows' && inputs.arch == 'x86_64' }}
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        architecture: 'x64'
 
     - name: Setup Python 3.11 (Windows x86)
       if: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' }}
@@ -144,6 +145,12 @@ runs:
       with:
         python-version: '3.11'
         architecture: 'x86'
+
+    - name: Setup Python 3.11 (macOS/Linux)
+      if: ${{ inputs.platform != 'windows' }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
     - name: Enable Corepack (pnpm)
       shell: bash
