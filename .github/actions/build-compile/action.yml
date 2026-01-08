@@ -214,7 +214,7 @@ runs:
       run: |
         set -euo pipefail
         echo "🔍 Verifying embedded Python architecture matches target: ${{ inputs.arch }}"
-        
+
         case "${{ inputs.platform }}" in
           windows)
             PYTHON_EXE="src-tauri/pyembed/python/python.exe"
@@ -223,24 +223,24 @@ runs:
             PYTHON_EXE="src-tauri/pyembed/python/bin/python3"
             ;;
         esac
-        
+
         if [ ! -f "$PYTHON_EXE" ]; then
           echo "❌ ERROR: Embedded Python not found at $PYTHON_EXE"
           echo "Contents of src-tauri/pyembed/:"
           ls -la src-tauri/pyembed/ || echo "Directory does not exist"
           exit 1
         fi
-        
+
         # Get Python architecture
         PYTHON_INFO=$($PYTHON_EXE -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')" 2>&1)
         MACHINE=$(echo "$PYTHON_INFO" | cut -d',' -f1)
         IS_64BIT=$(echo "$PYTHON_INFO" | cut -d',' -f2)
-        
+
         echo "📊 Embedded Python info:"
         echo "  - Machine: $MACHINE"
         echo "  - 64-bit: $IS_64BIT"
         echo "  - Target arch: ${{ inputs.arch }}"
-        
+
         # Validate architecture matches
         if [ "${{ inputs.arch }}" = "x86_64" ] || [ "${{ inputs.arch }}" = "aarch64" ]; then
           if [ "$IS_64BIT" != "True" ]; then
@@ -253,7 +253,7 @@ runs:
             exit 1
           fi
         fi
-        
+
         echo "✅ Embedded Python architecture matches target"
 
     - name: Install JS dependencies
@@ -327,7 +327,7 @@ runs:
           
           echo "## Environment Variables"
           echo '```'
-          env | grep -E '^(ROSTOC|TAURI|SENTRY|GITHUB|RUNNER)' | sort || true
+          env | grep -E '^(ROSTOC|TAURI|SENTRY|GITHUB|RUNNER|PYO3)' | sort || true
           echo '```'
           echo ""
           
@@ -430,20 +430,44 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "🔧 Configuring PyO3 to use staged embedded Python..."
+
         PYTHON_EXE="$(pwd)/build/runtime_staging/pyembed/python/python.exe"
         if [ ! -f "$PYTHON_EXE" ]; then
           echo "❌ ERROR: Staged Python not found at $PYTHON_EXE"
+          echo "   This should have been created by the staging step."
+          ls -la build/runtime_staging/ 2>/dev/null || echo "   Staging directory doesn't exist!"
           exit 1
         fi
-        
+
+        # Verify architecture matches target BEFORE setting PYO3_PYTHON
+        echo "🔍 Verifying Python architecture matches target: ${{ inputs.arch }}"
+        ARCH_INFO=$("$PYTHON_EXE" -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')" 2>&1)
+        MACHINE=$(echo "$ARCH_INFO" | cut -d',' -f1)
+        IS_64BIT=$(echo "$ARCH_INFO" | cut -d',' -f2)
+
+        # Validate architecture
+        EXPECTED_64BIT=""
+        if [ "${{ inputs.arch }}" = "x86_64" ]; then
+          EXPECTED_64BIT="True"
+        elif [ "${{ inputs.arch }}" = "i686" ]; then
+          EXPECTED_64BIT="False"
+        fi
+
+        if [ -n "$EXPECTED_64BIT" ] && [ "$IS_64BIT" != "$EXPECTED_64BIT" ]; then
+          echo "❌ ERROR: Python architecture mismatch!"
+          echo "   Target: ${{ inputs.arch }} ($([ "$EXPECTED_64BIT" = "True" ] && echo "64-bit" || echo "32-bit"))"
+          echo "   Python: $MACHINE ($IS_64BIT = $([ "$IS_64BIT" = "True" ] && echo "64-bit" || echo "32-bit"))"
+          echo "   This will cause PyO3 compilation to fail."
+          exit 1
+        fi
+
         # Convert to Windows path for PyO3
         PYTHON_EXE_WIN=$(cygpath -w "$PYTHON_EXE" 2>/dev/null || echo "$PYTHON_EXE")
         echo "PYO3_PYTHON=$PYTHON_EXE_WIN" >> "$GITHUB_ENV"
-        echo "✅ Set PYO3_PYTHON=$PYTHON_EXE_WIN"
-        
-        # Verify architecture matches target
-        ARCH_INFO=$("$PYTHON_EXE" -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')")
-        echo "📊 Staged Python: $ARCH_INFO (target: ${{ inputs.arch }})"
+
+        echo "✅ PYO3_PYTHON configured: $PYTHON_EXE_WIN"
+        echo "   Architecture: $MACHINE ($([ "$IS_64BIT" = "True" ] && echo "64-bit" || echo "32-bit")) - matches target ${{ inputs.arch }}"
 
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}
