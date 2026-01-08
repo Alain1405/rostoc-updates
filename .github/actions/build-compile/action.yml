@@ -500,7 +500,9 @@ runs:
         UV_PROJECT_ENVIRONMENT: 'shared'
         RUST_TARGET: ${{ steps.platform_config.outputs.target }}
         CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
-        # SKIP_ROSI removed - i686 builds now work with proper MSVC x86 toolchain configuration
+        # SKIP_ROSI: Set to '1' to skip rosi installation (checked by bundle_runtime.py)
+        # Empty for i686 now that MSVC x86 toolchain is properly configured
+        SKIP_ROSI: ''
         # Linux AppImage workarounds for FUSE and linuxdeploy issues
         APPIMAGE_EXTRACT_AND_RUN: ${{ inputs.platform == 'linux' && '1' || '' }}
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}
