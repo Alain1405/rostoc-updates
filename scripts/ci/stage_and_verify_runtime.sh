@@ -14,6 +14,12 @@ else
   exit 1
 fi
 
+# Skip rosi for Windows i686 builds (embedded Python is x64, pandas compilation fails)
+if [[ "${CARGO_BUILD_TARGET:-}" == "i686-pc-windows-msvc" ]]; then
+  echo "[INFO] Skipping rosi for Windows i686 (architecture mismatch with embedded Python)"
+  export SKIP_ROSI=1
+fi
+
 python3 scripts/bundle_runtime.py --target=release --stage-only
 
 # Verify file was included in staged runtime (platform-specific paths)
