@@ -14,13 +14,9 @@ else
   exit 1
 fi
 
-# Skip rosi for Windows i686 builds
-# - Embedded Python is x64 but target is i686 (32-bit)
-# - pandas (rosi dependency) requires native compilation which fails on architecture mismatch
-# - Rosi is optional extra in rostoc; setting SKIP_ROSI=1 installs rostoc without [rosi]
-# - Rosi doesn't work on Windows anyway (requires virtual TCP/socat support)
+# Skip rosi for Windows i686 builds (embedded Python is x64, pandas compilation fails)
 if [[ "${CARGO_BUILD_TARGET:-}" == "i686-pc-windows-msvc" ]]; then
-  echo "[INFO] Skipping rosi for Windows i686 (architecture mismatch + no Windows support)"
+  echo "[INFO] Skipping rosi for Windows i686 (architecture mismatch with embedded Python)"
   export SKIP_ROSI=1
 fi
 
