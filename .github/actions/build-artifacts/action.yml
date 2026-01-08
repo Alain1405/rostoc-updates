@@ -364,6 +364,18 @@ runs:
         "archive_name=$msiName" >> $env:GITHUB_OUTPUT
         "product_name=$productName" >> $env:GITHUB_OUTPUT
 
+    - name: '[Windows] Generate checksums'
+      if: ${{ inputs.platform == 'windows' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[INFO] Generating checksums for Windows MSI files"
+        # Generate sha256 checksums for all MSI files
+        (cd "../updates/windows" && sha256sum ./*.msi > checksums.txt)
+        echo "[INFO] Checksums generated:"
+        cat "../updates/windows/checksums.txt"
+
     - name: '[Windows] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
       working-directory: private-src
@@ -393,7 +405,7 @@ runs:
         echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
         echo "[INFO] Product name: ${PRODUCT_NAME}"
         echo "[INFO] MSI installer: ${MSI_NAME}"
-        echo "[INFO] MSI.ZIP archive: ${ARCHIVE_NAME:-not found}"
+        echo "[INFO] MSI for updates: ${ARCHIVE_NAME:-not found}"
 
         # Load checksums for verification
         echo "[INFO] Loading checksums from checksums.txt"
@@ -427,37 +439,7 @@ runs:
         echo "[INFO] ✅ Windows MSI and signature uploaded (MSI will be used for auto-updates)"
         echo "[INFO] Tauri v2: MSI file serves as both installer and updater archive"
 
-        echo "Uploaded to: ${SPACES_ENDPOINT}/${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/" >> "$GITHUB_STEP_SUMMARY"r verification
-        echo "[INFO] Loading checksums from checksums.txt"
-        MSI_CHECKSUM=$(grep "${MSI_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
-
-        echo "[INFO] Expected checksum:"
-        echo "  MSI: ${MSI_CHECKSUM}"
-
-        # Upload Windows artifacts
-        echo "[INFO] Uploading MSI..."
-        MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}"
-
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/windows/${MSI_NAME}" \
-          "${MSI_S3_URL}" \
-          --acl public-read
-
-        # Verify MSI upload using helper script from rostoc-updates repo
-        bash ../.github/scripts/verify-s3-upload.sh \
-          "../updates/windows/${MSI_NAME}" \
-          "${MSI_S3_URL}" \
-          "${MSI_CHECKSUM}" \
-          "${SPACES_ENDPOINT}"
-
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/windows/${MSI_NAME}.sig" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}.sig" \
-          --acl public-read
-
-        echo "[INFO] ✅ Windows upload complete"
+        echo "Uploaded to: ${SPACES_ENDPOINT}/${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/" >> "$GITHUB_STEP_SUMMARY"
 
     # ======== Linux ========
     - name: '[Linux] Locate updater artifacts'
