@@ -418,6 +418,33 @@ runs:
       shell: bash
       run: ../scripts/ci/verify_config_after_signing.sh
 
+    - name: '[Windows] Stage Python runtime (before Tauri build)'
+      if: ${{ inputs.platform == 'windows' }}
+      working-directory: private-src
+      shell: bash
+      run: ../scripts/ci/stage_and_verify_runtime.sh
+
+    - name: '[Windows] Set PYO3_PYTHON for correct embedded Python linking'
+      if: ${{ inputs.platform == 'windows' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        PYTHON_EXE="$(pwd)/build/runtime_staging/pyembed/python/python.exe"
+        if [ ! -f "$PYTHON_EXE" ]; then
+          echo "❌ ERROR: Staged Python not found at $PYTHON_EXE"
+          exit 1
+        fi
+        
+        # Convert to Windows path for PyO3
+        PYTHON_EXE_WIN=$(cygpath -w "$PYTHON_EXE" 2>/dev/null || echo "$PYTHON_EXE")
+        echo "PYO3_PYTHON=$PYTHON_EXE_WIN" >> "$GITHUB_ENV"
+        echo "✅ Set PYO3_PYTHON=$PYTHON_EXE_WIN"
+        
+        # Verify architecture matches target
+        ARCH_INFO=$("$PYTHON_EXE" -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')")
+        echo "📊 Staged Python: $ARCH_INFO (target: ${{ inputs.arch }})"
+
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}
       working-directory: private-src
@@ -450,4 +477,7 @@ runs:
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}
         OUTPUT: ${{ inputs.platform == 'linux' && '2' || '' }}
         VERBOSE: ${{ inputs.platform == 'linux' && '1' || '' }}
+        # Enable debug symbols for build dependencies (better error traces)
+        CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: 'true'
+        # PYO3_PYTHON is set by previous step for Windows, inherited for other platforms
       run: ../scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"
