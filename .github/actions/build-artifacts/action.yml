@@ -365,7 +365,7 @@ runs:
         "product_name=$productName" >> $env:GITHUB_OUTPUT
 
     - name: '[Windows] Generate checksums'
-      if: ${{ inputs.platform == 'windows' }}
+      if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
       working-directory: private-src
       shell: bash
       run: |
