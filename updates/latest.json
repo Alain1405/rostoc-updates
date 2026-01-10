@@ -1,0 +1,19 @@
+{
+  "version": "0.2.197",
+  "notes": "Release 0.2.197",
+  "pub_date": "2026-01-09T14:54:00.629281Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.197/Rostoc-0.2.197-darwin-aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQXorU1E0cmh1UWlQNjlsL3dqRnlyeE8yUWs3c3ZzejVFMUtYRVd6VXdDdStwMXRoQTNETnlnNnBvVlV5aW1qQ0NRWmpxOVN6Mmtvb01ZN2svc1JtM2djPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzY3OTYyNjc3CWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKbEtPRkpYNEVJZ3EycjZQUU5ReW80TnZlVCsxaVFRY2NsSkZ0OTJtcTViVWxKUktnVzAxVnlHOTZxTm45b0pVYnV4Q0VEUTFQQ3kvVWxxVnZla3pzQkE9PQo="
+    },
+    "darwin-x86_64": {
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.197/Rostoc-0.2.197-darwin-x86_64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQTBvOENvdGRIclA4cHNCR3htZnZ0eVd6aHY3VmtGR3QwQTVheHVCUXowbUFPK1Z6T2F4MDFFSXdYQW8wKzgvTkFVKy9QK0RBdWc5THhsWm9lYXBTandBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzY3OTYzMzYxCWZpbGU6Um9zdG9jLmFwcC50YXIuZ3oKSERHeTRoaUFIbHFmRUM5SXl5VGJUbDF5YmoyYXlpTU9QZEtqc3pBYVZvOEEyS2JqTUtEZWlFT3I1WFRPRjlPYkIrTUNDQjJzWWYvZUlNenNjL092QVE9PQo="
+    },
+    "windows-x86_64": {
+      "url": "https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.197/Rostoc-0.2.197-windows-x64.msi",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaVREWTQvdnFaQSs4eGYxcmx6NTg3MytXaE9EMG1oaXdQODRWLzZGeE5HMDVxQVZTRnFhYkROWHJtVlFHMWdZZWhJWURkQWppSEQwbjdjWGtYcVZPU2NXZ3JuTENJamdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzY3OTYyNzc2CWZpbGU6Um9zdG9jXzAuMi4xOTdfeDY0X2VuLVVTLm1zaQpwS2NsS3BaeXJSbDUrUEQvOXdqZFJGaElCWTdrMi8xY2hVYWprelF3Q29jQUp0TzRnOFlUNzlEcFN3Y0t5bE5RbEROUXJOdldsMlVxMjk4K296dWhBQT09Cg=="
+    }
+  }
+}

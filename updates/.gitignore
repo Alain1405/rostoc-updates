@@ -3,8 +3,11 @@
 macos/
 windows/
 linux/
-*.json
 version.txt
+
+# Keep static GitHub Pages manifests for legacy client compatibility
+!releases.json
+!latest.json
 
 # Keep only the static HTML index
 !index.html
