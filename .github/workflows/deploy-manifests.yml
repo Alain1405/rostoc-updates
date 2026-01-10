@@ -1,0 +1,48 @@
+name: Deploy Static Manifests to GitHub Pages
+
+# Deploy static update manifests for legacy client compatibility
+# These manifests support old clients (v0.2.150 and earlier) that still
+# check the GitHub Pages URL instead of the backend API.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'updates/*.json'
+      - 'updates/index.html'
+      - '.github/workflows/deploy-manifests.yml'
+  workflow_dispatch:
+
+# Sets permissions for GitHub Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Single deployment at a time
+concurrency:
+  group: 'pages-manifests'
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'updates'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
