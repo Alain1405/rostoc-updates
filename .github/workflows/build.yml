@@ -71,6 +71,9 @@ jobs:
       ROSTOC_APP_VARIANT: ${{ matrix.variant }}
       ROSTOC_UPDATE_CHANNEL: ${{ matrix.variant == 'staging' && 'staging' || 'stable' }}
       DO_RELEASE_PREFIX: ${{ matrix.variant == 'staging' && 'releases/staging' || 'releases' }}
+      # PostHog analytics (native Tauri plugin reads these at build time)
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
     timeout-minutes: ${{ matrix.platform == 'linux' && 30 || 50 }}
     outputs:
       version: ${{ steps.extract_version.outputs.version }}
