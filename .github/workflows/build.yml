@@ -74,6 +74,8 @@ jobs:
       # PostHog analytics (native Tauri plugin reads these at build time)
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+      # Frontend kill switch for analytics: disable for CI builds, enable for release builds
+      VITE_DISABLE_ANALYTICS: ${{ inputs.is_release && '0' || '1' }}
     timeout-minutes: ${{ matrix.platform == 'linux' && 30 || 50 }}
     outputs:
       version: ${{ steps.extract_version.outputs.version }}
