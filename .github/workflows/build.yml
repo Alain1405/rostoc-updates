@@ -68,6 +68,7 @@ jobs:
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
       VITE_SENTRY_SEND_DEFAULT_PII: ${{ secrets.VITE_SENTRY_SEND_DEFAULT_PII }}
       VITE_SENTRY_ENVIRONMENT: ${{ inputs.is_release && matrix.variant || 'ci' }}
+      VITE_WEB_APP_URL: https://app.rostoc.co
       ROSTOC_APP_VARIANT: ${{ matrix.variant }}
       ROSTOC_UPDATE_CHANNEL: ${{ matrix.variant == 'staging' && 'staging' || 'stable' }}
       DO_RELEASE_PREFIX: ${{ matrix.variant == 'staging' && 'releases/staging' || 'releases' }}
