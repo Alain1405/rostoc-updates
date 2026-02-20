@@ -4,7 +4,7 @@ applyTo: '**'
 
 # Rostoc Updates Repository Instructions
 
-> Public workflow runner for Rostoc desktop builds. The private `alain1405/rostoc`
+> Public workflow runner for Rostoc desktop builds. The private `Rostoc/rostoc`
 > repo dispatches CI and release events here to execute macOS/Windows builds on
 > public GitHub runners and host updater artifacts via GitHub Pages.
 
@@ -47,7 +47,7 @@ These trigger automatically based on task context:
 
 | Secret | Purpose |
 |--------|---------|
-| `PRIVATE_REPO_SSH_KEY` | Deploy key for `alain1405/rostoc` |
+| `PRIVATE_REPO_SSH_KEY` | Deploy key for `Rostoc/rostoc` |
 | `UPDATES_REPO_TOKEN` | PAT for artifact uploads and workflow dispatch |
 | `APPLE_CERTIFICATE` | Base64-encoded signing certificate |
 | `APPLE_CERTIFICATE_PASSWORD` | Certificate password |
