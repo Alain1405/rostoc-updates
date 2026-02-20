@@ -3,7 +3,7 @@
 
 # Repository configuration
 repositories:
-  private: alain1405/rostoc
+  private: Rostoc/rostoc
   updates: alain1405/rostoc-updates
 
 # Timeout configuration (minutes)

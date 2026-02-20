@@ -18,7 +18,7 @@ on:
         description: 'Whether this is a release build'
 
 env:
-  PRIVATE_REPO: alain1405/rostoc
+  PRIVATE_REPO: Rostoc/rostoc
   UPDATES_DIR: updates
   VERSION_FILE: version.txt
 

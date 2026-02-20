@@ -45,7 +45,7 @@ permissions:
   actions: write
 
 env:
-  PRIVATE_REPO: alain1405/rostoc
+  PRIVATE_REPO: Rostoc/rostoc
 
 jobs:
   # Phase 1: Setup & validation (set-status, lint-and-tests)

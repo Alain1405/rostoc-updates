@@ -17,7 +17,7 @@ inputs:
     required: true
 
   private_repo_ssh_key:
-    description: 'Deploy key for alain1405/rostoc'
+    description: 'Deploy key for Rostoc/rostoc'
     required: true
 
   apple_certificate:
@@ -83,7 +83,7 @@ runs:
     - name: Checkout private repo (read-only)
       uses: actions/checkout@v4
       with:
-        repository: alain1405/rostoc
+        repository: Rostoc/rostoc
         ref: ${{ inputs.ref }}
         ssh-key: ${{ inputs.private_repo_ssh_key }}
         path: private-src

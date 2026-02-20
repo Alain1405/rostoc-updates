@@ -28,7 +28,7 @@ on:
         description: 'Backend API endpoint for release publishing'
 
 env:
-  PRIVATE_REPO: alain1405/rostoc
+  PRIVATE_REPO: Rostoc/rostoc
   UPDATES_DIR: updates
   VERSION_FILE: version.txt
 
