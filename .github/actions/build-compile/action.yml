@@ -513,9 +513,9 @@ runs:
         UV_PROJECT_ENVIRONMENT: 'shared'
         RUST_TARGET: ${{ steps.platform_config.outputs.target }}
         CROSS_COMPILE_ARGS: ${{ steps.platform_config.outputs.cross_compile_args || '' }}
-        # SKIP_ROSI: Set to '1' to skip rosi installation (checked by bundle_runtime.py)
-        # Empty for i686 now that MSVC x86 toolchain is properly configured
-        SKIP_ROSI: ''
+        # SKIP_ROSI: Skip rosi only for Windows i686 to avoid pandas source build failures
+        # (pandas build backend meson-python is missing in this no-build-isolation path).
+        SKIP_ROSI: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' && '1' || '' }}
         # Linux AppImage workarounds for FUSE and linuxdeploy issues
         APPIMAGE_EXTRACT_AND_RUN: ${{ inputs.platform == 'linux' && '1' || '' }}
         NO_STRIP: ${{ inputs.platform == 'linux' && '1' || '' }}

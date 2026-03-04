@@ -34,7 +34,7 @@
     },
     {
       "variant": "production",
-      "os": "ubuntu-latest",
+      "os": "ubuntu-22.04",
       "platform": "linux",
       "arch": "x86_64",
       "name": "Linux AppImage x86-64",
@@ -76,7 +76,7 @@
     },
     {
       "variant": "staging",
-      "os": "ubuntu-latest",
+      "os": "ubuntu-22.04",
       "platform": "linux",
       "arch": "x86_64",
       "name": "Linux AppImage x86-64 — Staging",
