@@ -449,11 +449,26 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        SEARCH_DIRS=(target/release/bundle src-tauri/target/release/bundle)
+
+        # Use get_bundle_dirs.py for canonical search paths (same as macOS)
+        SEARCH_DIRS=()
+        while IFS= read -r line; do
+          SEARCH_DIRS+=("$line")
+        done < <(python scripts/ci/get_bundle_dirs.py linux appimage)
+
+        echo "[DEBUG] AppImage search directories:"
+        for dir in "${SEARCH_DIRS[@]}"; do
+          echo "  - $dir (exists=$([ -d "$dir" ] && echo yes || echo no))"
+        done
+
         APPIMAGE=""
         for dir in "${SEARCH_DIRS[@]}"; do
           [[ -d "$dir" ]] || continue
-          cand=$(find "$dir" -maxdepth 1 -name '*.AppImage' -print -quit 2>/dev/null || true)
+          echo "[DEBUG] Searching $dir:"
+          find "$dir" -maxdepth 3 -type f -name '*.AppImage*' 2>/dev/null | while read -r f; do
+            echo "  found: $f ($(du -h "$f" | cut -f1))"
+          done
+          cand=$(find "$dir" -maxdepth 3 -name '*.AppImage' ! -name '*.AppImage.*' -print -quit 2>/dev/null || true)
           if [[ -n "$cand" ]]; then
             APPIMAGE="$cand"
             break
@@ -461,7 +476,14 @@ runs:
         done
 
         if [[ -z "$APPIMAGE" ]]; then
-          echo "::error::No AppImage artifact found in target/ or src-tauri/target/"
+          echo "[DEBUG] No AppImage found. Dumping bundle directory tree:"
+          for root in target/release/bundle src-tauri/target/release/bundle; do
+            if [[ -d "$root" ]]; then
+              echo "[DEBUG] === $root ==="
+              find "$root" -maxdepth 4 -type f 2>/dev/null | head -40
+            fi
+          done
+          echo "::error::No AppImage artifact found in any search directory"
           exit 1
         fi
 
@@ -470,8 +492,9 @@ runs:
           exit 1
         fi
 
+        APPIMAGE_SIZE=$(du -h "$APPIMAGE" | cut -f1)
         echo "appimage=$APPIMAGE" >> "$GITHUB_OUTPUT"
-        echo "[INFO] Located AppImage: $APPIMAGE"
+        echo "[INFO] ✅ Located AppImage: $APPIMAGE ($APPIMAGE_SIZE)"
 
     - name: '[Linux] Prepare update bundle'
       if: ${{ inputs.platform == 'linux' && inputs.is_release == 'true' }}
