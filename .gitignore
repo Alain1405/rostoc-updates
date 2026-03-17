@@ -41,3 +41,6 @@ node_modules/
 # Build artifacts (local testing only)
 /tmp/
 /build/
+
+# AI test runner artifacts
+.artifacts/

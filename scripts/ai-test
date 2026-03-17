@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# -----------------------------------------------------------------------------
+# scripts/ai-test — AI-optimised check runner for rostoc-updates
+#
+# Runs CI validation checks (actionlint, shellcheck, validate-paths, test-env),
+# captures full logs to .artifacts/test/, and prints a compact sentinel-wrapped
+# summary to stdout.
+#
+# Usage:
+#   ./scripts/ai-test lint             # actionlint (YAML syntax + shellcheck)
+#   ./scripts/ai-test validate         # validate-paths (script/workflow path checks)
+#   ./scripts/ai-test env              # test-env (env var handling regression)
+#   ./scripts/ai-test smoke            # lint + validate (fast gate)
+#   ./scripts/ai-test full             # lint + validate + env
+#
+# Artifacts written to .artifacts/test/:
+#   summary.txt   — compact summary (printed to stdout between sentinels)
+#   summary.json  — machine-readable result
+#   full.log      — combined output from all checks
+# -----------------------------------------------------------------------------
+set -uo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+MODE="${1:-smoke}"
+
+ARTIFACTS=".artifacts/test"
+mkdir -p "$ARTIFACTS"
+
+FULL_LOG="$ARTIFACTS/full.log"
+SUMMARY_TXT="$ARTIFACTS/summary.txt"
+SUMMARY_JSON="$ARTIFACTS/summary.json"
+
+: > "$FULL_LOG"
+
+OVERALL_EXIT=0
+
+# Results accumulator: each entry is "PASS|FAIL <check-name> [message]"
+RESULTS=()
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+log() { echo "[ai-test] $*" | tee -a "$FULL_LOG"; }
+
+run_check() {
+  local name="$1"
+  shift
+  local status=0
+  log "Running: $name ($*)"
+  echo "--- $name ---" >> "$FULL_LOG"
+  "$@" >> "$FULL_LOG" 2>&1 || status=$?
+  if [[ $status -eq 0 ]]; then
+    RESULTS+=("PASS $name")
+    log "$name passed"
+  else
+    RESULTS+=("FAIL $name exit=$status")
+    log "$name FAILED (exit $status)"
+    OVERALL_EXIT=$status
+  fi
+}
+
+# ── Mode dispatch ─────────────────────────────────────────────────────────────
+case "$MODE" in
+
+  lint)
+    if command -v actionlint >/dev/null 2>&1; then
+      run_check "actionlint" actionlint -color
+    else
+      log "actionlint not found; skipping lint (install: brew install actionlint)"
+    fi
+    ;;
+
+  validate)
+    run_check "validate-paths" ./scripts/ci/validate_workflow_paths.sh
+    ;;
+
+  env)
+    run_check "test-env" ./scripts/ci/test_env_handling.sh
+    run_check "test-env-regression" ./scripts/ci/test_env_regression.sh
+    ;;
+
+  smoke)
+    if command -v actionlint >/dev/null 2>&1; then
+      run_check "actionlint" actionlint -color
+    else
+      log "actionlint not found; skipping lint"
+    fi
+    run_check "validate-paths" ./scripts/ci/validate_workflow_paths.sh
+    ;;
+
+  full)
+    if command -v actionlint >/dev/null 2>&1; then
+      run_check "actionlint" actionlint -color
+    else
+      log "actionlint not found; skipping lint"
+    fi
+    run_check "validate-paths" ./scripts/ci/validate_workflow_paths.sh
+    run_check "test-env" ./scripts/ci/test_env_handling.sh
+    run_check "test-env-regression" ./scripts/ci/test_env_regression.sh
+    ;;
+
+  help | --help | -h)
+    cat <<'EOF'
+Usage: ./scripts/ai-test <mode>
+
+Modes:
+  lint        actionlint YAML/shellcheck validation
+  validate    Script path validation
+  env         Environment variable handling regression tests
+  smoke       lint + validate (fast gate, preferred first check)
+  full        All checks
+
+AI workflow (preferred order):
+  1. ./scripts/ai-test smoke   (fast gate)
+  2. ./scripts/ai-test full    (final gate)
+
+Artifacts written to .artifacts/test/:
+  summary.txt    Compact summary with sentinel markers
+  summary.json   Machine-readable JSON result
+  full.log       Full verbose output
+EOF
+    exit 0
+    ;;
+
+  *)
+    echo "[ai-test] Unknown mode: $MODE. Run ./scripts/ai-test --help for usage." >&2
+    exit 1
+    ;;
+esac
+
+# ── Generate summary ──────────────────────────────────────────────────────────
+python3 - "$ARTIFACTS" "$SUMMARY_TXT" "$SUMMARY_JSON" "${RESULTS[@]+"${RESULTS[@]}"}" <<'PYEOF'
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+artifacts = args[0]
+summary_txt = args[1]
+summary_json = args[2]
+result_lines = args[3:]  # "PASS checkname" or "FAIL checkname exit=N"
+
+passed = 0
+failed = 0
+failures = []
+
+for line in result_lines:
+    parts = line.split(" ", 2)
+    outcome = parts[0] if parts else "FAIL"
+    name = parts[1] if len(parts) > 1 else "unknown"
+    msg = parts[2] if len(parts) > 2 else ""
+    if outcome == "PASS":
+        passed += 1
+    else:
+        failed += 1
+        failures.append({"test": name, "file": "", "message": msg, "type": "check_failure"})
+
+status = "failed" if failed > 0 else "passed"
+
+lines = [
+    "=== AI TEST SUMMARY START ===",
+    f"status:  {status}",
+    f"passed:  {passed}",
+    f"failed:  {failed}",
+    f"skipped: 0",
+]
+if failures:
+    lines.append("")
+    lines.append("FAILED CHECKS")
+    for i, f in enumerate(failures, 1):
+        lines.append(f"{i}) {f['test']}  {f['message']}")
+lines += [
+    "",
+    "See full logs:",
+    f"  {os.path.join(artifacts, 'full.log')}",
+    f"  {summary_json}",
+    "=== AI TEST SUMMARY END ===",
+]
+
+summary_text = "\n".join(lines)
+print(summary_text)
+
+with open(summary_txt, "w") as fh:
+    fh.write(summary_text + "\n")
+
+with open(summary_json, "w") as fh:
+    json.dump(
+        {
+            "status": status,
+            "passed": passed,
+            "failed": failed,
+            "skipped": 0,
+            "failures": failures,
+            "log_file": os.path.join(artifacts, "full.log"),
+        },
+        fh,
+        indent=2,
+    )
+PYEOF
+
+exit "$OVERALL_EXIT"

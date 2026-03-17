@@ -1,4 +1,4 @@
-.PHONY: format lint lint-ci test-local test-script test-env test-env-regression validate-paths setup-act help
+.PHONY: format lint lint-ci test-local test-script test-env test-env-regression validate-paths setup-act ai-test-smoke ai-test-full ai-test help
 
 WORKFLOW_FILES := $(shell find .github -name '*.yml' -o -name '*.yaml')
 
@@ -7,6 +7,17 @@ format:
 
 lint:
 	actionlint
+
+# ── AI test runner targets ────────────────────────────────────────────────────
+# Produces .artifacts/test/summary.{txt,json} + full.log for AI consumption.
+ai-test-smoke:
+	@bash scripts/ai-test smoke
+
+ai-test-full:
+	@bash scripts/ai-test full
+
+ai-test:
+	$(if $(MODE),bash scripts/ai-test $(MODE),bash scripts/ai-test smoke)
 
 validate-paths:
 	@./scripts/ci/validate_workflow_paths.sh
