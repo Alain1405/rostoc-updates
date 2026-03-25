@@ -115,6 +115,30 @@ runs:
           exit 0
         }
 
+    - name: '[Windows x64] Runtime smoke test'
+      if: ${{ inputs.platform == 'windows' && inputs.arch == 'x86_64' }}
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path windows)
+        PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
+        if [ -z "$PYBIN" ]; then
+          echo "[WARN] Embedded python.exe not found at canonical location for x64 build"
+          exit 0
+        fi
+        echo "[INFO] Running x64 runtime smoke test: $PYBIN" >&2
+        "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
+          --platform windows \
+          --comprehensive \
+          --require-manifest \
+          --debug-json windows_x64_runtime_smoke_debug.json \
+          --strict || {
+          exitcode=$?
+          echo "[WARN] x64 smoke test failed (exit code $exitcode), continuing"
+          exit 0
+        }
+
     - name: '[Linux] Runtime smoke test'
       if: ${{ inputs.platform == 'linux' }}
       working-directory: private-src
@@ -156,6 +180,15 @@ runs:
         name: smoke-debug-${{ inputs.variant }}-${{ inputs.platform }}-${{ inputs.arch }}
         path: |
           private-src/windows_x86_runtime_smoke_debug.json
+        if-no-files-found: warn
+
+    - name: Upload Windows x64 smoke diagnostics
+      if: ${{ inputs.platform == 'windows' && inputs.arch == 'x86_64' && always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: smoke-debug-${{ inputs.variant }}-${{ inputs.platform }}-${{ inputs.arch }}
+        path: |
+          private-src/windows_x64_runtime_smoke_debug.json
         if-no-files-found: warn
 
     - name: Upload Linux smoke diagnostics

@@ -244,7 +244,8 @@ runs:
 
         # Upload DMG if present
         if [ -n "${DMG_NAME}" ] && [ -f "../updates/macos/${DMG_NAME}" ]; then
-          echo "[INFO] Uploading unsigned DMG (will be replaced after notarization)"
+          echo "[INFO] Uploading signed, unstapled DMG for backend-managed notarization"
+          echo "[INFO] CI will replace this artifact after stapling completes"
           
           DMG_CHECKSUM=$(grep "${DMG_NAME}" "../updates/macos/checksums.txt" | awk '{print $1}')
           echo "[INFO] Expected DMG checksum: ${DMG_CHECKSUM}"
