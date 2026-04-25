@@ -2,6 +2,10 @@ name: Build Desktop (Reusable)
 
 on:
   workflow_call:
+    outputs:
+      version:
+        description: 'Built version string'
+        value: ${{ jobs.build-desktop.outputs.version }}
     inputs:
       ref:
         required: true
@@ -204,6 +208,17 @@ jobs:
           do_spaces_secret_key: ${{ secrets.DO_SPACES_SECRET_KEY }}
           do_spaces_bucket: ${{ secrets.DO_SPACES_BUCKET }}
           do_spaces_endpoint: ${{ secrets.DO_SPACES_ENDPOINT }}
+
+      - name: Upload Windows MSI for update smoke
+        if: ${{ matrix.platform == 'windows' && matrix.arch == 'x86_64' && matrix.variant == 'production' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi-for-smoke-${{ github.run_id }}
+          path: |
+            private-src/updates/windows/Rostoc-${{ steps.prep.outputs.version }}-windows-x64.msi
+            private-src/updates/windows/Rostoc-${{ steps.prep.outputs.version }}-windows-x64.msi.sig
+          retention-days: 7
+          if-no-files-found: error
 
       # --- Upload partial artifacts on failure ---
       - name: Upload partial artifacts (if build failed)

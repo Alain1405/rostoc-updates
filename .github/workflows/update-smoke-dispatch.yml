@@ -1,0 +1,96 @@
+name: Update Smoke Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      previous_msi_url:
+        description: 'URL for the previously published Windows MSI'
+        required: true
+        type: string
+      new_msi_url:
+        description: 'URL for the freshly built Windows MSI'
+        required: true
+        type: string
+      expected_new_version:
+        description: 'Expected version after the update install'
+        required: true
+        type: string
+
+jobs:
+  update-smoke:
+    runs-on: windows-latest
+    env:
+      IS_RELEASE: ${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'false' || 'true' }}
+    steps:
+      - name: Checkout repo (scripts + Loki helper)
+        uses: actions/checkout@v4
+
+      - name: Download MSI inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $logDir = Join-Path $env:RUNNER_TEMP 'update-smoke-dispatch'
+          New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+
+          $previousPath = Join-Path $logDir 'previous.msi'
+          $newPath = Join-Path $logDir 'new.msi'
+
+          Invoke-WebRequest -Uri '${{ inputs.previous_msi_url }}' -OutFile $previousPath
+          Invoke-WebRequest -Uri '${{ inputs.new_msi_url }}' -OutFile $newPath
+
+      - name: Run Windows update smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $logDir = Join-Path $env:RUNNER_TEMP 'update-smoke-dispatch'
+          $stdoutLog = Join-Path $logDir 'summary.stdout.log'
+          $newMsiPath = Join-Path $logDir 'new.msi'
+
+          & "$env:GITHUB_WORKSPACE/scripts/ci/windows/update-smoke.ps1" `
+            -NewMsiPath $newMsiPath `
+            -PreviousMsiUrl '${{ inputs.previous_msi_url }}' `
+            -ExpectedNewVersion '${{ inputs.expected_new_version }}' `
+            -LogDir $logDir 2>&1 | Tee-Object -FilePath $stdoutLog
+
+      - name: Upload update smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-smoke-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}\update-smoke-dispatch
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Ship update smoke logs to Loki
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
+          LOKI_PASSWORD: ${{ secrets.LOKI_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          REPO_ROOT="$(cygpath -u "$GITHUB_WORKSPACE")"
+          LOG_FILE="$(cygpath -u "$RUNNER_TEMP/update-smoke-dispatch/summary.stdout.log")"
+          LABELS=$(cat <<EOF
+          {
+            "platform": "windows",
+            "arch": "x86_64",
+            "variant": "${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'staging' || 'production' }}",
+            "job": "update_smoke",
+            "status": "${{ job.status }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "actor": "${{ github.actor }}",
+            "branch": "${{ github.ref_name }}",
+            "commit": "${{ github.sha }}",
+            "is_release": "${{ env.IS_RELEASE }}"
+          }
+          EOF
+          )
+
+          "$REPO_ROOT/scripts/ci/ship_logs_to_loki.sh" "$LOG_FILE" "$LABELS"
