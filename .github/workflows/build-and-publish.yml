@@ -68,10 +68,9 @@ jobs:
     secrets: inherit
 
   # Phase 2.5: Windows update smoke gate.
-  # TODO(PR-2): remove the permanent skip after validating the dispatch workflow.
   update-smoke-windows:
     needs: build
-    if: ${{ false }}
+    if: ${{ needs.build.result == 'success' }}
     runs-on: windows-latest
     steps:
       - name: Checkout repo (scripts + manifests)
@@ -89,7 +88,7 @@ jobs:
           EXPECTED_NEW_VERSION: ${{ needs.build.outputs.version }}
           IS_RELEASE: ${{ inputs.is_release || false }}
           UPDATE_SMOKE_THRESHOLD_SECONDS: '90'
-          UPDATE_SMOKE_BASELINE_SECONDS: '60'
+          UPDATE_SMOKE_BASELINE_SECONDS: '135'
         run: |
           $ErrorActionPreference = 'Stop'
 
@@ -211,7 +210,7 @@ jobs:
         shell: pwsh
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          UPDATE_SMOKE_BASELINE_SECONDS: '60'
+          UPDATE_SMOKE_BASELINE_SECONDS: '135'
         run: |
           $summaryPath = Join-Path (Join-Path $env:RUNNER_TEMP 'update-smoke') 'summary.json'
           if (-not (Test-Path -LiteralPath $summaryPath)) {
@@ -246,8 +245,7 @@ jobs:
                 fields = @(
                   @{ type = 'mrkdwn'; text = "*Update install seconds:* $seconds" },
                   @{ type = 'mrkdwn'; text = "*Baseline:* $baseline seconds" },
-                  @{ type = 'mrkdwn'; text = "*Regression threshold:* $regressionThreshold seconds" },
-                  @{ type = 'mrkdwn'; text = "*TODO:* replace this placeholder baseline with Loki-derived baselines in PR 2." }
+                  @{ type = 'mrkdwn'; text = "*Regression threshold:* $regressionThreshold seconds" }
                 )
               }
             )
@@ -257,7 +255,7 @@ jobs:
 
   # Phase 3a: Publish production channel
   publish-production:
-    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && (needs.update-smoke-windows.result == 'success' || needs.update-smoke-windows.result == 'skipped') }}
+    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
     needs: [build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
@@ -270,7 +268,7 @@ jobs:
 
   # Phase 3b: Publish staging channel
   publish-staging:
-    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && (needs.update-smoke-windows.result == 'success' || needs.update-smoke-windows.result == 'skipped') }}
+    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
     needs: [build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
@@ -289,5 +287,5 @@ jobs:
     with:
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       is_release: ${{ inputs.is_release || false }}
-      build_result: ${{ (needs.build.result == 'success' && (needs.update-smoke-windows.result == 'success' || needs.update-smoke-windows.result == 'skipped') && (needs.publish-production.result == 'success' || needs.publish-production.result == 'skipped') && (needs.publish-staging.result == 'success' || needs.publish-staging.result == 'skipped')) && 'success' || 'failure' }}
+      build_result: ${{ (needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' && (needs.publish-production.result == 'success' || needs.publish-production.result == 'skipped') && (needs.publish-staging.result == 'success' || needs.publish-staging.result == 'skipped')) && 'success' || 'failure' }}
     secrets: inherit
