@@ -20,12 +20,17 @@ jobs:
   update-smoke:
     runs-on: windows-latest
     env:
+      PREVIOUS_MSI_URL: ${{ inputs.previous_msi_url }}
+      NEW_MSI_URL: ${{ inputs.new_msi_url }}
+      EXPECTED_NEW_VERSION: ${{ inputs.expected_new_version }}
       IS_RELEASE: ${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'false' || 'true' }}
+      VARIANT: ${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'staging' || 'production' }}
     steps:
       - name: Checkout repo (scripts + Loki helper)
         uses: actions/checkout@v4
 
       - name: Download MSI inputs
+        id: download-msi
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -33,25 +38,32 @@ jobs:
           $logDir = Join-Path $env:RUNNER_TEMP 'update-smoke-dispatch'
           New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
-          $previousPath = Join-Path $logDir 'previous.msi'
-          $newPath = Join-Path $logDir 'new.msi'
+          # Preserve the canonical artifact basename so the smoke script can infer
+          # the product name from filenames like Rostoc-0.2.197-windows-x64.msi.
+          $newFileName = [System.IO.Path]::GetFileName(([uri]$env:NEW_MSI_URL).AbsolutePath)
+          $newPath = Join-Path $logDir $newFileName
 
-          Invoke-WebRequest -Uri '${{ inputs.previous_msi_url }}' -OutFile $previousPath
-          Invoke-WebRequest -Uri '${{ inputs.new_msi_url }}' -OutFile $newPath
+          Invoke-WebRequest -Uri $env:NEW_MSI_URL -OutFile $newPath
+
+          "new_msi_path=$newPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Run Windows update smoke
         shell: pwsh
+        env:
+          NEW_MSI_PATH: ${{ steps.download-msi.outputs.new_msi_path }}
+          PREVIOUS_MSI_URL: ${{ env.PREVIOUS_MSI_URL }}
+          EXPECTED_NEW_VERSION: ${{ env.EXPECTED_NEW_VERSION }}
         run: |
           $ErrorActionPreference = 'Stop'
 
           $logDir = Join-Path $env:RUNNER_TEMP 'update-smoke-dispatch'
           $stdoutLog = Join-Path $logDir 'summary.stdout.log'
-          $newMsiPath = Join-Path $logDir 'new.msi'
+          $newMsiPath = $env:NEW_MSI_PATH
 
           & "$env:GITHUB_WORKSPACE/scripts/ci/windows/update-smoke.ps1" `
             -NewMsiPath $newMsiPath `
-            -PreviousMsiUrl '${{ inputs.previous_msi_url }}' `
-            -ExpectedNewVersion '${{ inputs.expected_new_version }}' `
+            -PreviousMsiUrl $env:PREVIOUS_MSI_URL `
+            -ExpectedNewVersion $env:EXPECTED_NEW_VERSION `
             -LogDir $logDir 2>&1 | Tee-Object -FilePath $stdoutLog
 
       - name: Upload update smoke logs
@@ -80,7 +92,7 @@ jobs:
           {
             "platform": "windows",
             "arch": "x86_64",
-            "variant": "${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'staging' || 'production' }}",
+            "variant": "$VARIANT",
             "job": "update_smoke",
             "status": "${{ job.status }}",
             "run_id": "${{ github.run_id }}",
