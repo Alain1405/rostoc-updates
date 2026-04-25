@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download MSI inputs
+        id: download-msi
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -34,19 +35,26 @@ jobs:
           New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
           $previousPath = Join-Path $logDir 'previous.msi'
-          $newPath = Join-Path $logDir 'new.msi'
+          # Preserve the canonical artifact basename so the smoke script can infer
+          # the product name from filenames like Rostoc-0.2.197-windows-x64.msi.
+          $newFileName = [System.IO.Path]::GetFileName(([uri]'${{ inputs.new_msi_url }}').AbsolutePath)
+          $newPath = Join-Path $logDir $newFileName
 
           Invoke-WebRequest -Uri '${{ inputs.previous_msi_url }}' -OutFile $previousPath
           Invoke-WebRequest -Uri '${{ inputs.new_msi_url }}' -OutFile $newPath
 
+          "new_msi_path=$newPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - name: Run Windows update smoke
         shell: pwsh
+        env:
+          NEW_MSI_PATH: ${{ steps.download-msi.outputs.new_msi_path }}
         run: |
           $ErrorActionPreference = 'Stop'
 
           $logDir = Join-Path $env:RUNNER_TEMP 'update-smoke-dispatch'
           $stdoutLog = Join-Path $logDir 'summary.stdout.log'
-          $newMsiPath = Join-Path $logDir 'new.msi'
+          $newMsiPath = $env:NEW_MSI_PATH
 
           & "$env:GITHUB_WORKSPACE/scripts/ci/windows/update-smoke.ps1" `
             -NewMsiPath $newMsiPath `

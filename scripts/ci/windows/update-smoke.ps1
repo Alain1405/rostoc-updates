@@ -28,12 +28,22 @@ function Get-ProductNameFromMsiPath {
     [string]$Path
   )
 
-  $fileName = [System.IO.Path]::GetFileNameWithoutExtension($Path)
-  if ($fileName -notmatch '^(?<product>.+)-(?=\d)') {
-    throw "Unable to infer product name from MSI file name: $fileName"
+  $fileName = [System.IO.Path]::GetFileName($Path)
+  if ([string]::IsNullOrWhiteSpace($fileName)) {
+    throw "Unable to infer product name from MSI path '$Path': path is empty"
   }
 
-  return $Matches.product
+  $match = [regex]::Match(
+    $fileName,
+    '^(?<product>Rostoc(?:-staging)?)-(?<version>\d+\.\d+\.\d+)-windows-(?<arch>x64|x86)\.msi$',
+    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+  )
+
+  if (-not $match.Success) {
+    throw "Unable to infer product name from MSI path '$Path'. Expected a filename like 'Rostoc-X.Y.Z-windows-x64.msi' or 'Rostoc-staging-X.Y.Z-windows-x64.msi'."
+  }
+
+  return $match.Groups['product'].Value
 }
 
 function Get-InstalledVersion {
