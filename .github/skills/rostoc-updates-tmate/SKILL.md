@@ -74,6 +74,10 @@ exit
 - Private repo is checked out in `private-src/`
 - GitHub Actions env vars available: `echo $GITHUB_*`
 
+## Windows Update Smoke Debugging
+
+If the Windows update smoke job hangs or stalls, attach to the `windows-latest` runner the same way you would for `build-desktop`: add the debug marker, wait for the failure or debug hold, and open the tmate session from the job log. The same approach works for the new smoke gate and its manual dispatch workflow.
+
 ## Example: Debugging Codesign Failure
 
 ```bash

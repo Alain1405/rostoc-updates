@@ -126,6 +126,10 @@ SHA=$(gh run view 20758186226 --json headSha --jq '.headSha')
 gh api repos/Alain1405/rostoc/contents/package.json?ref=$SHA \
   --jq '.content' | base64 -d | jq -r '.version'
 
+## Update Smoke Logs
+
+When debugging Windows update smoke runs, download the workflow artifact named `update-smoke-logs-<run_id>` before digging through Loki. It contains `previous-install.log`, `update-install.log`, `summary.json`, and the captured stdout line from the smoke script.
+
 # Get commit message
 gh api repos/Alain1405/rostoc-updates/commits/$SHA --jq '.commit.message'
 ```

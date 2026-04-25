@@ -67,10 +67,198 @@ jobs:
       is_release: ${{ inputs.is_release || false }}
     secrets: inherit
 
+  # Phase 2.5: Windows update smoke gate.
+  # TODO(PR-2): remove the permanent skip after validating the dispatch workflow.
+  update-smoke-windows:
+    needs: build
+    if: ${{ false }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repo (scripts + manifests)
+        uses: actions/checkout@v4
+
+      - name: Download Windows MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-msi-for-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}\update-smoke\artifact
+
+      - name: Run Windows update smoke
+        shell: pwsh
+        env:
+          EXPECTED_NEW_VERSION: ${{ needs.build.outputs.version }}
+          IS_RELEASE: ${{ inputs.is_release || false }}
+          UPDATE_SMOKE_THRESHOLD_SECONDS: '90'
+          UPDATE_SMOKE_BASELINE_SECONDS: '60'
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $repoRoot = $env:GITHUB_WORKSPACE
+          $logDir = Join-Path $env:RUNNER_TEMP 'update-smoke'
+          $artifactDir = Join-Path $env:RUNNER_TEMP 'update-smoke\artifact'
+          $stdoutLog = Join-Path $logDir 'summary.stdout.log'
+
+          New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+
+          $newMsi = Get-ChildItem -Path $artifactDir -Filter '*.msi' -Recurse | Select-Object -First 1
+          if (-not $newMsi) {
+            throw "Downloaded MSI artifact not found under $artifactDir"
+          }
+
+          $releaseManifest = Join-Path $repoRoot 'updates/releases.json'
+          $manifest = Get-Content -LiteralPath $releaseManifest -Raw | ConvertFrom-Json
+          $previousMsiUrl = $manifest.releases[0].platforms.'windows-x86_64'.url
+
+          & "$repoRoot/scripts/ci/windows/update-smoke.ps1" `
+            -NewMsiPath $newMsi.FullName `
+            -PreviousMsiUrl $previousMsiUrl `
+            -ExpectedNewVersion $env:EXPECTED_NEW_VERSION `
+            -LogDir $logDir 2>&1 | Tee-Object -FilePath $stdoutLog
+
+      - name: Upload update smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-smoke-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}\update-smoke
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Ship update smoke logs to Loki
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
+          LOKI_PASSWORD: ${{ secrets.LOKI_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          REPO_ROOT="$(cygpath -u "$GITHUB_WORKSPACE")"
+          LOG_FILE="$(cygpath -u "$RUNNER_TEMP/update-smoke/summary.stdout.log")"
+          LABELS=$(cat <<EOF
+          {
+            "platform": "windows",
+            "arch": "x86_64",
+            "variant": "${{ inputs.is_release && 'production' || 'staging' }}",
+            "job": "update_smoke",
+            "status": "${{ job.status }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "actor": "${{ github.actor }}",
+            "branch": "${{ github.ref_name }}",
+            "commit": "${{ github.sha }}",
+            "is_release": "${{ inputs.is_release || false }}"
+          }
+          EOF
+          )
+
+          "$REPO_ROOT/scripts/ci/ship_logs_to_loki.sh" "$LOG_FILE" "$LABELS"
+
+      - name: Warn on slow update install
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          UPDATE_SMOKE_THRESHOLD_SECONDS: '90'
+        run: |
+          $summaryPath = Join-Path (Join-Path $env:RUNNER_TEMP 'update-smoke') 'summary.json'
+          if (-not (Test-Path -LiteralPath $summaryPath)) {
+            Write-Host '[WARN] summary.json missing; skipping threshold notification'
+            exit 0
+          }
+
+          $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+          $seconds = [double]$summary.update_install_seconds
+          $threshold = [double]$env:UPDATE_SMOKE_THRESHOLD_SECONDS
+
+          if ($seconds -le $threshold) {
+            Write-Host "[INFO] update_install_seconds=$seconds is within threshold $threshold"
+            exit 0
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            Write-Host '[WARN] SLACK_WEBHOOK_URL is not set; skipping threshold notification'
+            exit 0
+          }
+
+          $payload = @{
+            text = "⚠️ Rostoc Windows update smoke exceeded $threshold seconds"
+            blocks = @(
+              @{
+                type = 'header'
+                text = @{ type = 'plain_text'; text = '⚠️ Slow Windows update smoke' }
+              },
+              @{
+                type = 'section'
+                fields = @(
+                  @{ type = 'mrkdwn'; text = "*Update install seconds:* $seconds" },
+                  @{ type = 'mrkdwn'; text = "*Threshold:* $threshold" },
+                  @{ type = 'mrkdwn'; text = "*Run:* ${{ github.run_id }}" },
+                  @{ type = 'mrkdwn'; text = "*Variant:* ${{ inputs.is_release && 'production' || 'staging' }}" }
+                )
+              }
+            )
+          } | ConvertTo-Json -Depth 6
+
+          Invoke-RestMethod -Uri $env:SLACK_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $payload | Out-Null
+
+      - name: Warn on update install regression
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          UPDATE_SMOKE_BASELINE_SECONDS: '60'
+        run: |
+          $summaryPath = Join-Path (Join-Path $env:RUNNER_TEMP 'update-smoke') 'summary.json'
+          if (-not (Test-Path -LiteralPath $summaryPath)) {
+            Write-Host '[WARN] summary.json missing; skipping regression notification'
+            exit 0
+          }
+
+          $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+          $seconds = [double]$summary.update_install_seconds
+          $baseline = [double]$env:UPDATE_SMOKE_BASELINE_SECONDS
+          $regressionThreshold = $baseline * 1.5
+
+          if ($seconds -le $regressionThreshold) {
+            Write-Host "[INFO] update_install_seconds=$seconds is within regression threshold $regressionThreshold"
+            exit 0
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            Write-Host '[WARN] SLACK_WEBHOOK_URL is not set; skipping regression notification'
+            exit 0
+          }
+
+          $payload = @{
+            text = "🚨 Rostoc Windows update smoke regressed beyond the baseline"
+            blocks = @(
+              @{
+                type = 'header'
+                text = @{ type = 'plain_text'; text = '🚨 Windows update smoke regression' }
+              },
+              @{
+                type = 'section'
+                fields = @(
+                  @{ type = 'mrkdwn'; text = "*Update install seconds:* $seconds" },
+                  @{ type = 'mrkdwn'; text = "*Baseline:* $baseline seconds" },
+                  @{ type = 'mrkdwn'; text = "*Regression threshold:* $regressionThreshold seconds" },
+                  @{ type = 'mrkdwn'; text = "*TODO:* replace this placeholder baseline with Loki-derived baselines in PR 2." }
+                )
+              }
+            )
+          } | ConvertTo-Json -Depth 6
+
+          Invoke-RestMethod -Uri $env:SLACK_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $payload | Out-Null
+
   # Phase 3a: Publish production channel
   publish-production:
-    if: inputs.is_release
-    needs: build
+    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && (needs.update-smoke-windows.result == 'success' || needs.update-smoke-windows.result == 'skipped') }}
+    needs: [build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -82,8 +270,8 @@ jobs:
 
   # Phase 3b: Publish staging channel
   publish-staging:
-    if: inputs.is_release
-    needs: build
+    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && (needs.update-smoke-windows.result == 'success' || needs.update-smoke-windows.result == 'skipped') }}
+    needs: [build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -96,10 +284,10 @@ jobs:
   # Phase 4: Finalize (update commit status)
   finalize:
     if: always()
-    needs: [build, publish-production, publish-staging]
+    needs: [build, update-smoke-windows, publish-production, publish-staging]
     uses: ./.github/workflows/finalize.yml
     with:
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       is_release: ${{ inputs.is_release || false }}
-      build_result: ${{ needs.build.result }}
+      build_result: ${{ (needs.build.result == 'success' && (needs.update-smoke-windows.result == 'success' || needs.update-smoke-windows.result == 'skipped') && (needs.publish-production.result == 'success' || needs.publish-production.result == 'skipped') && (needs.publish-staging.result == 'success' || needs.publish-staging.result == 'skipped')) && 'success' || 'failure' }}
     secrets: inherit

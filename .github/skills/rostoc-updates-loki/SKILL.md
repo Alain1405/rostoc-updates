@@ -45,6 +45,21 @@ All logs include these labels for filtering:
 | `commit` | Full commit SHA |
 | `version` | Build version |
 
+## Update Smoke Events
+
+The Windows update smoke workflow emits a single JSON line to Loki with `job="update_smoke"`. The payload includes:
+
+- `update_install_seconds`
+- `previous_install_seconds`
+- `previous_version`
+- `new_version`
+- `previous_msi_size_bytes`
+- `new_msi_size_bytes`
+- `run_id`
+- `is_release`
+
+Use this event to correlate update-install timing with the artifact logs uploaded as `update-smoke-logs-<run_id>`.
+
 ## Common Queries
 
 ```logql
