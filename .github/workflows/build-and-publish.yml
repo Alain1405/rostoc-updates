@@ -110,14 +110,15 @@ jobs:
           $backendLatestUrl = 'https://api.rostoc.co/api/updates/latest/public/'
           $latestRelease = Invoke-RestMethod -Uri "$backendLatestUrl?channel=$updateChannel" -Method Get
           $previousMsi = $latestRelease.platforms |
-            Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq 'x86_64' } |
+            Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq 'x64' } |
             Select-Object -First 1
 
           if (-not $previousMsi) {
             throw "Unable to resolve the previous Windows x86_64 MSI from $backendLatestUrl for channel '$updateChannel'"
           }
 
-          $previousMsiUrl = "$backendLatestUrl$($previousMsi.downloadUrl)"
+          $backendOrigin = ([uri]$backendLatestUrl).GetLeftPart([System.UriPartial]::Authority)
+          $previousMsiUrl = ([uri]::new([uri]$backendOrigin, $previousMsi.downloadUrl)).AbsoluteUri
 
           & "$repoRoot/scripts/ci/windows/update-smoke.ps1" `
             -NewMsiPath $newMsi.FullName `

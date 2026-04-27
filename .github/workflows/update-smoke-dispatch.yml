@@ -58,19 +58,25 @@ jobs:
           $previousMsiUrl = $env:PREVIOUS_MSI_URL
           if ([string]::IsNullOrWhiteSpace($previousMsiUrl)) {
             $updateChannel = if ($env:VARIANT -eq 'staging') { 'staging' } else { 'stable' }
+            $backendArchitecture = switch ($env:UPDATE_ARCH) {
+              'x86_64' { 'x64' }
+              'i686' { 'x86' }
+              default { $env:UPDATE_ARCH }
+            }
             # Resolve the baseline from the backend public latest endpoint so
             # dispatch-time smoke checks do not depend on Pages manifests.
             $backendLatestUrl = 'https://api.rostoc.co/api/updates/latest/public/'
             $latestRelease = Invoke-RestMethod -Uri "$backendLatestUrl?channel=$updateChannel" -Method Get
             $previousMsi = $latestRelease.platforms |
-              Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq $env:UPDATE_ARCH } |
+              Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq $backendArchitecture } |
               Select-Object -First 1
 
             if (-not $previousMsi) {
-              throw "Unable to resolve the previous Windows MSI from $backendLatestUrl for channel '$updateChannel' and architecture '$($env:UPDATE_ARCH)'"
+              throw "Unable to resolve the previous Windows MSI from $backendLatestUrl for channel '$updateChannel' and architecture '$backendArchitecture'"
             }
 
-            $previousMsiUrl = "$backendLatestUrl$($previousMsi.downloadUrl)"
+            $backendOrigin = ([uri]$backendLatestUrl).GetLeftPart([System.UriPartial]::Authority)
+            $previousMsiUrl = ([uri]::new([uri]$backendOrigin, $previousMsi.downloadUrl)).AbsoluteUri
           }
 
           "new_msi_path=$newPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
