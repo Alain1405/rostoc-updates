@@ -6,7 +6,8 @@ This guide walks through setting up DigitalOcean Spaces for hosting Rostoc relea
 
 **Architecture:**
 - **DO Spaces**: S3-compatible object storage for release binaries (.tar.gz, .dmg, .msi, .sig)
-- **GitHub Pages**: Hosts JSON manifests (releases.json, latest.json)
+- **Backend public latest endpoint**: Source of truth for smoke/update consumers
+- **GitHub Pages**: Compatibility mirror for JSON manifests (releases.json, latest.json)
 - **GitHub Actions**: Uploads binaries to Spaces during build, downloads/replaces DMG during notarization
 
 **Why Spaces?**
@@ -117,7 +118,8 @@ curl -I https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/test/test-file.t
 ### Build Workflow (`build-and-publish.yml`)
 - Uploads binaries to `s3://BUCKET/releases/vVERSION/` after build
 - Sets `--acl public-read` for direct CDN access
-- Generates `releases.json` and `latest.json` with Spaces CDN URLs
+- Publishes release metadata to the backend public latest/download channel used by smoke checks and clients
+- Generates `releases.json` and `latest.json` with Spaces CDN URLs for compatibility consumers
 - Deploys manifests to GitHub Pages
 
 ### Stapler Workflow (`staple-notarized-dmg.yml`)
@@ -130,9 +132,16 @@ curl -I https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/test/test-file.t
 
 ## 7. URL Structure
 
+Backend update API (authoritative for smoke/update checks):
+- Public latest: `https://api.rostoc.co/api/updates/latest/public/?channel=stable`
+- Public latest: `https://api.rostoc.co/api/updates/latest/public/?channel=staging`
+
 Manifests (GitHub Pages):
 - Latest release: `https://alain1405.github.io/rostoc-updates/latest.json`
 - Version history: `https://alain1405.github.io/rostoc-updates/releases.json`
+
+Reserved future fallback:
+- `https://updates.rostoc.co`
 
 Binaries (DO Spaces CDN):
 - macOS updater: `https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.95/Rostoc-0.2.95-darwin-aarch64.app.tar.gz`
@@ -184,6 +193,7 @@ DigitalOcean Spaces pricing (as of 2024):
 - [ ] Test upload/download with AWS CLI locally
 - [ ] Create test release to verify workflow
 - [ ] Monitor first notarization cycle (30min cron)
+- [ ] Verify the backend public latest endpoint returns the current Windows x64 and x86 MSI URLs
 - [ ] Verify Tauri updater can fetch from new URLs
 - [ ] Clean up old GitHub Releases (optional)
 

@@ -20,7 +20,7 @@ Migrated binary storage from GitHub Releases to DigitalOcean Spaces to solve a c
 1. Build workflow uploads unsigned DMG to Spaces: `s3://BUCKET/releases/v0.2.95/Rostoc-0.2.95-darwin-aarch64.dmg`
 2. Submits to Apple notarization
 3. Stapler workflow downloads from Spaces, staples, **re-uploads to same path**
-4. ✅ **CDN URL stays the same** - `releases.json` update marks DMG as available
+4. ✅ **CDN URL stays the same** - backend release metadata marks the asset available and exposes it through the public latest/download channel
 
 ## Files Modified
 
@@ -31,6 +31,7 @@ Migrated binary storage from GitHub Releases to DigitalOcean Spaces to solve a c
 - Added AWS CLI upload to DO Spaces for both macOS and Windows binaries
 - Passes `DO_SPACES_CDN_URL` to manifest generation script
 - (2024-05) Added backend publish hook that POSTs `/api/updates/publish/` with release+asset metadata whenever `ROSTOC_BACKEND_TOKEN` is configured
+- Windows smoke now resolves its baseline from `https://api.rostoc.co/api/updates/latest/public/` instead of reading `updates/releases.json`
 
 **`staple-notarized-dmg.yml`**:
 - Added DO Spaces environment variables
@@ -80,14 +81,14 @@ Migrated binary storage from GitHub Releases to DigitalOcean Spaces to solve a c
 ```
 [Build] → Upload to DO Spaces (mutable)
           ↓
-        Stapler replaces DMG on Spaces (same URL)
+        Backend public latest/download API (source of truth)
           ↓
-        latest.json (GitHub Pages) → Points to Spaces CDN
+        latest.json / releases.json (GitHub Pages compatibility mirrors)
           ↓
         [Tauri updater fetches from Spaces CDN]
 ```
 
-**Benefit**: DMG URL never changes, stapling works seamlessly
+**Benefit**: DMG URL never changes, stapling works seamlessly, and CI no longer depends on the legacy Pages manifest path
 
 ## URL Changes
 
@@ -105,6 +106,17 @@ https://rostoc-releases.sgp1.cdn.digitaloceanspaces.com/releases/v0.2.95/Rostoc-
 ```
 https://alain1405.github.io/rostoc-updates/latest.json
 https://alain1405.github.io/rostoc-updates/releases.json
+```
+
+**Reserved future updater fallback contract**:
+```
+https://updates.rostoc.co
+```
+
+**Active smoke/update source of truth**:
+```
+https://api.rostoc.co/api/updates/latest/public/?channel=stable
+https://api.rostoc.co/api/updates/latest/public/?channel=staging
 ```
 
 ## Required Secrets (New)
@@ -132,6 +144,7 @@ Before first production release:
 - [ ] Create test release tag (e.g., `v0.2.95-test`)
 - [ ] Verify binaries appear in Spaces under `releases/v0.2.95-test/`
 - [ ] Check `releases.json` and `latest.json` have Spaces CDN URLs
+- [ ] Verify the backend public latest endpoint returns the current Windows x64 and x86 MSI URLs
 - [ ] Verify Tauri updater can fetch from new URLs
 - [ ] Wait 30min for stapler workflow to process notarization
 - [ ] Check DMG is replaced in Spaces (download and verify staple)
