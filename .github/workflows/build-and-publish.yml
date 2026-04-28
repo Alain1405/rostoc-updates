@@ -104,9 +104,21 @@ jobs:
             throw "Downloaded MSI artifact not found under $artifactDir"
           }
 
-          $releaseManifest = Join-Path $repoRoot 'updates/releases.json'
-          $manifest = Get-Content -LiteralPath $releaseManifest -Raw | ConvertFrom-Json
-          $previousMsiUrl = $manifest.releases[0].platforms.'windows-x86_64'.url
+          $updateChannel = if ($env:IS_RELEASE -eq 'true') { 'stable' } else { 'staging' }
+          # Use the backend public latest endpoint as the authoritative smoke baseline.
+          # GitHub Pages manifests remain available only as compatibility mirrors.
+          $backendLatestUrl = 'https://api.rostoc.co/api/updates/latest/public/'
+          $latestRelease = Invoke-RestMethod -Uri "$backendLatestUrl?channel=$updateChannel" -Method Get
+          $previousMsi = $latestRelease.platforms |
+            Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq 'x64' } |
+            Select-Object -First 1
+
+          if (-not $previousMsi) {
+            throw "Unable to resolve the previous Windows x86_64 MSI from $backendLatestUrl for channel '$updateChannel'"
+          }
+
+          $backendOrigin = ([uri]$backendLatestUrl).GetLeftPart([System.UriPartial]::Authority)
+          $previousMsiUrl = ([uri]::new([uri]$backendOrigin, $previousMsi.downloadUrl)).AbsoluteUri
 
           & "$repoRoot/scripts/ci/windows/update-smoke.ps1" `
             -NewMsiPath $newMsi.FullName `

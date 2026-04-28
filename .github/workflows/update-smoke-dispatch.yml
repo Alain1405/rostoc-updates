@@ -3,9 +3,18 @@ name: Update Smoke Dispatch
 on:
   workflow_dispatch:
     inputs:
+      arch:
+        description: 'Windows architecture to smoke'
+        required: false
+        default: 'x86_64'
+        type: choice
+        options:
+          - x86_64
+          - i686
       previous_msi_url:
-        description: 'URL for the previously published Windows MSI'
-        required: true
+        description: 'Optional URL for the previously published Windows MSI. Leave blank to resolve from the backend public latest endpoint.'
+        required: false
+        default: ''
         type: string
       new_msi_url:
         description: 'URL for the freshly built Windows MSI'
@@ -23,13 +32,14 @@ jobs:
       PREVIOUS_MSI_URL: ${{ inputs.previous_msi_url }}
       NEW_MSI_URL: ${{ inputs.new_msi_url }}
       EXPECTED_NEW_VERSION: ${{ inputs.expected_new_version }}
+      UPDATE_ARCH: ${{ inputs.arch }}
       IS_RELEASE: ${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'false' || 'true' }}
       VARIANT: ${{ contains(inputs.new_msi_url, 'Rostoc-staging-') && 'staging' || 'production' }}
     steps:
       - name: Checkout repo (scripts + Loki helper)
         uses: actions/checkout@v4
 
-      - name: Download MSI inputs
+      - name: Download MSI inputs and resolve baseline
         id: download-msi
         shell: pwsh
         run: |
@@ -45,13 +55,38 @@ jobs:
 
           Invoke-WebRequest -Uri $env:NEW_MSI_URL -OutFile $newPath
 
+          $previousMsiUrl = $env:PREVIOUS_MSI_URL
+          if ([string]::IsNullOrWhiteSpace($previousMsiUrl)) {
+            $updateChannel = if ($env:VARIANT -eq 'staging') { 'staging' } else { 'stable' }
+            $backendArchitecture = switch ($env:UPDATE_ARCH) {
+              'x86_64' { 'x64' }
+              'i686' { 'x86' }
+              default { $env:UPDATE_ARCH }
+            }
+            # Resolve the baseline from the backend public latest endpoint so
+            # dispatch-time smoke checks do not depend on Pages manifests.
+            $backendLatestUrl = 'https://api.rostoc.co/api/updates/latest/public/'
+            $latestRelease = Invoke-RestMethod -Uri "$backendLatestUrl?channel=$updateChannel" -Method Get
+            $previousMsi = $latestRelease.platforms |
+              Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq $backendArchitecture } |
+              Select-Object -First 1
+
+            if (-not $previousMsi) {
+              throw "Unable to resolve the previous Windows MSI from $backendLatestUrl for channel '$updateChannel' and architecture '$backendArchitecture'"
+            }
+
+            $backendOrigin = ([uri]$backendLatestUrl).GetLeftPart([System.UriPartial]::Authority)
+            $previousMsiUrl = ([uri]::new([uri]$backendOrigin, $previousMsi.downloadUrl)).AbsoluteUri
+          }
+
           "new_msi_path=$newPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "previous_msi_url=$previousMsiUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Run Windows update smoke
         shell: pwsh
         env:
           NEW_MSI_PATH: ${{ steps.download-msi.outputs.new_msi_path }}
-          PREVIOUS_MSI_URL: ${{ env.PREVIOUS_MSI_URL }}
+          PREVIOUS_MSI_URL: ${{ steps.download-msi.outputs.previous_msi_url }}
           EXPECTED_NEW_VERSION: ${{ env.EXPECTED_NEW_VERSION }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -91,7 +126,7 @@ jobs:
           LABELS=$(cat <<EOF
           {
             "platform": "windows",
-            "arch": "x86_64",
+            "arch": "$UPDATE_ARCH",
             "variant": "$VARIANT",
             "job": "update_smoke",
             "status": "${{ job.status }}",

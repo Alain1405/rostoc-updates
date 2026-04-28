@@ -6,7 +6,9 @@ applyTo: '**'
 
 > Public workflow runner for Rostoc desktop builds. The private `Rostoc/rostoc`
 > repo dispatches CI and release events here to execute macOS/Windows builds on
-> public GitHub runners and host updater artifacts via GitHub Pages.
+> public GitHub runners, publish compatibility manifests to GitHub Pages only,
+> and keep the backend public latest/download API authoritative for smoke and
+> update consumers.
 
 ## Workspace Structure
 
@@ -39,9 +41,10 @@ These trigger automatically based on task context:
 
 ### Notarization Pipeline
 
-- **Build workflow**: Submits DMG to Apple notarization, saves `submission_id` in `releases.json`
-- **Stapler workflow** (`staple-notarized-dmg.yml`): Cron job that queries notarytool, staples ticket, uploads to Pages
+- **Build workflow**: Submits DMG to Apple notarization, saves `submission_id` in the compatibility `releases.json` mirror
+- **Stapler workflow** (`staple-notarized-dmg.yml`): Cron job that queries notarytool, staples ticket, and updates the Pages compatibility mirror
 - **Lifecycle**: Release enables stapler schedule; stapler self-disables when queue is empty
+- **Backend source of truth**: The public latest/download API on the Rostoc backend is the authoritative source for smoke checks and update consumers
 
 ## Required Secrets
 
@@ -61,8 +64,8 @@ These trigger automatically based on task context:
 
 ## Key Files
 
-- `updates/releases.json`: Release manifest with download URLs, notarization status
-- `updates/latest.json`: Current stable release metadata
+- `updates/releases.json`: Compatibility release manifest mirror with download URLs and notarization status
+- `updates/latest.json`: Compatibility latest-release mirror for older clients
 - `scripts/ci/generate_releases_json.sh`: Builds release manifest entries
 - `scripts/macos/staple_and_upload_dmg.sh`: Stapler script for scheduled workflow
 

@@ -1,8 +1,7 @@
 name: Deploy Static Manifests to GitHub Pages
 
-# Deploy static update manifests for legacy client compatibility
-# These manifests support old clients (v0.2.150 and earlier) that still
-# check the GitHub Pages URL instead of the backend API.
+# Deploy static update manifests as compatibility mirrors for older clients.
+# The future contract is reserved for https://updates.rostoc.co and is not served here yet.
 
 on:
   push:

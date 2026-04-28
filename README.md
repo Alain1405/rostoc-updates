@@ -4,13 +4,15 @@
 
 [![Dispatch Release Build](https://github.com/Alain1405/rostoc-updates/actions/workflows/release-dispatch.yml/badge.svg)](https://github.com/Alain1405/rostoc-updates/actions/workflows/release-dispatch.yml)
 
-Public workflow runner for Rostoc desktop builds. The private `alain1405/rostoc` repository dispatches CI and tagged release events to this repo so we can execute macOS/Windows builds on public runners and host updater artifacts.
+Public workflow runner for Rostoc desktop builds. The private `alain1405/rostoc` repository dispatches CI and tagged release events to this repo so we can execute macOS/Windows builds on public runners, publish compatibility manifests to GitHub Pages only, and keep the backend public latest/download API authoritative for smoke and update consumers.
 
 ## 📦 Architecture
 
 **Binary Storage**: DigitalOcean Spaces (S3-compatible object storage with CDN)  
-**Metadata Hosting**: GitHub Pages (`latest.json`, `releases.json`)  
-**Update Endpoint**: `https://alain1405.github.io/rostoc-updates/latest.json`
+**Authoritative Update API**: `https://api.rostoc.co/api/updates/latest/public/`  
+**Compatibility Manifests Only**: GitHub Pages (`latest.json`, `releases.json`) for compatibility consumers
+
+**Reserved Future Fallback Contract**: `https://updates.rostoc.co` (not served here yet)
 
 ### Why DigitalOcean Spaces?
 
@@ -32,9 +34,9 @@ DigitalOcean Spaces (s3://rostoc-releases/releases/):
       └── Rostoc-0.2.x-windows-x86_64.msi.sig
 
 GitHub Pages (alain1405.github.io/rostoc-updates/):
-  ├── latest.json          # Tauri updater manifest (points to Spaces CDN URLs)
-  ├── releases.json        # Version history (includes notarization status)
-  └── storybook/          # Documentation
+   ├── latest.json          # Compatibility manifest mirror
+   ├── releases.json        # Compatibility version history mirror
+   └── compatibility only   # No live app or docs site is served here
 ```
 
 ### Notarization Pipeline
@@ -77,15 +79,17 @@ See [DIGITALOCEAN_SPACES_SETUP.md](./DIGITALOCEAN_SPACES_SETUP.md) for detailed 
    - Builds signed macOS and Windows binaries
    - Uploads binaries to DigitalOcean Spaces (via AWS CLI with S3-compatible endpoint)
    - Submits macOS DMG to Apple notarization (async)
-   - Generates `latest.json` and `releases.json` with Spaces CDN URLs
+   - Publishes release metadata to the backend update API, which serves the public latest/download channel used by smoke checks and clients
+   - Generates `latest.json` and `releases.json` with Spaces CDN URLs for compatibility consumers
    - Publishes release metadata to the Rostoc backend via `/api/updates/publish/` (runs when `ROSTOC_BACKEND_TOKEN` is configured)
-   - Deploys manifests to GitHub Pages
+   - Deploys compatibility manifests to GitHub Pages
    - Enables stapler workflow cron
    - Reports success via status context `rostoc-updates/release`
-3. **Stapler workflow** (cron: every 30min) – Checks `releases.json` for pending notarizations:
+   - For ad hoc Windows smoke checks, `update-smoke-dispatch.yml` accepts `arch=i686` for the optional x86 path and resolves the baseline from the backend public latest endpoint when `previous_msi_url` is left blank
+3. **Stapler workflow** (cron: every 30min) – Checks the compatibility `releases.json` mirror for pending notarizations:
    - Queries Apple notarytool for submission status
    - If accepted: Downloads DMG from Spaces, staples certificate, re-uploads to same path
-   - Updates `releases.json` on GitHub Pages with `available: true`
+   - Updates the compatibility `releases.json` mirror on GitHub Pages with `available: true`
    - Auto-disables cron when no pending notarizations remain
 
 If either side is missing the shared secrets, the dispatch/workflows will fail fast with actionable logs.
