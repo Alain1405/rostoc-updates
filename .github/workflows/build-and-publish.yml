@@ -188,6 +188,16 @@ jobs:
           }
 
           $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+          if ($summary.status -ne 'success') {
+            Write-Host "[INFO] update smoke status is '$($summary.status)'; skipping threshold notification"
+            exit 0
+          }
+
+          if ($null -eq $summary.update_install_seconds) {
+            Write-Host '[WARN] update_install_seconds missing; skipping threshold notification'
+            exit 0
+          }
+
           $seconds = [double]$summary.update_install_seconds
           $threshold = [double]$env:UPDATE_SMOKE_THRESHOLD_SECONDS
 
@@ -237,6 +247,16 @@ jobs:
           }
 
           $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+          if ($summary.status -ne 'success') {
+            Write-Host "[INFO] update smoke status is '$($summary.status)'; skipping regression notification"
+            exit 0
+          }
+
+          if ($null -eq $summary.update_install_seconds) {
+            Write-Host '[WARN] update_install_seconds missing; skipping regression notification'
+            exit 0
+          }
+
           $seconds = [double]$summary.update_install_seconds
           $baseline = [double]$env:UPDATE_SMOKE_BASELINE_SECONDS
           $regressionThreshold = $baseline * 1.5
