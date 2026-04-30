@@ -6,9 +6,6 @@ on:
       version:
         description: 'Built version string'
         value: ${{ jobs.build-desktop.outputs.version }}
-      update_smoke_version:
-        description: 'Expected installed version for Windows update smoke'
-        value: ${{ jobs.build-desktop.outputs.update_smoke_version }}
     inputs:
       ref:
         required: true
@@ -89,7 +86,6 @@ jobs:
     timeout-minutes: ${{ matrix.platform == 'linux' && 30 || 50 }}
     outputs:
       version: ${{ steps.extract_version.outputs.version }}
-      update_smoke_version: ${{ steps.extract_version.outputs.update_smoke_version }}
       platform: ${{ matrix.platform }}
       arch: ${{ matrix.arch }}
 
@@ -258,14 +254,16 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # --- Export versions for downstream jobs ---
-      - name: Export versions
+      # --- Export version for downstream jobs ---
+      - name: Export version
         id: extract_version
         shell: bash
         env:
           BASE_VERSION: ${{ steps.prep.outputs.version }}
-          DEV_WINDOWS_VERSION: ${{ env.DEV_WINDOWS_VERSION }}
-        run: bash scripts/ci/export_build_versions.sh
+        run: |
+          set -euo pipefail
+          echo "version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "[INFO] Base version: $BASE_VERSION"
 
       # --- Ship logs to Grafana Loki ---
       - name: Send build logs to Loki

@@ -85,7 +85,8 @@ jobs:
       - name: Run Windows update smoke
         shell: pwsh
         env:
-          EXPECTED_NEW_VERSION: ${{ needs.build.outputs.update_smoke_version }}
+          BASE_VERSION: ${{ needs.build.outputs.version }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
           IS_RELEASE: ${{ inputs.is_release || false }}
           UPDATE_CHANNEL: 'stable'
           UPDATE_VARIANT: 'production'
@@ -107,6 +108,14 @@ jobs:
           }
 
           $updateChannel = $env:UPDATE_CHANNEL
+          $expectedNewVersion = if ($env:IS_RELEASE -eq 'true') {
+            $env:BASE_VERSION
+          } else {
+            $runNumber = [int]$env:GITHUB_RUN_NUMBER
+            $windowsVersionSegment = $runNumber % 65536
+            "$($env:BASE_VERSION)-$windowsVersionSegment"
+          }
+
           # The smoke job always validates the production Windows MSI artifact.
           # Use the stable backend channel as the authoritative baseline so the
           # installed product name matches the production bundle under test.
@@ -127,7 +136,7 @@ jobs:
           & "$repoRoot/scripts/ci/windows/update-smoke.ps1" `
             -NewMsiPath $newMsi.FullName `
             -PreviousMsiUrl $previousMsiUrl `
-            -ExpectedNewVersion $env:EXPECTED_NEW_VERSION `
+            -ExpectedNewVersion $expectedNewVersion `
             -LogDir $logDir 2>&1 | Tee-Object -FilePath $stdoutLog
 
       - name: Upload update smoke logs
