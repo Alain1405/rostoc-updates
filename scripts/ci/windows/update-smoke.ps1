@@ -70,6 +70,52 @@ function Get-InstalledVersion {
   throw "Unable to find installed version for product '$ProductName' in the uninstall registry keys"
 }
 
+function Get-InstalledBinaryPathCandidates {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ProductName
+  )
+
+  $installRoots = @()
+  if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+    $installRoots += $env:ProgramFiles
+  }
+
+  $programFilesX86 = [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+  if (-not [string]::IsNullOrWhiteSpace($programFilesX86) -and $programFilesX86 -notin $installRoots) {
+    $installRoots += $programFilesX86
+  }
+
+  if ($installRoots.Count -eq 0) {
+    throw "Unable to determine Windows program files directories for product '$ProductName'"
+  }
+
+  $exeName = "$ProductName.exe"
+  return $installRoots | ForEach-Object {
+    Join-Path (Join-Path $_ $ProductName) $exeName
+  }
+}
+
+function Assert-InstalledBinaryPresent {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ProductName,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Stage
+  )
+
+  $candidatePaths = Get-InstalledBinaryPathCandidates -ProductName $ProductName
+  foreach ($candidatePath in $candidatePaths) {
+    if (Test-Path -LiteralPath $candidatePath) {
+      return $candidatePath
+    }
+  }
+
+  $checkedPaths = $candidatePaths -join ', '
+  throw "Expected installed binary not found after $Stage install. Checked: $checkedPaths"
+}
+
 function Invoke-MsiInstall {
   param(
     [Parameter(Mandatory = $true)]
@@ -108,7 +154,6 @@ $previousInstallLog = Join-Path $LogDir 'previous-install.log'
 $updateInstallLog = Join-Path $LogDir 'update-install.log'
 $summaryPath = Join-Path $LogDir 'summary.json'
 $previousMsiPath = Join-Path $LogDir 'previous.msi'
-$installedBinaryPath = 'C:\Program Files\Rostoc\rostoc.exe'
 $productName = Get-ProductNameFromMsiPath -Path $NewMsiPath
 $isRelease = $false
 if (-not [string]::IsNullOrWhiteSpace($env:IS_RELEASE)) {
@@ -129,6 +174,7 @@ $summary = [ordered]@{
   is_release               = $isRelease
   status                   = 'running'
   product_name             = $productName
+  installed_binary_path    = $null
 }
 
 try {
@@ -143,9 +189,7 @@ try {
     throw "Previous MSI install failed with exit code $($previousInstall.ExitCode)"
   }
 
-  if (-not (Test-Path -LiteralPath $installedBinaryPath)) {
-    throw "Expected installed binary not found after previous install: $installedBinaryPath"
-  }
+  $summary.installed_binary_path = Assert-InstalledBinaryPresent -ProductName $productName -Stage 'previous'
 
   $summary.previous_version = Get-InstalledVersion -ProductName $productName
 
@@ -156,9 +200,7 @@ try {
     throw "Update MSI install failed with exit code $($updateInstall.ExitCode)"
   }
 
-  if (-not (Test-Path -LiteralPath $installedBinaryPath)) {
-    throw "Expected installed binary not found after update install: $installedBinaryPath"
-  }
+  $summary.installed_binary_path = Assert-InstalledBinaryPresent -ProductName $productName -Stage 'update'
 
   $summary.new_version = Get-InstalledVersion -ProductName $productName
   if ($summary.new_version -ne $ExpectedNewVersion) {
