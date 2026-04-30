@@ -22,6 +22,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+function Get-UninstallRegistryRoots {
+  return @(
+    'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+  )
+}
+
 function Get-ProductNameFromMsiPath {
   param(
     [Parameter(Mandatory = $true)]
@@ -52,10 +61,7 @@ function Get-InstalledVersion {
     [string]$ProductName
   )
 
-  $registryRoots = @(
-    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-  )
+  $registryRoots = Get-UninstallRegistryRoots
 
   foreach ($root in $registryRoots) {
     $match = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue |
@@ -76,10 +82,7 @@ function Get-RegistryMatchesForProduct {
     [string]$ProductName
   )
 
-  $registryRoots = @(
-    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-  )
+  $registryRoots = Get-UninstallRegistryRoots
 
   $matches = @()
   foreach ($root in $registryRoots) {
@@ -109,6 +112,19 @@ function Get-InstalledBinaryPathCandidates {
   )
 
   $installRoots = @()
+  $registryMatches = Get-RegistryMatchesForProduct -ProductName $ProductName
+
+  foreach ($match in $registryMatches) {
+    if (-not [string]::IsNullOrWhiteSpace($match.install_location)) {
+      $installRoots += [string]$match.install_location
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    $installRoots += (Join-Path $env:LOCALAPPDATA 'Programs')
+    $installRoots += $env:LOCALAPPDATA
+  }
+
   if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
     $installRoots += $env:ProgramFiles
   }
@@ -123,9 +139,26 @@ function Get-InstalledBinaryPathCandidates {
   }
 
   $exeName = "$ProductName.exe"
-  return $installRoots | ForEach-Object {
-    Join-Path (Join-Path $_ $ProductName) $exeName
+  $candidatePaths = foreach ($root in $installRoots) {
+    if ([string]::IsNullOrWhiteSpace($root)) {
+      continue
+    }
+
+    $normalizedRoot = $root.TrimEnd('\', '/')
+
+    $directCandidate = Join-Path $normalizedRoot $exeName
+    $nestedCandidate = Join-Path (Join-Path $normalizedRoot $ProductName) $exeName
+
+    if ($directCandidate -eq $nestedCandidate) {
+      $directCandidate
+    }
+    else {
+      $directCandidate
+      $nestedCandidate
+    }
   }
+
+  return $candidatePaths | Select-Object -Unique
 }
 
 function Assert-InstalledBinaryPresent {
@@ -326,6 +359,7 @@ finally {
     host             = [ordered]@{
       computer_name    = $env:COMPUTERNAME
       program_files    = $env:ProgramFiles
+      local_app_data   = $env:LOCALAPPDATA
       program_files_x86 = [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
     }
   }
