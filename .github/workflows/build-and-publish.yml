@@ -113,7 +113,9 @@ jobs:
           } else {
             $runNumber = [int]$env:GITHUB_RUN_NUMBER
             $windowsVersionSegment = $runNumber % 65536
-            "$($env:BASE_VERSION)-$windowsVersionSegment"
+            # Windows Installer exposes the installed product version as a dotted
+            # numeric string even though the dev stamp is derived from semver.
+            "$($env:BASE_VERSION).$windowsVersionSegment"
           }
 
           # The smoke job always validates the production Windows MSI artifact.
