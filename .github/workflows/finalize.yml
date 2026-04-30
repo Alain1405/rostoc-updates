@@ -24,7 +24,7 @@ jobs:
   finalize-status:
     runs-on: ubuntu-latest
     env:
-      TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
+      TARGET_SHA: ${{ inputs.commit_sha }}
       STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
     steps:
       - name: Report release failure if build failed

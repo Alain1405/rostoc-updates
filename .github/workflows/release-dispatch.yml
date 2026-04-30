@@ -27,7 +27,7 @@ jobs:
     uses: ./.github/workflows/build-and-publish.yml
     with:
       ref: ${{ inputs.ref || github.event.client_payload.ref || github.ref_name || 'main' }}
-      commit_sha: ${{ inputs.commit_sha || github.event.client_payload.sha || github.sha }}
+      commit_sha: ${{ inputs.commit_sha || github.event.client_payload.sha || '' }}
       initiator: ${{ inputs.initiator || github.event.client_payload.initiator || github.event.client_payload.sourceRepo || github.actor }}
       is_release: true
     secrets: inherit

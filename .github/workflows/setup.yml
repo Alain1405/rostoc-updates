@@ -2,6 +2,10 @@ name: Setup & Validation
 
 on:
   workflow_call:
+    outputs:
+      resolved_commit_sha:
+        description: 'Resolved commit SHA of the private repo target'
+        value: ${{ jobs.set-status.outputs.resolved_commit_sha }}
     inputs:
       ref:
         description: 'Branch, tag, or SHA to build from private repo'
@@ -26,8 +30,9 @@ env:
 jobs:
   set-status:
     runs-on: ubuntu-latest
+    outputs:
+      resolved_commit_sha: ${{ steps.explicit-target-sha.outputs.sha || steps.resolved-target-sha.outputs.sha || steps.empty-target-sha.outputs.sha }}
     env:
-      TARGET_SHA: ${{ inputs.commit_sha || github.sha }}
       STATUS_CONTEXT: ${{ inputs.is_release && 'rostoc-updates/release' || 'rostoc-updates/ci' }}
       STATUS_DESCRIPTION: ${{ inputs.is_release && 'Public release build running' || 'Public CI build running' }}
     steps:
@@ -46,10 +51,55 @@ jobs:
         env:
           UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
 
+      - name: Use explicit commit SHA
+        if: ${{ inputs.commit_sha != '' }}
+        id: explicit-target-sha
+        run: echo "sha=${INPUT_COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
+
+      - name: Resolve commit SHA from private ref
+        if: ${{ inputs.commit_sha == '' && steps.detect-status-token.outputs.available == 'true' }}
+        id: resolved-target-sha
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.UPDATES_REPO_TOKEN }}
+          result-encoding: string
+          script: |
+            const [owner, repo] = process.env.PRIVATE_REPO.split('/');
+            const ref = process.env.INPUT_REF || 'main';
+
+            if (!owner || !repo) {
+              core.warning(`Unable to parse PRIVATE_REPO env "${process.env.PRIVATE_REPO}"; leaving target SHA empty.`);
+              core.setOutput('sha', '');
+              return 'unresolved';
+            }
+
+            const { data } = await github.rest.repos.getCommit({
+              owner,
+              repo,
+              ref
+            });
+
+            core.setOutput('sha', data.sha);
+            core.info(`Resolved ${owner}/${repo}@${ref} to ${data.sha}`);
+            return data.sha;
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+
+      - name: Leave commit SHA empty
+        if: ${{ inputs.commit_sha == '' && steps.detect-status-token.outputs.available != 'true' }}
+        id: empty-target-sha
+        run: |
+          echo "sha=" >> "$GITHUB_OUTPUT"
+          echo '### ℹ️ Commit SHA resolution skipped' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Manual dispatch did not include a commit SHA, and UPDATES_REPO_TOKEN is unavailable to resolve the private repo ref.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set pending status in private repo
-        if: ${{ env.TARGET_SHA != '' && steps.detect-status-token.outputs.available == 'true' }}
+        if: ${{ (steps.explicit-target-sha.outputs.sha || steps.resolved-target-sha.outputs.sha || steps.empty-target-sha.outputs.sha) != '' && steps.detect-status-token.outputs.available == 'true' }}
         uses: actions/github-script@v7
         env:
+          TARGET_SHA: ${{ steps.explicit-target-sha.outputs.sha || steps.resolved-target-sha.outputs.sha || steps.empty-target-sha.outputs.sha }}
           TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ secrets.UPDATES_REPO_TOKEN }}

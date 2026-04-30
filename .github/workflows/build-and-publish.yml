@@ -53,7 +53,7 @@ jobs:
     uses: ./.github/workflows/setup.yml
     with:
       ref: ${{ inputs.ref }}
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      commit_sha: ${{ inputs.commit_sha }}
       is_release: ${{ inputs.is_release || false }}
     secrets: inherit
 
@@ -63,7 +63,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       ref: ${{ inputs.ref }}
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: ${{ inputs.is_release || false }}
     secrets: inherit
 
@@ -294,11 +294,11 @@ jobs:
   # Phase 3a: Publish production channel
   publish-production:
     if: ${{ always() && inputs.is_release && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
-    needs: [build, update-smoke-windows]
+    needs: [setup, build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: true
       release_channel: 'stable'
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
@@ -307,11 +307,11 @@ jobs:
   # Phase 3b: Publish staging channel
   publish-staging:
     if: ${{ always() && inputs.is_release && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
-    needs: [build, update-smoke-windows]
+    needs: [setup, build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: true
       release_channel: 'staging'
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
@@ -320,10 +320,11 @@ jobs:
   # Phase 4: Finalize (update commit status)
   finalize:
     if: always()
-    needs: [build, update-smoke-windows, publish-production, publish-staging]
+    needs:
+      [setup, build, update-smoke-windows, publish-production, publish-staging]
     uses: ./.github/workflows/finalize.yml
     with:
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: ${{ inputs.is_release || false }}
       build_result: ${{ (needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' && (needs.publish-production.result == 'success' || needs.publish-production.result == 'skipped') && (needs.publish-staging.result == 'success' || needs.publish-staging.result == 'skipped')) && 'success' || 'failure' }}
     secrets: inherit
