@@ -94,7 +94,7 @@ runs:
       run: ../scripts/ci/run_build_artifacts.ps1 locate-windows
 
     - name: '[Windows] Prepare update bundle'
-      if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
+      if: ${{ inputs.platform == 'windows' }}
       id: prepare-windows
       working-directory: private-src
       shell: pwsh
