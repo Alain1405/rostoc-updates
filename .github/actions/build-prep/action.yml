@@ -260,7 +260,7 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: |
-          private-src/src-tauri -> target
+            private-src/src-tauri -> ../target
         # Removed shared-key to let cache auto-invalidate on Cargo.toml changes
         # Each platform will have its own cache based on Cargo.toml+Cargo.lock
         save-if: ${{ github.ref == 'refs/heads/main' }}

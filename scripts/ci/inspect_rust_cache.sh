@@ -21,16 +21,16 @@ case "$MODE" in
   post)
     echo "::group::Rust cache restore result"
     echo "[INFO] rust-cache cache-hit=$CACHE_HIT"
-    if [ -d src-tauri/target ]; then
-      echo "[INFO] src-tauri/target restored contents:"
-      find src-tauri/target -maxdepth 2 -mindepth 1 -type d | sort | head -50
-      du -sh src-tauri/target || true
-    else
-      echo "[INFO] src-tauri/target not present after restore"
-    fi
     if [ -d target ]; then
-      echo "[INFO] repo-root target also exists after restore:"
+      echo "[INFO] repo-root target restored contents:"
+      find target -maxdepth 2 -mindepth 1 -type d | sort | head -50
       du -sh target || true
+    else
+      echo "[INFO] repo-root target not present after restore"
+    fi
+    if [ -d src-tauri/target ]; then
+      echo "[INFO] src-tauri/target also exists after restore:"
+      du -sh src-tauri/target || true
     fi
     echo "::endgroup::"
     ;;

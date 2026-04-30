@@ -230,7 +230,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            private-src/src-tauri -> target
+              private-src/src-tauri -> ../target
           shared-key: lint
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
