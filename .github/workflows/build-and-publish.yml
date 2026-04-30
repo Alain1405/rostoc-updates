@@ -132,7 +132,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: update-smoke-logs-${{ github.run_id }}
-          path: ${{ runner.temp }}\update-smoke
+          path: |
+            ${{ runner.temp }}\update-smoke\summary.json
+            ${{ runner.temp }}\update-smoke\debug-state.json
+            ${{ runner.temp }}\update-smoke\summary.stdout.log
+            ${{ runner.temp }}\update-smoke\previous-install.log
+            ${{ runner.temp }}\update-smoke\update-install.log
           retention-days: 14
           if-no-files-found: warn
 
