@@ -220,12 +220,26 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Debug Rust cache configuration
+        working-directory: private-src
+        shell: bash
+        run: bash ../scripts/ci/inspect_rust_cache.sh pre
+
       - name: Cache Rust target
+        id: rust-cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: private-src
+          workspaces: |
+            private-src/src-tauri -> target
           shared-key: lint
           save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Report Rust cache restore result
+        working-directory: private-src
+        shell: bash
+        env:
+          RUST_CACHE_HIT: ${{ steps.rust-cache.outputs.cache-hit || 'false' }}
+        run: bash ../scripts/ci/inspect_rust_cache.sh post . "$RUST_CACHE_HIT"
 
       - name: Install JS dependencies
         working-directory: private-src

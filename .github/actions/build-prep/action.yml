@@ -250,13 +250,27 @@ runs:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Debug Rust cache configuration
+      working-directory: private-src
+      shell: bash
+      run: bash ../scripts/ci/inspect_rust_cache.sh pre
+
     - name: Cache Rust dependencies and build artifacts
+      id: rust-cache
       uses: Swatinem/rust-cache@v2
       with:
-        workspaces: private-src
+        workspaces: |
+          private-src/src-tauri -> target
         # Removed shared-key to let cache auto-invalidate on Cargo.toml changes
         # Each platform will have its own cache based on Cargo.toml+Cargo.lock
         save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Report Rust cache restore result
+      working-directory: private-src
+      shell: bash
+      env:
+        RUST_CACHE_HIT: ${{ steps.rust-cache.outputs.cache-hit || 'false' }}
+      run: bash ../scripts/ci/inspect_rust_cache.sh post . "$RUST_CACHE_HIT"
 
     - name: Extract version
       id: extract_version
