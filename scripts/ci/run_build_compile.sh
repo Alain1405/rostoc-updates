@@ -16,10 +16,68 @@ variant_uses_dev_tooling() {
   esac
 }
 
-init_platform_config() {
+resolve_target_triple() {
   local platform arch
   platform=${1:?platform is required}
   arch=${2:?arch is required}
+
+  case "$platform:$arch" in
+    macos:x86_64)
+      echo "x86_64-apple-darwin"
+      ;;
+    macos:aarch64)
+      echo "aarch64-apple-darwin"
+      ;;
+    windows:x86_64)
+      echo "x86_64-pc-windows-msvc"
+      ;;
+    windows:i686)
+      echo "i686-pc-windows-msvc"
+      ;;
+    linux:x86_64)
+      echo "x86_64-unknown-linux-gnu"
+      ;;
+    *)
+      echo "::error::Unsupported platform/arch combination: $platform/$arch" >&2
+      exit 1
+      ;;
+  esac
+}
+
+resolve_python_url_fragment() {
+  local platform arch
+  platform=${1:?platform is required}
+  arch=${2:?arch is required}
+
+  case "$platform:$arch" in
+    macos:x86_64)
+      echo "macos-x64"
+      ;;
+    macos:aarch64)
+      echo "macos-arm64"
+      ;;
+    windows:x86_64)
+      echo "windows-x64"
+      ;;
+    windows:i686)
+      echo "windows-x86"
+      ;;
+    linux:x86_64)
+      echo "linux-x64"
+      ;;
+    *)
+      echo "::error::Unsupported platform/arch combination for embedded Python: $platform/$arch" >&2
+      exit 1
+      ;;
+  esac
+}
+
+init_platform_config() {
+  local platform arch target py_url_fragment
+  platform=${1:?platform is required}
+  arch=${2:?arch is required}
+  target=$(resolve_target_triple "$platform" "$arch")
+  py_url_fragment=$(resolve_python_url_fragment "$platform" "$arch")
 
   local mode_flag=""
   local features_flag=""
@@ -36,26 +94,19 @@ init_platform_config() {
         echo "build_command=python scripts/build.py --locked $mode_flag $features_flag"
         echo "artifact_extension=tar.gz"
         echo "test_smoke=true"
-        if [[ "$arch" == "x86_64" ]]; then
-          echo "target=x86_64-apple-darwin"
-          echo "py_url_fragment=macos-x64"
-        else
-          echo "target=aarch64-apple-darwin"
-          echo "py_url_fragment=macos-arm64"
-        fi
+        echo "target=$target"
+        echo "py_url_fragment=$py_url_fragment"
       } >> "$GITHUB_OUTPUT"
       ;;
     windows)
       {
         if [[ "$arch" == "x86_64" ]]; then
           echo "build_command=python scripts/build.py --locked --bundles msi $mode_flag $features_flag"
-          echo "target=x86_64-pc-windows-msvc"
-          echo "py_url_fragment=windows-x64"
         else
           echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc $mode_flag $features_flag"
-          echo "target=i686-pc-windows-msvc"
-          echo "py_url_fragment=windows-x86"
         fi
+        echo "target=$target"
+        echo "py_url_fragment=$py_url_fragment"
         echo "artifact_extension=msi"
         echo "test_smoke=true"
       } >> "$GITHUB_OUTPUT"
@@ -65,8 +116,8 @@ init_platform_config() {
         echo "build_command=python scripts/build.py --locked --bundles appimage $mode_flag $features_flag"
         echo "artifact_extension=AppImage"
         echo "test_smoke=true"
-        echo "target=x86_64-unknown-linux-gnu"
-        echo "py_url_fragment=linux-x64"
+        echo "target=$target"
+        echo "py_url_fragment=$py_url_fragment"
       } >> "$GITHUB_OUTPUT"
       ;;
     *)
@@ -77,29 +128,20 @@ init_platform_config() {
 }
 
 download_embedded_python() {
-  local platform arch
+  local platform arch python_target
   platform=${1:?platform is required}
   arch=${2:?arch is required}
+  python_target=$(resolve_target_triple "$platform" "$arch")
 
   case "$platform" in
     macos)
-      if [[ "$arch" == "x86_64" ]]; then
-        PYTHON_TARGET="x86_64-apple-darwin"
-      else
-        PYTHON_TARGET="aarch64-apple-darwin"
-      fi
-      PYTHON_TARGET="$PYTHON_TARGET" bash scripts/macos/download-py.sh
+      PYTHON_TARGET="$python_target" bash scripts/macos/download-py.sh
       ;;
     windows)
-      if [[ "$arch" == "i686" ]]; then
-        PYTHON_TARGET="i686-pc-windows-msvc"
-      else
-        PYTHON_TARGET="x86_64-pc-windows-msvc"
-      fi
-      PYTHON_TARGET="$PYTHON_TARGET" pwsh scripts/windows/download-py.ps1
+      PYTHON_TARGET="$python_target" pwsh scripts/windows/download-py.ps1
       ;;
     linux)
-      PYTHON_TARGET="x86_64-unknown-linux-gnu" bash scripts/linux/download-py.sh
+      PYTHON_TARGET="$python_target" bash scripts/linux/download-py.sh
       ;;
     *)
       echo "::error::Unknown platform: $platform"
