@@ -1,5 +1,5 @@
 name: 'Build Tests (Smoke tests for all platforms)'
-description: 'Run runtime and GUI smoke tests, upload diagnostics'
+description: 'Run runtime, GUI, and Windows integration smoke tests, upload diagnostics'
 
 inputs:
   platform:
@@ -29,139 +29,46 @@ runs:
       env:
         APP_BUNDLE: ${{ inputs.app_path }}
         PYBIN_HINT: ${{ inputs.python_path }}
-      run: |
-        set -euo pipefail
-        if [ -z "${APP_BUNDLE}" ]; then
-          echo "::warning::APP_BUNDLE not set, skipping macOS runtime smoke test"
-          exit 0
-        fi
-        if [[ "${APP_BUNDLE}" == /* ]]; then
-          ABS_APP="${APP_BUNDLE}"
-        else
-          ABS_APP="$GITHUB_WORKSPACE/private-src/${APP_BUNDLE}"
-        fi
-        if [ ! -d "$ABS_APP" ]; then
-          echo "::warning::App bundle not found at $ABS_APP, skipping runtime test"
-          exit 0
-        fi
-        PYBIN="${PYBIN_HINT}"
-        if [[ -n "$PYBIN" && "$PYBIN" != /* ]]; then
-          PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
-        fi
-        if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-          echo "::warning::Embedded Python not found at $PYBIN, skipping runtime test"
-          exit 0
-        fi
-        echo "[INFO] Running runtime smoke test: $PYBIN"
-        "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
-          --platform mac \
-          --comprehensive \
-          --require-manifest \
-          --debug-json macos_runtime_smoke_debug.json \
-          --strict
+      run: bash ../scripts/ci/run_build_tests.sh mac-runtime ${{ inputs.arch }} ${{ inputs.variant }}
 
     - name: '[macOS] GUI smoke test (non-fatal)'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
       env:
+        APP_BUNDLE: ${{ inputs.app_path }}
         PYBIN_HINT: ${{ inputs.python_path }}
-      run: |
-        set -euo pipefail
-        ABS_APP="${{ inputs.app_path }}"
-        if [ -z "$ABS_APP" ]; then
-          echo "::warning::App path not provided, skipping GUI smoke test"
-          exit 0
-        fi
-        PYBIN="${PYBIN_HINT}"
-        if [[ -n "$PYBIN" && "$PYBIN" != /* ]]; then
-          PYBIN="$GITHUB_WORKSPACE/private-src/$PYBIN"
-        fi
-        if [ -z "$PYBIN" ] || [ ! -x "$PYBIN" ]; then
-          echo "::warning::Embedded Python not found, skipping GUI smoke test"
-          exit 0
-        fi
-        echo "[INFO] Running GUI smoke test with 10s timeout"
-        "$PYBIN" scripts/ci/unified_smoke_validator.py gui \
-          --platform mac \
-          --timeout 10 \
-          --debug-json macos_gui_smoke_debug.json || {
-          exitcode=$?
-          echo "[WARN] GUI smoke test failed (non-fatal): exit code $exitcode"
-          exit 0
-        }
+      run: bash ../scripts/ci/run_build_tests.sh mac-gui ${{ inputs.arch }} ${{ inputs.variant }}
 
     - name: '[Windows x86] Runtime smoke test (cross-compile validation)'
       if: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path windows)
-        PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
-        if [ -z "$PYBIN" ]; then
-          echo "[WARN] Embedded python.exe not found at canonical location for x86 build"
-          exit 0
-        fi
-        echo "[INFO] Running x86 runtime smoke test: $PYBIN" >&2
-        "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
-          --platform windows \
-          --comprehensive \
-          --require-manifest \
-          --debug-json windows_x86_runtime_smoke_debug.json \
-          --strict || {
-          exitcode=$?
-          echo "[WARN] x86 smoke test failed (optional platform, continuing): exit code $exitcode"
-          exit 0
-        }
+      run: bash ../scripts/ci/run_build_tests.sh windows-runtime ${{ inputs.arch }} ${{ inputs.variant }}
+
+    - name: '[Windows x86] Single-instance deep-link integration smoke (non-fatal)'
+      if: ${{ inputs.platform == 'windows' && inputs.arch == 'i686' }}
+      working-directory: private-src
+      shell: bash
+      run: bash ../scripts/ci/run_build_tests.sh windows-integration ${{ inputs.arch }} ${{ inputs.variant }}
 
     - name: '[Windows x64] Runtime smoke test'
       if: ${{ inputs.platform == 'windows' && inputs.arch == 'x86_64' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path windows)
-        PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
-        if [ -z "$PYBIN" ]; then
-          echo "[WARN] Embedded python.exe not found at canonical location for x64 build"
-          exit 0
-        fi
-        echo "[INFO] Running x64 runtime smoke test: $PYBIN" >&2
-        "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
-          --platform windows \
-          --comprehensive \
-          --require-manifest \
-          --debug-json windows_x64_runtime_smoke_debug.json \
-          --strict || {
-          exitcode=$?
-          echo "[WARN] x64 smoke test failed (exit code $exitcode), continuing"
-          exit 0
-        }
+      run: bash ../scripts/ci/run_build_tests.sh windows-runtime ${{ inputs.arch }} ${{ inputs.variant }}
+
+    - name: '[Windows x64] Single-instance deep-link integration smoke'
+      if: ${{ inputs.platform == 'windows' && inputs.arch == 'x86_64' }}
+      working-directory: private-src
+      shell: bash
+      run: bash ../scripts/ci/run_build_tests.sh windows-integration ${{ inputs.arch }} ${{ inputs.variant }}
 
     - name: '[Linux] Runtime smoke test'
       if: ${{ inputs.platform == 'linux' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        PYTHON_PATH=$(python3 scripts/ci/get_runtime_path.py python_path unix)
-        PYBIN=$(find target -type f -path "*/$PYTHON_PATH" -print -quit || true)
-        if [ -z "$PYBIN" ]; then
-          echo "[WARN] Embedded python not found at canonical location for Linux build"
-          exit 0
-        fi
-        echo "[INFO] Running Linux runtime smoke test: $PYBIN" >&2
-        "$PYBIN" scripts/ci/unified_smoke_validator.py runtime \
-          --platform linux \
-          --comprehensive \
-          --require-manifest \
-          --debug-json linux_runtime_smoke_debug.json \
-          --strict || {
-          exitcode=$?
-          echo "[WARN] Linux smoke test failed (optional platform, continuing): exit code $exitcode"
-          exit 0
-        }
+      run: bash ../scripts/ci/run_build_tests.sh linux-runtime ${{ inputs.arch }} ${{ inputs.variant }}
 
     - name: Upload macOS smoke diagnostics
       if: ${{ inputs.platform == 'macos' && always() }}
@@ -180,6 +87,7 @@ runs:
         name: smoke-debug-${{ inputs.variant }}-${{ inputs.platform }}-${{ inputs.arch }}
         path: |
           private-src/windows_x86_runtime_smoke_debug.json
+          private-src/windows_x86_integration_smoke_debug.json
         if-no-files-found: warn
 
     - name: Upload Windows x64 smoke diagnostics
@@ -189,6 +97,7 @@ runs:
         name: smoke-debug-${{ inputs.variant }}-${{ inputs.platform }}-${{ inputs.arch }}
         path: |
           private-src/windows_x64_runtime_smoke_debug.json
+          private-src/windows_x64_integration_smoke_debug.json
         if-no-files-found: warn
 
     - name: Upload Linux smoke diagnostics

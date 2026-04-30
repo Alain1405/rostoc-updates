@@ -31,7 +31,7 @@ inputs:
     description: 'DigitalOcean Spaces endpoint'
     required: false
   variant:
-    description: 'App variant (production|staging)'
+    description: 'App variant (production|staging|dev)'
     required: false
     default: 'production'
 
@@ -44,14 +44,7 @@ runs:
       shell: bash
       env:
         UPDATES_REPO_TOKEN: ${{ inputs.updates_repo_token }}
-      run: |
-        if [ -n "${UPDATES_REPO_TOKEN:-}" ]; then
-          echo "available=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "available=false" >> "$GITHUB_OUTPUT"
-          echo '### ℹ️ Release asset upload skipped' >> "$GITHUB_STEP_SUMMARY"
-          echo '`UPDATES_REPO_TOKEN` not provided; skipping release artifact upload.' >> "$GITHUB_STEP_SUMMARY"
-        fi
+      run: bash scripts/ci/run_build_artifacts.sh detect-release-token
 
     # ======== macOS ========
     - name: '[macOS] Locate updater artifacts'
@@ -59,54 +52,7 @@ runs:
       id: locate-macos
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        SEARCH_DIRS=()
-        while IFS= read -r line; do
-          SEARCH_DIRS+=("$line")
-        done < <(python scripts/ci/get_bundle_dirs.py macos tarball)
-
-        TARBALL=""
-        for dir in "${SEARCH_DIRS[@]}"; do
-          [[ -d "$dir" ]] || continue
-          cand=$(find "$dir" -maxdepth 1 -name '*.app.tar.gz' -print -quit 2>/dev/null || true)
-          if [[ -n "$cand" ]]; then
-            TARBALL="$cand"
-            break
-          fi
-        done
-
-        SIG_FILE=""
-        if [[ -n "$TARBALL" ]]; then
-          SIG_FILE="${TARBALL}.sig"
-          if [[ ! -f "$SIG_FILE" ]]; then
-            ALT_SIG=$(find "$(dirname "$TARBALL")" -maxdepth 1 -name "$(basename "$TARBALL").sig" -print -quit 2>/dev/null || true)
-            if [[ -n "$ALT_SIG" ]]; then
-              SIG_FILE="$ALT_SIG"
-            fi
-          fi
-        fi
-
-        echo "Tarball: $TARBALL" >&2
-        echo "Signature: $SIG_FILE" >&2
-
-        if [[ -z "$TARBALL" ]]; then
-          echo 'Missing updater tarball (.app.tar.gz)'
-          for dir in "${SEARCH_DIRS[@]}"; do
-            if [[ -d "$dir" ]]; then
-              echo "[INFO] Contents of $dir:" >&2
-              ls -al "$dir" >&2
-            fi
-          done
-          exit 1
-        fi
-        if [[ -z "$SIG_FILE" || ! -f "$SIG_FILE" ]]; then
-          echo 'Missing updater signature (.app.tar.gz.sig)'
-          exit 1
-        fi
-
-        echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
-        echo "signature=$SIG_FILE" >> "$GITHUB_OUTPUT"
+      run: bash ../scripts/ci/run_build_artifacts.sh locate-macos
 
     - name: '[macOS] Prepare update bundle'
       if: ${{ inputs.platform == 'macos' }}
@@ -114,82 +60,12 @@ runs:
       working-directory: private-src
       shell: bash
       env:
+        TARBALL: ${{ steps.locate-macos.outputs.tarball }}
+        SIGNATURE: ${{ steps.locate-macos.outputs.signature }}
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
         VARIANT: ${{ inputs.variant }}
-      run: |
-        set -euo pipefail
-        TARBALL="${{ steps.locate-macos.outputs.tarball }}"
-        SIGNATURE="${{ steps.locate-macos.outputs.signature }}"
-
-        # Determine product name prefix based on variant
-        if [ "${VARIANT}" == "staging" ]; then
-          PRODUCT_NAME="Rostoc-staging"
-        else
-          PRODUCT_NAME="Rostoc"
-        fi
-
-        # Create updates directory
-        mkdir -p "../updates/macos"
-
-        # Copy artifacts with version-tagged names (preserving variant in name)
-        TARBALL_NAME="${PRODUCT_NAME}-${VERSION}-darwin-${ARCH}.app.tar.gz"
-        cp "$TARBALL" "../updates/macos/$TARBALL_NAME"
-        cp "$SIGNATURE" "../updates/macos/${TARBALL_NAME}.sig"
-
-        # Also copy as latest for convenience
-        cp "$TARBALL" "../updates/macos/${PRODUCT_NAME}.app.tar.gz"
-        cp "$SIGNATURE" "../updates/macos/${PRODUCT_NAME}.app.tar.gz.sig"
-
-        # Copy DMG if present (will be replaced after notarization)
-        SEARCH_DIRS=()
-        while IFS= read -r line; do
-          SEARCH_DIRS+=("$line")
-        done < <(python scripts/ci/get_bundle_dirs.py macos dmg)
-
-        DMG_PATH=""
-        for dir in "${SEARCH_DIRS[@]}"; do
-          [[ -d "$dir" ]] || continue
-          cand=$(find "$dir" -maxdepth 1 -name "*.dmg" -print -quit 2>/dev/null || true)
-          if [[ -n "$cand" && -f "$cand" ]]; then
-            DMG_PATH="$cand"
-            break
-          fi
-        done
-
-        if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
-          # Use underscore for DMG name to match Tauri convention
-          # But preserve variant: Rostoc-staging_0.2.94_aarch64.dmg for staging
-          DMG_NAME="${PRODUCT_NAME}_${VERSION}_${ARCH}.dmg"
-          DMG_SIZE=$(du -h "${DMG_PATH}" | cut -f1)
-          echo "[INFO] Found DMG at ${DMG_PATH} (${DMG_SIZE}), copying to updates as ${DMG_NAME}"
-          echo "[INFO] Variant: ${VARIANT}, Product name: ${PRODUCT_NAME}"
-          cp -v "${DMG_PATH}" "../updates/macos/${DMG_NAME}"
-          ls -lh "../updates/macos/${DMG_NAME}"
-        else
-          echo "[WARN] No DMG found in any search directory"
-          for dir in "${SEARCH_DIRS[@]}"; do
-            if [[ -d "$dir" ]]; then
-              echo "[DEBUG] Contents of $dir:" >&2
-              ls -la "$dir" 2>/dev/null || true
-            fi
-          done
-        fi
-
-        # Stamp version file
-        {
-          date -u +"%Y-%m-%dT%H:%M:%SZ"
-          echo "version=${VERSION}"
-          echo "git_sha=$(git rev-parse --short HEAD)"
-          echo "variant=${VARIANT}"
-        } > "../updates/version.txt"
-
-        # Generate checksums using helper script from rostoc-updates repo
-        bash ../.github/scripts/generate-checksums.sh "../updates/macos"
-
-        echo "tarball_name=$TARBALL_NAME" >> "$GITHUB_OUTPUT"
-        echo "dmg_name=${DMG_NAME:-}" >> "$GITHUB_OUTPUT"
-        echo "product_name=${PRODUCT_NAME}" >> "$GITHUB_OUTPUT"
+      run: bash ../scripts/ci/run_build_artifacts.sh prepare-macos
 
     - name: '[macOS] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'macos' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -203,70 +79,11 @@ runs:
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
-        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
+        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || inputs.variant == 'dev' && 'releases/dev' || 'releases' }}
         PRODUCT_NAME: ${{ steps.prepare-macos.outputs.product_name }}
         TARBALL_NAME: ${{ steps.prepare-macos.outputs.tarball_name }}
         DMG_NAME: ${{ steps.prepare-macos.outputs.dmg_name }}
-      run: |
-        set -euo pipefail
-
-        # Install AWS CLI if not present
-        if ! command -v aws &> /dev/null; then
-          echo "Installing AWS CLI..."
-          pip install --quiet awscli
-        fi
-
-        RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
-        echo "[INFO] Uploading macOS binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
-        echo "[INFO] Product name: ${PRODUCT_NAME}"
-        echo "[INFO] Tarball: ${TARBALL_NAME}"
-        echo "[INFO] DMG: ${DMG_NAME}"
-
-        # Load checksums for verification
-        echo "[INFO] Loading checksums from checksums.txt"
-        TARBALL_CHECKSUM=$(grep "${TARBALL_NAME}" "../updates/macos/checksums.txt" | awk '{print $1}')
-
-        echo "[INFO] Expected tarball checksum: ${TARBALL_CHECKSUM}"
-
-        # Upload macOS artifacts
-        echo "[INFO] Uploading tarball..."
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/macos/${TARBALL_NAME}" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${TARBALL_NAME}" \
-          --acl public-read
-
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/macos/${TARBALL_NAME}.sig" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${TARBALL_NAME}.sig" \
-          --acl public-read
-
-        # Upload DMG if present
-        if [ -n "${DMG_NAME}" ] && [ -f "../updates/macos/${DMG_NAME}" ]; then
-          echo "[INFO] Uploading signed, unstapled DMG for backend-managed notarization"
-          echo "[INFO] CI will replace this artifact after stapling completes"
-          
-          DMG_CHECKSUM=$(grep "${DMG_NAME}" "../updates/macos/checksums.txt" | awk '{print $1}')
-          echo "[INFO] Expected DMG checksum: ${DMG_CHECKSUM}"
-          
-          DMG_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${DMG_NAME}"
-          
-          aws s3 cp \
-            --endpoint-url "${SPACES_ENDPOINT}" \
-            "../updates/macos/${DMG_NAME}" \
-            "${DMG_S3_URL}" \
-            --acl public-read
-          
-          # Verify upload using helper script from rostoc-updates repo
-          bash ../.github/scripts/verify-s3-upload.sh \
-            "../updates/macos/${DMG_NAME}" \
-            "${DMG_S3_URL}" \
-            "${DMG_CHECKSUM}" \
-            "${SPACES_ENDPOINT}"
-        fi
-
-        echo "[INFO] ✅ macOS upload complete"
+      run: bash ../scripts/ci/run_build_artifacts.sh upload-macos
 
     # ======== Windows ========
     - name: '[Windows] Locate updater artifacts'
@@ -274,43 +91,7 @@ runs:
       id: locate-windows
       working-directory: private-src
       shell: pwsh
-      run: |
-        $ErrorActionPreference = 'Stop'
-        $searchRoots = @('target', 'src-tauri/target')
-
-        # Find MSI installer
-        $msiCandidates = @()
-        foreach ($root in $searchRoots) {
-          if (-not (Test-Path -LiteralPath $root)) { continue }
-          $found = Get-ChildItem -Path $root -Recurse -File -Filter '*.msi' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
-          if ($found) { $msiCandidates += $found }
-        }
-        $msi = $msiCandidates | Select-Object -First 1
-        if (-not $msi) {
-          throw 'MSI artifact not found under target/ or src-tauri/target/'
-        }
-
-        # Find MSI signature
-        $msiSigPath = "$($msi.FullName).sig"
-        if (-not (Test-Path $msiSigPath)) {
-          $sigCandidate = Get-ChildItem -Path $msi.DirectoryName -Filter "$($msi.BaseName)*.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($sigCandidate) {
-            $msiSigPath = $sigCandidate.FullName
-          } else {
-            throw "Signature file not found for $($msi.Name)"
-          }
-        }
-
-        # Tauri v2: MSI file itself is used for updates (no separate .msi.zip needed)
-        # See: https://v2.tauri.app/plugin/updater/
-        Write-Host "[INFO] MSI and signature will be used for Tauri auto-updates"
-
-        "artifact=$($msi.FullName)" >> $env:GITHUB_OUTPUT
-        "signature=$msiSigPath" >> $env:GITHUB_OUTPUT
-        "archive=$($msi.FullName)" >> $env:GITHUB_OUTPUT
-        "archive_signature=$msiSigPath" >> $env:GITHUB_OUTPUT
-        Write-Host "[INFO] Located MSI installer: $($msi.FullName)"
-        Write-Host "[INFO] Located MSI signature: $msiSigPath"
+      run: ../scripts/ci/run_build_artifacts.ps1 locate-windows
 
     - name: '[Windows] Prepare update bundle'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
@@ -318,64 +99,20 @@ runs:
       working-directory: private-src
       shell: pwsh
       env:
+        ARTIFACT: ${{ steps.locate-windows.outputs.artifact }}
+        SIGNATURE: ${{ steps.locate-windows.outputs.signature }}
+        ARCHIVE: ${{ steps.locate-windows.outputs.archive }}
+        ARCHIVE_SIGNATURE: ${{ steps.locate-windows.outputs.archive_signature }}
+        ARCH: ${{ inputs.arch }}
         VERSION: ${{ inputs.version }}
         VARIANT: ${{ inputs.variant }}
-      run: |
-        $ErrorActionPreference = 'Stop'
-        $version = $env:VERSION
-        $variant = $env:VARIANT
-        $artifact = '${{ steps.locate-windows.outputs.artifact }}'
-        $signature = '${{ steps.locate-windows.outputs.signature }}'
-        $archive = '${{ steps.locate-windows.outputs.archive }}'
-        $archiveSignature = '${{ steps.locate-windows.outputs.archive_signature }}'
-        $arch = '${{ inputs.arch }}'
-
-        if ([string]::IsNullOrWhiteSpace($version)) { throw 'Version missing' }
-        if (-not (Test-Path $artifact)) { throw "Artifact missing: $artifact" }
-        if (-not (Test-Path $signature)) { throw "Signature missing: $signature" }
-
-        # Create Windows updates directory
-        $parent = Split-Path -Parent $PWD
-        $updatesRoot = Join-Path $parent 'updates'
-        $windowsDir = Join-Path $updatesRoot 'windows'
-        New-Item -ItemType Directory -Path $windowsDir -Force | Out-Null
-
-        # Determine product name based on variant
-        $productName = if ($variant -eq 'staging') { 'Rostoc-staging' } else { 'Rostoc' }
-
-        # Determine architecture label for filename
-        $archLabel = if ($arch -eq 'i686') { 'x86' } else { 'x64' }
-
-        # Copy MSI installer artifacts with version-tagged names
-        $extension = [System.IO.Path]::GetExtension($artifact)
-        $msiName = "${productName}-${version}-windows-${archLabel}${extension}"
-        Copy-Item $artifact (Join-Path $windowsDir $msiName) -Force
-        Copy-Item $signature (Join-Path $windowsDir "${msiName}.sig") -Force
-
-        # Also copy MSI as latest for convenience
-        $latestName = "${productName}-windows-${archLabel}${extension}"
-        Copy-Item $artifact (Join-Path $windowsDir $latestName) -Force
-        Copy-Item $signature (Join-Path $windowsDir "${latestName}.sig") -Force
-
-        Write-Host "[INFO] Windows MSI installer staged: $msiName"
-        Write-Host "[INFO] Tauri v2: MSI file will be used directly for auto-updates (no separate .zip needed)"
-
-        Write-Host "[INFO] Variant: $variant, Product name: $productName"
-        "msi_name=$msiName" >> $env:GITHUB_OUTPUT
-        "archive_name=$msiName" >> $env:GITHUB_OUTPUT
-        "product_name=$productName" >> $env:GITHUB_OUTPUT
+      run: ../scripts/ci/run_build_artifacts.ps1 prepare-windows
 
     - name: '[Windows] Generate checksums'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "[INFO] Generating checksums for Windows MSI files"
-        # Generate sha256 checksums for all MSI files
-        (cd "../updates/windows" && sha256sum ./*.msi > checksums.txt)
-        echo "[INFO] Checksums generated:"
-        cat "../updates/windows/checksums.txt"
+      run: bash ../scripts/ci/run_build_artifacts.sh generate-windows-checksums
 
     - name: '[Windows] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'windows' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -389,58 +126,11 @@ runs:
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
         ARCH: ${{ inputs.arch }}
-        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
+        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || inputs.variant == 'dev' && 'releases/dev' || 'releases' }}
         MSI_NAME: ${{ steps.prepare-windows.outputs.msi_name }}
         ARCHIVE_NAME: ${{ steps.prepare-windows.outputs.archive_name }}
         PRODUCT_NAME: ${{ steps.prepare-windows.outputs.product_name }}
-      run: |
-        set -euo pipefail
-
-        # Install AWS CLI if not present
-        if ! command -v aws &> /dev/null; then
-          echo "Installing AWS CLI..."
-          pip install --quiet awscli
-        fi
-
-        RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
-        echo "[INFO] Uploading Windows binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
-        echo "[INFO] Product name: ${PRODUCT_NAME}"
-        echo "[INFO] MSI installer: ${MSI_NAME}"
-        echo "[INFO] MSI for updates: ${ARCHIVE_NAME:-not found}"
-
-        # Load checksums for verification
-        echo "[INFO] Loading checksums from checksums.txt"
-        MSI_CHECKSUM=$(grep "${MSI_NAME}" "../updates/windows/checksums.txt" | awk '{print $1}')
-
-        echo "[INFO] Expected MSI checksum: ${MSI_CHECKSUM}"
-
-        # Upload MSI installer
-        echo "[INFO] Uploading MSI installer..."
-        MSI_S3_URL="s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}"
-
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/windows/${MSI_NAME}" \
-          "${MSI_S3_URL}" \
-          --acl public-read
-
-        # Verify MSI upload using helper script from rostoc-updates repo
-        bash ../.github/scripts/verify-s3-upload.sh \
-          "../updates/windows/${MSI_NAME}" \
-          "${MSI_S3_URL}" \
-          "${MSI_CHECKSUM}" \
-          "${SPACES_ENDPOINT}"
-
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/windows/${MSI_NAME}.sig" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${MSI_NAME}.sig" \
-          --acl public-read
-
-        echo "[INFO] ✅ Windows MSI and signature uploaded (MSI will be used for auto-updates)"
-        echo "[INFO] Tauri v2: MSI file serves as both installer and updater archive"
-
-        echo "Uploaded to: ${SPACES_ENDPOINT}/${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/" >> "$GITHUB_STEP_SUMMARY"
+      run: bash ../scripts/ci/run_build_artifacts.sh upload-windows
 
     # ======== Linux ========
     - name: '[Linux] Locate updater artifacts'
@@ -448,54 +138,7 @@ runs:
       id: locate-linux
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-
-        # Use get_bundle_dirs.py for canonical search paths (same as macOS)
-        SEARCH_DIRS=()
-        while IFS= read -r line; do
-          SEARCH_DIRS+=("$line")
-        done < <(python scripts/ci/get_bundle_dirs.py linux appimage)
-
-        echo "[DEBUG] AppImage search directories:"
-        for dir in "${SEARCH_DIRS[@]}"; do
-          echo "  - $dir (exists=$([ -d "$dir" ] && echo yes || echo no))"
-        done
-
-        APPIMAGE=""
-        for dir in "${SEARCH_DIRS[@]}"; do
-          [[ -d "$dir" ]] || continue
-          echo "[DEBUG] Searching $dir:"
-          find "$dir" -maxdepth 3 -type f -name '*.AppImage*' 2>/dev/null | while read -r f; do
-            echo "  found: $f ($(du -h "$f" | cut -f1))"
-          done
-          cand=$(find "$dir" -maxdepth 3 -name '*.AppImage' ! -name '*.AppImage.*' -print -quit 2>/dev/null || true)
-          if [[ -n "$cand" ]]; then
-            APPIMAGE="$cand"
-            break
-          fi
-        done
-
-        if [[ -z "$APPIMAGE" ]]; then
-          echo "[DEBUG] No AppImage found. Dumping bundle directory tree:"
-          for root in target/release/bundle src-tauri/target/release/bundle; do
-            if [[ -d "$root" ]]; then
-              echo "[DEBUG] === $root ==="
-              find "$root" -maxdepth 4 -type f 2>/dev/null | head -40
-            fi
-          done
-          echo "::error::No AppImage artifact found in any search directory"
-          exit 1
-        fi
-
-        if [[ ! -f "$APPIMAGE" ]]; then
-          echo "::error::AppImage file not found: $APPIMAGE"
-          exit 1
-        fi
-
-        APPIMAGE_SIZE=$(du -h "$APPIMAGE" | cut -f1)
-        echo "appimage=$APPIMAGE" >> "$GITHUB_OUTPUT"
-        echo "[INFO] ✅ Located AppImage: $APPIMAGE ($APPIMAGE_SIZE)"
+      run: bash ../scripts/ci/run_build_artifacts.sh locate-linux
 
     - name: '[Linux] Prepare update bundle'
       if: ${{ inputs.platform == 'linux' && inputs.is_release == 'true' }}
@@ -503,45 +146,10 @@ runs:
       working-directory: private-src
       shell: bash
       env:
+        APPIMAGE: ${{ steps.locate-linux.outputs.appimage }}
         VERSION: ${{ inputs.version }}
         VARIANT: ${{ inputs.variant }}
-      run: |
-        set -euo pipefail
-        APPIMAGE="${{ steps.locate-linux.outputs.appimage }}"
-
-        if [[ -z "$VERSION" ]]; then
-          echo "::error::Version missing"
-          exit 1
-        fi
-        if [[ ! -f "$APPIMAGE" ]]; then
-          echo "::error::AppImage missing: $APPIMAGE"
-          exit 1
-        fi
-
-        # Determine product name based on variant
-        if [ "${VARIANT}" == "staging" ]; then
-          PRODUCT_NAME="Rostoc-staging"
-        else
-          PRODUCT_NAME="Rostoc"
-        fi
-
-        # Create Linux updates directory
-        mkdir -p "../updates/linux"
-
-        # Copy AppImage with version-tagged name (preserving variant in name)
-        APPIMAGE_NAME="${PRODUCT_NAME}-${VERSION}-x86_64.AppImage"
-        cp "$APPIMAGE" "../updates/linux/$APPIMAGE_NAME"
-
-        # Also copy as latest for convenience
-        cp "$APPIMAGE" "../updates/linux/${PRODUCT_NAME}-x86_64.AppImage"
-
-        # Generate checksums
-        (cd "../updates/linux" && sha256sum ./*.AppImage > checksums.txt)
-
-        echo "[INFO] Linux artifacts staged: $APPIMAGE_NAME"
-        echo "[INFO] Variant: ${VARIANT}, Product name: ${PRODUCT_NAME}"
-        echo "appimage_name=$APPIMAGE_NAME" >> "$GITHUB_OUTPUT"
-        echo "product_name=${PRODUCT_NAME}" >> "$GITHUB_OUTPUT"
+      run: bash ../scripts/ci/run_build_artifacts.sh prepare-linux
 
     - name: '[Linux] Upload binaries to DigitalOcean Spaces'
       if: ${{ inputs.platform == 'linux' && inputs.is_release == 'true' && steps.detect-release-token.outputs.available == 'true' }}
@@ -554,36 +162,15 @@ runs:
         SPACES_BUCKET: ${{ inputs.do_spaces_bucket }}
         SPACES_ENDPOINT: ${{ inputs.do_spaces_endpoint }}
         VERSION: ${{ inputs.version }}
-        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || 'releases' }}
+        RELEASE_PREFIX: ${{ inputs.variant == 'staging' && 'releases/staging' || inputs.variant == 'dev' && 'releases/dev' || 'releases' }}
         APPIMAGE_NAME: ${{ steps.prepare-linux.outputs.appimage_name }}
         PRODUCT_NAME: ${{ steps.prepare-linux.outputs.product_name }}
-      run: |
-        set -euo pipefail
-
-        # Install AWS CLI if not present
-        if ! command -v aws &> /dev/null; then
-          echo "Installing AWS CLI..."
-          pip install --quiet awscli
-        fi
-
-        RELEASE_PREFIX=${RELEASE_PREFIX:-releases}
-        echo "[INFO] Uploading Linux binaries to Spaces: ${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/"
-        echo "[INFO] Product name: ${PRODUCT_NAME}"
-        echo "[INFO] AppImage: ${APPIMAGE_NAME}"
-
-        # Upload Linux AppImage
-        aws s3 cp \
-          --endpoint-url "${SPACES_ENDPOINT}" \
-          "../updates/linux/${APPIMAGE_NAME}" \
-          "s3://${SPACES_BUCKET}/${RELEASE_PREFIX}/v${VERSION}/${APPIMAGE_NAME}" \
-          --acl public-read
-
-        echo "[INFO] ✅ Linux upload complete"
+      run: bash ../scripts/ci/run_build_artifacts.sh upload-linux
 
     # ======== Upload for manifest generation ========
     - name: Upload artifacts for manifest generation
       if: ${{ inputs.is_release == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.variant == 'staging' && 'rostoc-updates-staging' || 'rostoc-updates-stable' }}-${{ inputs.platform }}-${{ inputs.arch }}
+        name: ${{ inputs.variant == 'staging' && 'rostoc-updates-staging' || inputs.variant == 'dev' && 'rostoc-updates-dev' || 'rostoc-updates-stable' }}-${{ inputs.platform }}-${{ inputs.arch }}
         path: updates/*

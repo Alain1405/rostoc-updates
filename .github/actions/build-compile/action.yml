@@ -9,7 +9,7 @@ inputs:
     description: 'Architecture being built (aarch64, x86_64, i686)'
     required: true
   variant:
-    description: 'Build variant (production, staging)'
+    description: 'Build variant (production, staging, dev)'
     required: true
   is_release:
     description: 'Whether this is a release build'
@@ -48,68 +48,7 @@ runs:
     - name: Initialize platform-specific config
       id: platform_config
       shell: bash
-      run: |
-        set -euo pipefail
-
-        # Add --mode development and --features devtools for staging builds
-        # --mode development: Enables TanStack Router DevTools (Vite MODE=development)
-        # --features devtools: Enables Tauri WebView DevTools (right-click inspect)
-        MODE_FLAG=""
-        FEATURES_FLAG=""
-        CONFIG_FLAG=""
-        if [ "${ROSTOC_APP_VARIANT:-production}" == "staging" ]; then
-          MODE_FLAG="--mode development"
-          FEATURES_FLAG="--features devtools"
-          CONFIG_FLAG="--config src-tauri/tauri.staging.conf.json"
-          # Export for build.py to pass to generate_python_config.py
-          echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
-        fi
-
-        case "${{ inputs.platform }}" in
-          macos)
-            {
-              echo "build_command=python scripts/build.py --locked $MODE_FLAG $FEATURES_FLAG"
-              echo "artifact_extension=tar.gz"
-              echo "test_smoke=true"
-              if [ "${{ inputs.arch }}" == "x86_64" ]; then
-                echo "target=x86_64-apple-darwin"
-                echo "py_url_fragment=macos-x64"
-              else
-                echo "target=aarch64-apple-darwin"
-                echo "py_url_fragment=macos-arm64"
-              fi
-            } >> "$GITHUB_OUTPUT"
-            ;;
-          windows)
-            {
-              if [ "${{ inputs.arch }}" == "x86_64" ]; then
-                echo "build_command=python scripts/build.py --locked --bundles msi $MODE_FLAG $FEATURES_FLAG"
-                echo "target=x86_64-pc-windows-msvc"
-                echo "py_url_fragment=windows-x64"
-              else
-                # For 32-bit Windows, pass --target to Tauri CLI so WiX creates 32-bit MSI
-                echo "build_command=python scripts/build.py --locked --bundles msi --target i686-pc-windows-msvc $MODE_FLAG $FEATURES_FLAG"
-                echo "target=i686-pc-windows-msvc"
-                echo "py_url_fragment=windows-x86"
-              fi
-              echo "artifact_extension=msi"
-              echo "test_smoke=true"
-            } >> "$GITHUB_OUTPUT"
-            ;;
-          linux)
-            {
-              echo "build_command=python scripts/build.py --locked --bundles appimage $MODE_FLAG $FEATURES_FLAG"
-              echo "artifact_extension=AppImage"
-              echo "test_smoke=true"
-              echo "target=x86_64-unknown-linux-gnu"
-              echo "py_url_fragment=linux-x64"
-            } >> "$GITHUB_OUTPUT"
-            ;;
-          *)
-            echo "::error::Unknown platform: ${{ inputs.platform }}"
-            exit 1
-            ;;
-        esac
+      run: bash scripts/ci/run_build_compile.sh init-platform-config "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: '[macOS Intel] Confirm runner architecture'
       if: ${{ inputs.arch == 'x86_64' && inputs.platform == 'macos' }}
@@ -163,127 +102,22 @@ runs:
     - name: '[Windows] Remove Git usr/bin from PATH to prevent link.exe conflict'
       if: ${{ inputs.platform == 'windows' }}
       shell: bash
-      run: |
-        # Git for Windows includes /usr/bin/link.exe (Unix symlink utility)
-        # which conflicts with MSVC's link.exe (C++ linker)
-        # Remove Git's usr/bin and mingw64/bin from PATH to ensure MSVC linker is used
-        # In MSYS2/Git Bash, these appear in two forms:
-        #   - Windows-ified: /c/Program Files/Git/usr/bin  (contains "Git/usr/bin")
-        #   - MSYS2-native:  /usr/bin, /mingw64/bin        (no "Git" prefix)
-        # Both must be removed, as MSYS2 converts /usr/bin back to C:\Program Files\Git\usr\bin
-        # when child processes (Python, cargo) read the Windows PATH.
-        # See: https://github.com/Alain1405/rostoc-updates/actions/runs/22841590381/job/66248915439
-        NEW_PATH=$(echo "$PATH" | tr ':' '\n' \
-          | grep -v "Git/usr/bin" \
-          | grep -v "Git/mingw64/bin" \
-          | grep -v "^/usr/bin$" \
-          | grep -v "^/mingw64/bin$" \
-          | tr '\n' ':' | sed 's/:$//')
-        echo "PATH=$NEW_PATH" >> $GITHUB_ENV
-        echo "✅ Removed Git usr/bin and mingw64/bin from PATH (including MSYS2-native forms)"
-        echo "Updated PATH (first 500 chars): ${NEW_PATH:0:500}"
+      run: bash scripts/ci/run_build_compile.sh remove-windows-git-path-entries
 
     - name: '[Linux] Install system dependencies for AppImage'
       if: ${{ inputs.platform == 'linux' }}
       shell: bash
-      run: |
-        sudo apt-get update -qq
-        # Tauri v2 + WebKit 4.1 dependencies for AppImage
-        # libfuse2 is required by AppImage tools (linuxdeploy is itself an AppImage)
-        # librsvg2-dev and libayatana-appindicator3-dev are required for proper GTK bundling
-        # libwebp-dev is required for image processing support
-        sudo apt-get install -y \
-          libssl-dev \
-          libffi-dev \
-          libglib2.0-0 \
-          libglib2.0-dev \
-          libgtk-3-dev \
-          libwebkit2gtk-4.1-dev \
-          libjavascriptcoregtk-4.1-dev \
-          librsvg2-dev \
-          libayatana-appindicator3-dev \
-          libwebp-dev \
-          patchelf \
-          pkg-config \
-          libx11-6 \
-          fuse3 \
-          libfuse2
-        echo "✅ AppImage build dependencies installed"
+      run: bash scripts/ci/run_build_compile.sh install-linux-appimage-deps
 
     - name: Download embedded Python
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        case "${{ inputs.platform }}" in
-          macos)
-            if [ "${{ inputs.arch }}" = "x86_64" ]; then
-              PYTHON_TARGET="x86_64-apple-darwin"
-            else
-              PYTHON_TARGET="aarch64-apple-darwin"
-            fi
-            PYTHON_TARGET="$PYTHON_TARGET" bash scripts/macos/download-py.sh
-            ;;
-          windows)
-            if [ "${{ inputs.arch }}" = "i686" ]; then
-              PYTHON_TARGET="i686-pc-windows-msvc"
-            else
-              PYTHON_TARGET="x86_64-pc-windows-msvc"
-            fi
-            PYTHON_TARGET="$PYTHON_TARGET" pwsh scripts/windows/download-py.ps1
-            ;;
-          linux)
-            PYTHON_TARGET="x86_64-unknown-linux-gnu" bash scripts/linux/download-py.sh
-            ;;
-        esac
+      run: bash ../scripts/ci/run_build_compile.sh download-embedded-python "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Verify embedded Python architecture
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "🔍 Verifying embedded Python architecture matches target: ${{ inputs.arch }}"
-
-        case "${{ inputs.platform }}" in
-          windows)
-            PYTHON_EXE="src-tauri/pyembed/python/python.exe"
-            ;;
-          *)
-            PYTHON_EXE="src-tauri/pyembed/python/bin/python3"
-            ;;
-        esac
-
-        if [ ! -f "$PYTHON_EXE" ]; then
-          echo "❌ ERROR: Embedded Python not found at $PYTHON_EXE"
-          echo "Contents of src-tauri/pyembed/:"
-          ls -la src-tauri/pyembed/ || echo "Directory does not exist"
-          exit 1
-        fi
-
-        # Get Python architecture
-        PYTHON_INFO=$($PYTHON_EXE -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')" 2>&1)
-        MACHINE=$(echo "$PYTHON_INFO" | cut -d',' -f1)
-        IS_64BIT=$(echo "$PYTHON_INFO" | cut -d',' -f2)
-
-        echo "📊 Embedded Python info:"
-        echo "  - Machine: $MACHINE"
-        echo "  - 64-bit: $IS_64BIT"
-        echo "  - Target arch: ${{ inputs.arch }}"
-
-        # Validate architecture matches
-        if [ "${{ inputs.arch }}" = "x86_64" ] || [ "${{ inputs.arch }}" = "aarch64" ]; then
-          if [ "$IS_64BIT" != "True" ]; then
-            echo "❌ ERROR: Expected 64-bit Python for ${{ inputs.arch }} target, but got 32-bit!"
-            exit 1
-          fi
-        elif [ "${{ inputs.arch }}" = "i686" ]; then
-          if [ "$IS_64BIT" != "False" ]; then
-            echo "❌ ERROR: Expected 32-bit Python for i686 target, but got 64-bit!"
-            exit 1
-          fi
-        fi
-
-        echo "✅ Embedded Python architecture matches target"
+      run: bash ../scripts/ci/run_build_compile.sh verify-embedded-python-arch "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Install JS dependencies
       working-directory: private-src
@@ -304,74 +138,13 @@ runs:
 
     - name: Set variant-specific Tauri config flag
       shell: bash
-      run: |
-        case "${ROSTOC_APP_VARIANT:-production}" in
-          staging)
-            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.staging.conf.json" >> "$GITHUB_ENV"
-            ;;
-          dev)
-            echo "TAURI_CONFIG_FLAG=src-tauri/tauri.dev.conf.json" >> "$GITHUB_ENV"
-            ;;
-          production)
-            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
-            ;;
-          *)
-            echo "::warning::Unknown variant '$ROSTOC_APP_VARIANT', defaulting to production"
-            echo "TAURI_CONFIG_FLAG=" >> "$GITHUB_ENV"
-            ;;
-        esac
-        echo "[INFO] TAURI_CONFIG_FLAG=${TAURI_CONFIG_FLAG:-<empty>}"
+      run: bash scripts/ci/run_build_compile.sh set-tauri-config-flag
 
     - name: Capture diagnostic environment info
       if: always()
       shell: bash
       working-directory: private-src
-      run: |
-        {
-          echo "# Build Environment Diagnostics"
-          echo ""
-          echo "**Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-          echo "**Runner**: ${{ runner.os }} ${{ runner.arch }}"
-          echo "**Platform**: ${{ inputs.platform }}"
-          echo "**Architecture**: ${{ inputs.arch }}"
-          echo "**Variant**: ${ROSTOC_APP_VARIANT}"
-          echo ""
-          
-          echo "## Disk Space"
-          df -h . || true
-          echo ""
-          
-          echo "## Installed Tools"
-          echo "- Node: $(node --version 2>/dev/null || echo 'not installed')"
-          echo "- pnpm: $(pnpm --version 2>/dev/null || echo 'not installed')"
-          echo "- Rust: $(rustc --version 2>/dev/null || echo 'not installed')"
-          echo "- Python: $(python3 --version 2>/dev/null || echo 'not installed')"
-          echo "- uv: $(uv --version 2>/dev/null || echo 'not installed')"
-          
-          if [[ "${{ inputs.platform }}" == "macos" ]]; then
-            echo "- codesign: $(codesign --version 2>&1 | head -1 || echo 'not available')"
-            echo "- xcrun: $(xcrun --version 2>&1 || echo 'not available')"
-          fi
-          echo ""
-          
-          echo "## Environment Variables"
-          echo '```'
-          env | grep -E '^(ROSTOC|TAURI|SENTRY|GITHUB|RUNNER|PYO3)' | sort || true
-          echo '```'
-          echo ""
-          
-          echo "## Available Tauri Configs"
-          find src-tauri -maxdepth 1 -name "tauri*.json" -exec basename {} \; | sort
-          echo ""
-          
-          echo "## Python Runtime Status"
-          if [[ -d "build/runtime_staging" ]]; then
-            echo "Runtime staged: YES"
-            find build/runtime_staging -type f -name "python*" -o -name "*.dll" -o -name "*.dylib" 2>/dev/null | head -20
-          else
-            echo "Runtime staged: NO"
-          fi
-        } > diagnostics-${{ inputs.platform }}-${{ inputs.arch }}.md
+      run: bash ../scripts/ci/run_build_compile.sh capture-diagnostic-environment "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Upload diagnostic info
       if: always()
@@ -385,33 +158,7 @@ runs:
     - name: Generate build fingerprint
       shell: bash
       working-directory: private-src
-      run: |
-        {
-          echo "# Build Fingerprint"
-          echo "timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          echo "platform: ${{ inputs.platform }}"
-          echo "arch: ${{ inputs.arch }}"
-          echo "variant: ${ROSTOC_APP_VARIANT}"
-          echo "runner_os: ${{ runner.os }}"
-          echo "github_sha: ${{ github.sha }}"
-          echo "github_run_number: ${{ github.run_number }}"
-          echo ""
-          echo "# Dependencies"
-          echo "package_json_hash: $(shasum package.json 2>/dev/null | awk '{print $1}' || echo 'N/A')"
-          echo "cargo_lock_hash: $(shasum src-tauri/Cargo.lock 2>/dev/null | awk '{print $1}' || echo 'N/A')"
-          echo "pnpm_lock_hash: $(shasum pnpm-lock.yaml 2>/dev/null | awk '{print $1}' || echo 'N/A')"
-          echo ""
-          echo "# Tool Versions"
-          echo "node: $(node --version 2>/dev/null || echo 'unknown')"
-          echo "rust: $(rustc --version 2>/dev/null || echo 'unknown')"
-          echo "python: $(python3 --version 2>/dev/null || echo 'unknown')"
-          echo ""
-          echo "# Config Selection"
-          echo "tauri_config: ${TAURI_CONFIG_FLAG:-<base>}"
-          if [[ -n "${TAURI_CONFIG_FLAG}" && -f "${TAURI_CONFIG_FLAG}" ]]; then
-            echo "config_hash: $(shasum "${TAURI_CONFIG_FLAG}" 2>/dev/null | awk '{print $1}' || echo 'N/A')"
-          fi
-        } > build-fingerprint.txt
+      run: bash ../scripts/ci/run_build_compile.sh generate-build-fingerprint "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Upload build fingerprint
       if: always()
@@ -457,46 +204,7 @@ runs:
       if: ${{ inputs.platform == 'windows' }}
       working-directory: private-src
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "🔧 Configuring PyO3 to use staged embedded Python..."
-
-        PYTHON_EXE="$(pwd)/build/runtime_staging/pyembed/python/python.exe"
-        if [ ! -f "$PYTHON_EXE" ]; then
-          echo "❌ ERROR: Staged Python not found at $PYTHON_EXE"
-          echo "   This should have been created by the staging step."
-          ls -la build/runtime_staging/ 2>/dev/null || echo "   Staging directory doesn't exist!"
-          exit 1
-        fi
-
-        # Verify architecture matches target BEFORE setting PYO3_PYTHON
-        echo "🔍 Verifying Python architecture matches target: ${{ inputs.arch }}"
-        ARCH_INFO=$("$PYTHON_EXE" -c "import platform, sys; print(f'{platform.machine()},{sys.maxsize > 2**32}')" 2>&1)
-        MACHINE=$(echo "$ARCH_INFO" | cut -d',' -f1)
-        IS_64BIT=$(echo "$ARCH_INFO" | cut -d',' -f2)
-
-        # Validate architecture
-        EXPECTED_64BIT=""
-        if [ "${{ inputs.arch }}" = "x86_64" ]; then
-          EXPECTED_64BIT="True"
-        elif [ "${{ inputs.arch }}" = "i686" ]; then
-          EXPECTED_64BIT="False"
-        fi
-
-        if [ -n "$EXPECTED_64BIT" ] && [ "$IS_64BIT" != "$EXPECTED_64BIT" ]; then
-          echo "❌ ERROR: Python architecture mismatch!"
-          echo "   Target: ${{ inputs.arch }} ($([ "$EXPECTED_64BIT" = "True" ] && echo "64-bit" || echo "32-bit"))"
-          echo "   Python: $MACHINE ($IS_64BIT = $([ "$IS_64BIT" = "True" ] && echo "64-bit" || echo "32-bit"))"
-          echo "   This will cause PyO3 compilation to fail."
-          exit 1
-        fi
-
-        # Convert to Windows path for PyO3
-        PYTHON_EXE_WIN=$(cygpath -w "$PYTHON_EXE" 2>/dev/null || echo "$PYTHON_EXE")
-        echo "PYO3_PYTHON=$PYTHON_EXE_WIN" >> "$GITHUB_ENV"
-
-        echo "✅ PYO3_PYTHON configured: $PYTHON_EXE_WIN"
-        echo "   Architecture: $MACHINE ($([ "$IS_64BIT" = "True" ] && echo "64-bit" || echo "32-bit")) - matches target ${{ inputs.arch }}"
+      run: bash ../scripts/ci/run_build_compile.sh set-windows-pyo3-python "${{ inputs.arch }}"
 
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}

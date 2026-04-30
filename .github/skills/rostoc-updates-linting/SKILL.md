@@ -28,9 +28,19 @@ make test-env        # Catch env var bugs (empty value handling)
 | `validate-paths` | Script paths broken by `working-directory` (Dec 31, 2025 bug) |
 | `test-env` | Incorrect `${VAR:?}` usage for empty-allowed vars (Jan 1, 2026 bug) |
 
+## Script Placement
+
+Prefer dedicated script files in `scripts/ci/` over inline shell in workflow YAML.
+
+- Default: extract non-trivial workflow logic into a checked-in script and call it from YAML.
+- Keep YAML `run:` blocks as thin wrappers, ideally a single `bash ../scripts/ci/script_name.sh ...` invocation.
+- Inline shell is acceptable only for very short glue code where extraction would add no clarity.
+- `make validate-paths` now also warns on long inline `run: |` blocks, not just broken script paths.
+- After extraction, always run `make validate-paths` because `working-directory` changes how `../scripts/ci/...` resolves.
+
 ## Shell Script Rules
 
-When writing shell scripts in workflow `run:` blocks:
+When writing shell scripts for CI, whether extracted to `scripts/ci/` or kept inline for trivial glue:
 
 ### Variable Quoting
 

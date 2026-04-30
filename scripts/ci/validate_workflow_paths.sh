@@ -19,6 +19,7 @@ NC='\033[0m' # No Color
 
 errors=0
 warnings=0
+INLINE_RUN_WARN_THRESHOLD=8
 
 echo "🔍 Validating script paths in GitHub Actions workflows..."
 echo -e "${BLUE}ℹ️  Checking scripts in both public repo and private repo (if available)${NC}"
@@ -36,16 +37,16 @@ fi
 while IFS= read -r workflow_file; do
   rel_path="${workflow_file#$REPO_ROOT/}"
   
-  # Extract script paths from shell commands
-  # Look for patterns like: bash scripts/ci/something.sh, ./scripts/ci/something.sh, ../scripts/ci/something.sh
-  script_refs=$(grep -n "scripts/ci/[a-zA-Z0-9_-]*\.sh" "$workflow_file" 2>/dev/null || true)
+  # Extract script paths from shell commands.
+  # Look for patterns like: bash scripts/ci/something.sh, ../scripts/ci/something.ps1
+  script_refs=$(grep -nE "scripts/ci/[a-zA-Z0-9_-]*\.(sh|ps1)" "$workflow_file" 2>/dev/null || true)
   
   if [ -n "$script_refs" ]; then
     echo "📄 Checking: $rel_path"
     
     while IFS=: read -r line_num line_content; do
       # Extract the script path
-      script_path=$(echo "$line_content" | grep -o "[.]*scripts/ci/[a-zA-Z0-9_-]*\.sh" | head -1)
+      script_path=$(echo "$line_content" | grep -oE "[.]*scripts/ci/[a-zA-Z0-9_-]*\.(sh|ps1)" | head -1)
       
       if [ -z "$script_path" ]; then
         continue
@@ -124,9 +125,64 @@ while IFS= read -r workflow_file; do
   fi
 done <<< "$workflow_files"
 
+echo "🔍 Checking for long inline run blocks..."
+while IFS= read -r workflow_file; do
+  rel_path="${workflow_file#$REPO_ROOT/}"
+  long_runs=$(awk -v threshold="$INLINE_RUN_WARN_THRESHOLD" '
+    function flush() {
+      if (in_run && line_count > threshold) {
+        print start_line ":" line_count
+      }
+      in_run = 0
+      run_indent = 0
+      line_count = 0
+      start_line = 0
+    }
+
+    {
+      line = $0
+      indent = match(line, /[^ ]/) - 1
+      if (indent < 0) {
+        indent = length(line)
+      }
+
+      if (in_run && line !~ /^[[:space:]]*$/ && indent <= run_indent) {
+        flush()
+      }
+
+      if (!in_run && line ~ /^[[:space:]]*run:[[:space:]]*\|[[:space:]]*$/) {
+        in_run = 1
+        run_indent = indent
+        start_line = NR
+        line_count = 0
+        next
+      }
+
+      if (in_run) {
+        line_count++
+      }
+    }
+
+    END {
+      flush()
+    }
+  ' "$workflow_file")
+
+  if [[ -n "$long_runs" ]]; then
+    echo "📄 Checking inline run blocks: $rel_path"
+    while IFS=: read -r line_num line_count; do
+      [[ -z "$line_num" ]] && continue
+      echo -e "   ${YELLOW}⚠️  Line $line_num: inline run block is $line_count lines long${NC}"
+      echo -e "      Prefer extracting non-trivial workflow shell into scripts/ci/ and calling it from YAML"
+      ((warnings++))
+    done <<< "$long_runs"
+    echo ""
+  fi
+done <<< "$workflow_files"
+
 # Check that all scripts in scripts/ci/ are actually used
 echo "🔍 Checking for unused scripts..."
-for script_file in "$REPO_ROOT/scripts/ci"/*.sh "$REPO_ROOT/scripts/ci"/*.py; do
+for script_file in "$REPO_ROOT/scripts/ci"/*.sh "$REPO_ROOT/scripts/ci"/*.py "$REPO_ROOT/scripts/ci"/*.ps1; do
   if [ ! -f "$script_file" ]; then
     continue
   fi
@@ -156,7 +212,7 @@ if [ "$errors" -eq 0 ] && [ "$warnings" -eq 0 ]; then
 elif [ "$errors" -eq 0 ]; then
   echo -e "${YELLOW}⚠️  $warnings warning(s) found${NC}"
   echo ""
-  echo "Fix warnings to prevent CI failures when working-directory changes."
+  echo "Fix warnings to prevent CI drift and path issues."
   exit 0
 else
   echo -e "${RED}❌ $errors error(s) and $warnings warning(s) found${NC}"
