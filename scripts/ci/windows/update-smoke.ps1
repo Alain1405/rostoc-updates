@@ -76,35 +76,6 @@ function Get-InstalledVersion {
   throw "Unable to find installed version for product '$ProductName' in the uninstall registry keys"
 }
 
-function Test-VersionMatchesExpected {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$InstalledVersion,
-
-    [Parameter(Mandatory = $true)]
-    [string]$ExpectedVersion
-  )
-
-  if ($InstalledVersion -eq $ExpectedVersion) {
-    return $true
-  }
-
-  $installedParts = $InstalledVersion.Split('.')
-  $expectedParts = $ExpectedVersion.Split('.')
-
-  if ($installedParts.Length -lt $expectedParts.Length) {
-    return $false
-  }
-
-  for ($index = 0; $index -lt $expectedParts.Length; $index++) {
-    if ($installedParts[$index] -ne $expectedParts[$index]) {
-      return $false
-    }
-  }
-
-  return $true
-}
-
 function Get-RegistryMatchesForProduct {
   param(
     [Parameter(Mandatory = $true)]
@@ -364,7 +335,7 @@ try {
   $summary.installed_binary_path = Assert-InstalledBinaryPresent -ProductName $productName -Stage 'update'
 
   $summary.new_version = Get-InstalledVersion -ProductName $productName
-  if (-not (Test-VersionMatchesExpected -InstalledVersion $summary.new_version -ExpectedVersion $ExpectedNewVersion)) {
+  if ($summary.new_version -ne $ExpectedNewVersion) {
     throw "Installed version '$($summary.new_version)' does not match expected '$ExpectedNewVersion'"
   }
 

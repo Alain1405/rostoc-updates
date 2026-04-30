@@ -85,7 +85,7 @@ jobs:
       - name: Run Windows update smoke
         shell: pwsh
         env:
-          EXPECTED_NEW_VERSION: ${{ needs.build.outputs.version }}
+          EXPECTED_NEW_VERSION: ${{ needs.build.outputs.update_smoke_version }}
           IS_RELEASE: ${{ inputs.is_release || false }}
           UPDATE_CHANNEL: 'stable'
           UPDATE_VARIANT: 'production'
