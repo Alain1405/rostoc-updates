@@ -15,6 +15,10 @@ inputs:
   arch:
     description: 'Architecture being built (aarch64, x86_64, i686)'
     required: true
+  variant:
+    description: 'App variant being built (production, staging, dev)'
+    required: false
+    default: 'production'
 
   private_repo_ssh_key:
     description: 'Deploy key for Rostoc/rostoc'
@@ -261,6 +265,7 @@ runs:
       with:
         workspaces: |
             private-src/src-tauri -> ../target
+        key: ${{ inputs.platform }}-${{ inputs.arch }}-${{ inputs.variant }}
         # Removed shared-key to let cache auto-invalidate on Cargo.toml changes
         # Each platform will have its own cache based on Cargo.toml+Cargo.lock
         save-if: ${{ github.ref == 'refs/heads/main' }}

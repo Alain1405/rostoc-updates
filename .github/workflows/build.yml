@@ -144,6 +144,7 @@ jobs:
           is_release: ${{ inputs.is_release }}
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          variant: ${{ matrix.variant }}
           private_repo_ssh_key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}
           apple_certificate: ${{ secrets.APPLE_CERTIFICATE }}
           apple_certificate_password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
