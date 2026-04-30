@@ -87,6 +87,8 @@ jobs:
         env:
           EXPECTED_NEW_VERSION: ${{ needs.build.outputs.version }}
           IS_RELEASE: ${{ inputs.is_release || false }}
+          UPDATE_CHANNEL: 'stable'
+          UPDATE_VARIANT: 'production'
           UPDATE_SMOKE_THRESHOLD_SECONDS: '90'
           UPDATE_SMOKE_BASELINE_SECONDS: '135'
         run: |
@@ -104,9 +106,10 @@ jobs:
             throw "Downloaded MSI artifact not found under $artifactDir"
           }
 
-          $updateChannel = if ($env:IS_RELEASE -eq 'true') { 'stable' } else { 'staging' }
-          # Use the backend public latest endpoint as the authoritative smoke baseline.
-          # GitHub Pages manifests remain available only as compatibility mirrors.
+          $updateChannel = $env:UPDATE_CHANNEL
+          # The smoke job always validates the production Windows MSI artifact.
+          # Use the stable backend channel as the authoritative baseline so the
+          # installed product name matches the production bundle under test.
           $backendLatestUrl = 'https://api.rostoc.co/api/updates/latest/public/'
           $latestReleaseUri = "${backendLatestUrl}?channel=$updateChannel"
           $latestRelease = Invoke-RestMethod -Uri $latestReleaseUri -Method Get
@@ -149,6 +152,7 @@ jobs:
           LOKI_URL: ${{ secrets.LOKI_URL }}
           LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
           LOKI_PASSWORD: ${{ secrets.LOKI_PASSWORD }}
+          UPDATE_VARIANT: 'production'
         run: |
           set -euo pipefail
 
@@ -158,7 +162,7 @@ jobs:
           {
             "platform": "windows",
             "arch": "x86_64",
-            "variant": "${{ inputs.is_release && 'production' || 'staging' }}",
+            "variant": "${UPDATE_VARIANT}",
             "job": "update_smoke",
             "status": "${{ job.status }}",
             "run_id": "${{ github.run_id }}",
@@ -179,6 +183,7 @@ jobs:
         shell: pwsh
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          UPDATE_VARIANT: 'production'
           UPDATE_SMOKE_THRESHOLD_SECONDS: '90'
         run: |
           $summaryPath = Join-Path (Join-Path $env:RUNNER_TEMP 'update-smoke') 'summary.json'
@@ -224,7 +229,7 @@ jobs:
                   @{ type = 'mrkdwn'; text = "*Update install seconds:* $seconds" },
                   @{ type = 'mrkdwn'; text = "*Threshold:* $threshold" },
                   @{ type = 'mrkdwn'; text = "*Run:* ${{ github.run_id }}" },
-                  @{ type = 'mrkdwn'; text = "*Variant:* ${{ inputs.is_release && 'production' || 'staging' }}" }
+                  @{ type = 'mrkdwn'; text = "*Variant:* $env:UPDATE_VARIANT" }
                 )
               }
             )

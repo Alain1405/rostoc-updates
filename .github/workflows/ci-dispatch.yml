@@ -1,8 +1,12 @@
-name: Dispatch CI Build
+name: Public CI Build
+
+run-name: >-
+  Public CI build for ${{ inputs.ref || github.event.client_payload.ref || 'main' }}
+  (${{ github.event_name == 'repository_dispatch' && format('dispatched by {0} from {1}', github.event.client_payload.initiator || github.actor, github.event.client_payload.sourceRepo || 'Rostoc/rostoc') || format('manual by {0}', github.actor) }})
 
 on:
   repository_dispatch:
-    types: [trigger-ci]
+    types: [public-ci-build, trigger-ci]
   workflow_dispatch:
     inputs:
       ref:

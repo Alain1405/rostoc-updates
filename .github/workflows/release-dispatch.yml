@@ -1,8 +1,12 @@
-name: Dispatch Release Build
+name: Public Release Build
+
+run-name: >-
+  Public release build for ${{ inputs.ref || github.event.client_payload.ref || github.ref_name || 'main' }}
+  (${{ github.event_name == 'repository_dispatch' && format('dispatched by {0} from {1}', github.event.client_payload.initiator || github.actor, github.event.client_payload.sourceRepo || 'Rostoc/rostoc') || format('manual by {0}', github.actor) }})
 
 on:
   repository_dispatch:
-    types: [trigger-release]
+    types: [public-release-build, trigger-release]
   workflow_dispatch:
     inputs:
       ref:
