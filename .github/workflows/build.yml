@@ -215,8 +215,8 @@ jobs:
         with:
           name: windows-msi-for-smoke-${{ github.run_id }}
           path: |
-            private-src/updates/windows/Rostoc-${{ steps.prep.outputs.version }}-windows-x64.msi
-            private-src/updates/windows/Rostoc-${{ steps.prep.outputs.version }}-windows-x64.msi.sig
+            updates/windows/Rostoc-${{ steps.prep.outputs.version }}-windows-x64.msi
+            updates/windows/Rostoc-${{ steps.prep.outputs.version }}-windows-x64.msi.sig
           retention-days: 7
           if-no-files-found: error
 
@@ -233,7 +233,7 @@ jobs:
             private-src/src-tauri/target/release/bundle/**/*.msi.zip
             private-src/src-tauri/target/release/bundle/**/*.AppImage
             private-src/src-tauri/target/release/bundle/**/*.sig
-            private-src/updates/**/*
+            updates/**/*
           retention-days: 7
           if-no-files-found: ignore
 
