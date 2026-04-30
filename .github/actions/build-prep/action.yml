@@ -254,6 +254,16 @@ runs:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Persist Cargo bin path
+      shell: bash
+      run: |
+        set -euo pipefail
+        CARGO_BIN=$(dirname "$(command -v cargo)")
+        echo "$CARGO_BIN" >> "$GITHUB_PATH"
+        if command -v cygpath >/dev/null 2>&1; then
+          echo "$(cygpath -w "$CARGO_BIN")" >> "$GITHUB_PATH"
+        fi
+
     - name: Debug Rust cache configuration
       working-directory: private-src
       shell: bash
