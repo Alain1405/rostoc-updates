@@ -38,6 +38,33 @@ Prefer dedicated script files in `scripts/ci/` over inline shell in workflow YAM
 - `make validate-paths` now also warns on long inline `run: |` blocks, not just broken script paths.
 - After extraction, always run `make validate-paths` because `working-directory` changes how `../scripts/ci/...` resolves.
 
+## Path Contracts
+
+Treat workflow paths as explicit contracts between three roots:
+
+| Path family | Owner | Typical use |
+|-------------|-------|-------------|
+| `scripts/ci/**`, `.github/**`, `updates/**` | Public repo root | Workflow entrypoints, staged release artifacts, smoke artifacts |
+| `private-src/**` | Private repo checkout root | Product source checkout, build outputs, runtime staging |
+| `../updates/**` inside helper scripts with `working-directory: private-src` | Public repo root | Script-relative writes back into the updates repo |
+
+Rules:
+
+1. `working-directory: private-src` only changes the shell's cwd for that step. It does **not** move later workflow steps out of the public repo root.
+2. If a helper script running from `private-src` writes to `../updates/...`, downstream YAML steps must read `updates/...`, not `private-src/updates/...`.
+3. Do not reconstruct artifact paths from memory. Prefer helper outputs (`steps.<id>.outputs.*`) or the actual staging directory contract.
+4. Build bundles may live under `private-src/target/...` or `private-src/src-tauri/target/...`. Use helper discovery or dual-root globs when collecting diagnostics instead of hardcoding one root.
+5. `updates/**` is the canonical repo-level staging area for smoke/update artifacts. `private-src/**` is for source and immediate build outputs.
+
+## CI Retrospective Guardrails
+
+Use these checks whenever CI path bugs recur:
+
+1. Identify the producer path, staging path, and consumer path separately before editing YAML.
+2. Check whether a script path is interpreted from repo root or from a step `working-directory`.
+3. When logs show a concrete path, update the skill or workflow to match that observed contract instead of preserving stale assumptions.
+4. If a workflow appears not to trigger, inspect `on.push.paths` / `paths-ignore` before blaming dispatch. Empty commits do not satisfy path filters; use `workflow_dispatch` when needed.
+
 ## Shell Script Rules
 
 When writing shell scripts for CI, whether extracted to `scripts/ci/` or kept inline for trivial glue:

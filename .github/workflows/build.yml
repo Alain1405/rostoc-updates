@@ -227,12 +227,8 @@ jobs:
         with:
           name: partial-artifacts-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
           path: |
-            private-src/src-tauri/target/release/bundle/**/*.dmg
-            private-src/src-tauri/target/release/bundle/**/*.app
-            private-src/src-tauri/target/release/bundle/**/*.msi
-            private-src/src-tauri/target/release/bundle/**/*.msi.zip
-            private-src/src-tauri/target/release/bundle/**/*.AppImage
-            private-src/src-tauri/target/release/bundle/**/*.sig
+            private-src/target/release/bundle/**/*
+            private-src/src-tauri/target/release/bundle/**/*
             updates/**/*
           retention-days: 7
           if-no-files-found: ignore

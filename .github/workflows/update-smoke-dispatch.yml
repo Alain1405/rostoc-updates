@@ -66,7 +66,8 @@ jobs:
             # Resolve the baseline from the backend public latest endpoint so
             # dispatch-time smoke checks do not depend on Pages manifests.
             $backendLatestUrl = 'https://api.rostoc.co/api/updates/latest/public/'
-            $latestRelease = Invoke-RestMethod -Uri "$backendLatestUrl?channel=$updateChannel" -Method Get
+            $latestReleaseUri = "${backendLatestUrl}?channel=$updateChannel"
+            $latestRelease = Invoke-RestMethod -Uri $latestReleaseUri -Method Get
             $previousMsi = $latestRelease.platforms |
               Where-Object { $_.platform -eq 'windows' -and $_.architecture -eq $backendArchitecture } |
               Select-Object -First 1
