@@ -269,13 +269,25 @@ runs:
       shell: bash
       run: bash ../scripts/ci/inspect_rust_cache.sh pre
 
+    - name: Compute Rust cache key
+      id: rust-cache-key
+      shell: bash
+      run: |
+        set -euo pipefail
+        cache_key="${{ inputs.platform }}-${{ inputs.arch }}-${{ inputs.variant }}"
+        if [[ "${{ inputs.platform }}" == "windows" ]]; then
+          # Rotate the Windows namespace to escape immutable bad cache entries.
+          cache_key="${cache_key}-v2"
+        fi
+        echo "key=$cache_key" >> "$GITHUB_OUTPUT"
+
     - name: Cache Rust dependencies and build artifacts
       id: rust-cache
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: |
             private-src/src-tauri -> ../target
-        key: ${{ inputs.platform }}-${{ inputs.arch }}-${{ inputs.variant }}
+        key: ${{ steps.rust-cache-key.outputs.key }}
         # Removed shared-key to let cache auto-invalidate on Cargo.toml changes
         # Each platform will have its own cache based on Cargo.toml+Cargo.lock
         save-if: ${{ github.ref == 'refs/heads/main' }}
