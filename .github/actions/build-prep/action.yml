@@ -277,10 +277,32 @@ runs:
         set -euo pipefail
         cache_key="${{ inputs.platform }}-${{ inputs.arch }}-${{ inputs.variant }}"
         if [[ "${{ inputs.platform }}" == "windows" ]]; then
-          # Rotate the Windows namespace to escape immutable bad cache entries.
-          cache_key="${cache_key}-v2"
+          # Rotate the Windows namespace for the workspace-local CARGO_HOME probe.
+          cache_key="${cache_key}-v3"
         fi
         echo "key=$cache_key" >> "$GITHUB_OUTPUT"
+
+    - name: Configure Windows Cargo home
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-home
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        cargo_home_posix="$GITHUB_WORKSPACE/.cargo-ci"
+        mkdir -p "$cargo_home_posix/registry" "$cargo_home_posix/git"
+
+        cargo_home_windows=$(cygpath -w "$cargo_home_posix")
+        registry_windows=$(cygpath -w "$cargo_home_posix/registry")
+        git_windows=$(cygpath -w "$cargo_home_posix/git")
+
+        echo "CARGO_HOME=$cargo_home_windows" >> "$GITHUB_ENV"
+
+        {
+          echo "cargo_home=$cargo_home_windows"
+          echo "registry=$registry_windows"
+          echo "git=$git_windows"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Compute Windows Cargo cache inputs
       if: ${{ inputs.platform == 'windows' }}
@@ -321,12 +343,9 @@ runs:
           } | hash_stream
         )
 
-        registry=$(cygpath -w "$HOME/.cargo/registry")
-        git_dir=$(cygpath -w "$HOME/.cargo/git")
-
         {
-          echo "registry=$registry"
-          echo "git=$git_dir"
+          echo "registry=${{ steps.windows-cargo-home.outputs.registry }}"
+          echo "git=${{ steps.windows-cargo-home.outputs.git }}"
           echo "key=windows-cargo-${{ steps.rust-cache-key.outputs.key }}-$combined_hash"
         } >> "$GITHUB_OUTPUT"
 
@@ -348,7 +367,7 @@ runs:
       uses: Swatinem/rust-cache@v2
       with:
         workspaces: |
-            private-src/src-tauri -> ../target
+          private-src/src-tauri -> ../target
         key: ${{ steps.rust-cache-key.outputs.key }}
         # Removed shared-key to let cache auto-invalidate on Cargo.toml changes
         # Each platform will have its own cache based on Cargo.toml+Cargo.lock
@@ -367,11 +386,13 @@ runs:
       shell: bash
       env:
         WINDOWS_CARGO_CACHE_HIT: ${{ steps.windows-cargo-restore.outputs.cache-hit || 'false' }}
+        WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home }}
         WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
         WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
       run: |
         echo "::group::Windows Cargo cache restore result"
         echo "[INFO] cache-hit=$WINDOWS_CARGO_CACHE_HIT"
+        echo "[INFO] cargo-home=$WINDOWS_CARGO_HOME"
         echo "[INFO] registry=$WINDOWS_CARGO_REGISTRY"
         echo "[INFO] git=$WINDOWS_CARGO_GIT"
         echo "::endgroup::"
