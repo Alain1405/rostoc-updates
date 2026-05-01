@@ -265,6 +265,7 @@ runs:
         fi
 
     - name: Debug Rust cache configuration
+      if: ${{ inputs.platform != 'windows' }}
       working-directory: private-src
       shell: bash
       run: bash ../scripts/ci/inspect_rust_cache.sh pre
@@ -281,7 +282,68 @@ runs:
         fi
         echo "key=$cache_key" >> "$GITHUB_OUTPUT"
 
+    - name: Compute Windows Cargo cache inputs
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-cache
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        hash_stream() {
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 | awk '{print $1}'
+          elif command -v sha256sum >/dev/null 2>&1; then
+            sha256sum | awk '{print $1}'
+          else
+            openssl dgst -sha256 | awk '{print $NF}'
+          fi
+        }
+
+        files=("private-src/src-tauri/Cargo.toml")
+        for candidate in \
+          "private-src/src-tauri/Cargo.lock" \
+          "private-src/rust-toolchain.toml" \
+          "private-src/rust-toolchain" \
+          "private-src/src-tauri/rust-toolchain.toml" \
+          "private-src/src-tauri/rust-toolchain"; do
+          if [[ -f "$candidate" ]]; then
+            files+=("$candidate")
+          fi
+        done
+
+        combined_hash=$(
+          {
+            for file in "${files[@]}"; do
+              printf '%s\n' "$file"
+              cat "$file"
+              printf '\n'
+            done
+          } | hash_stream
+        )
+
+        registry=$(cygpath -w "$HOME/.cargo/registry")
+        git_dir=$(cygpath -w "$HOME/.cargo/git")
+
+        {
+          echo "registry=$registry"
+          echo "git=$git_dir"
+          echo "key=windows-cargo-${{ steps.rust-cache-key.outputs.key }}-$combined_hash"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Cache Windows Cargo dependencies
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-restore
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.windows-cargo-cache.outputs.registry }}
+          ${{ steps.windows-cargo-cache.outputs.git }}
+        key: ${{ steps.windows-cargo-cache.outputs.key }}
+        restore-keys: |
+          windows-cargo-${{ steps.rust-cache-key.outputs.key }}-
+
     - name: Cache Rust dependencies and build artifacts
+      if: ${{ inputs.platform != 'windows' }}
       id: rust-cache
       uses: Swatinem/rust-cache@v2
       with:
@@ -293,11 +355,26 @@ runs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Report Rust cache restore result
+      if: ${{ inputs.platform != 'windows' }}
       working-directory: private-src
       shell: bash
       env:
         RUST_CACHE_HIT: ${{ steps.rust-cache.outputs.cache-hit || 'false' }}
       run: bash ../scripts/ci/inspect_rust_cache.sh post . "$RUST_CACHE_HIT"
+
+    - name: Report Windows Cargo cache restore result
+      if: ${{ inputs.platform == 'windows' }}
+      shell: bash
+      env:
+        WINDOWS_CARGO_CACHE_HIT: ${{ steps.windows-cargo-restore.outputs.cache-hit || 'false' }}
+        WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
+        WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
+      run: |
+        echo "::group::Windows Cargo cache restore result"
+        echo "[INFO] cache-hit=$WINDOWS_CARGO_CACHE_HIT"
+        echo "[INFO] registry=$WINDOWS_CARGO_REGISTRY"
+        echo "[INFO] git=$WINDOWS_CARGO_GIT"
+        echo "::endgroup::"
 
     - name: Extract version
       id: extract_version
