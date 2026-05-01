@@ -349,6 +349,45 @@ runs:
           echo "key=windows-cargo-${{ steps.rust-cache-key.outputs.key }}-$combined_hash"
         } >> "$GITHUB_OUTPUT"
 
+    - name: Debug Windows cache lookup inputs
+      if: ${{ inputs.platform == 'windows' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        EXPECTED_KEY: ${{ steps.windows-cargo-cache.outputs.key }}
+        RESTORE_PREFIX: windows-cargo-${{ steps.rust-cache-key.outputs.key }}-
+        WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home }}
+        CACHE_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
+        CACHE_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
+      run: bash scripts/ci/debug_windows_cache_lookup.sh
+
+    - name: Lookup Windows Cargo cache
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-lookup
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ${{ steps.windows-cargo-cache.outputs.registry }}
+          ${{ steps.windows-cargo-cache.outputs.git }}
+        key: ${{ steps.windows-cargo-cache.outputs.key }}
+        restore-keys: |
+          windows-cargo-${{ steps.rust-cache-key.outputs.key }}-
+        lookup-only: true
+
+    - name: Report Windows Cargo lookup-only result
+      if: ${{ inputs.platform == 'windows' }}
+      shell: bash
+      env:
+        WINDOWS_CARGO_LOOKUP_HIT: ${{ steps.windows-cargo-lookup.outputs.cache-hit || 'false' }}
+        WINDOWS_CARGO_LOOKUP_PRIMARY_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-primary-key || '' }}
+        WINDOWS_CARGO_LOOKUP_MATCHED_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-matched-key || '' }}
+      run: |
+        echo "::group::Windows Cargo lookup-only result"
+        echo "[INFO] lookup-hit=$WINDOWS_CARGO_LOOKUP_HIT"
+        echo "[INFO] lookup-primary-key=$WINDOWS_CARGO_LOOKUP_PRIMARY_KEY"
+        echo "[INFO] lookup-matched-key=$WINDOWS_CARGO_LOOKUP_MATCHED_KEY"
+        echo "::endgroup::"
+
     - name: Cache Windows Cargo dependencies
       if: ${{ inputs.platform == 'windows' }}
       id: windows-cargo-restore
