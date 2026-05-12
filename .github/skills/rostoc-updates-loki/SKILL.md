@@ -1,6 +1,7 @@
 ---
 name: rostoc-updates-loki
 description: Grafana Loki log aggregation for Rostoc CI builds. Use when searching CI build logs, debugging failed builds by run ID, filtering logs by platform/status/variant, or accessing centralized log monitoring.
+disable-model-invocation: true
 ---
 
 # Grafana Loki Log Aggregation

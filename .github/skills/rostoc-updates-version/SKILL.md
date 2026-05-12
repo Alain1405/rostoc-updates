@@ -1,6 +1,7 @@
 ---
 name: rostoc-updates-version
 description: Retrieve build context, GitHub SHA, and Rostoc version from CI runs. Use when correlating CI runs to product versions, finding commit SHA for a workflow run, or debugging which version was built.
+disable-model-invocation: true
 ---
 
 # Retrieving Build Context

@@ -1,6 +1,7 @@
 ---
 name: rostoc-updates-tmate
 description: Interactive CI debugging for Rostoc builds using tmate SSH sessions. Use when CI builds fail and need live debugging on the GitHub Actions runner, testing fixes without re-running the full 30-50 minute pipeline, or debugging platform-specific issues like codesigning.
+disable-model-invocation: true
 ---
 
 # Interactive Debugging with tmate
