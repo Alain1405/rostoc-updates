@@ -110,6 +110,7 @@ jobs:
           path: |
             ${{ runner.temp }}\update-smoke-dispatch\summary.json
             ${{ runner.temp }}\update-smoke-dispatch\debug-state.json
+            ${{ runner.temp }}\update-smoke-dispatch\msi-action-timeline.json
             ${{ runner.temp }}\update-smoke-dispatch\summary.stdout.log
             ${{ runner.temp }}\update-smoke-dispatch\previous-install.log
             ${{ runner.temp }}\update-smoke-dispatch\update-install.log

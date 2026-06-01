@@ -231,6 +231,33 @@ set_tauri_config_flag() {
   echo "[INFO] TAURI_CONFIG_FLAG=${config_flag:-<empty>}"
 }
 
+configure_python_bytecode_mode() {
+  local platform variant is_release bytecode_mode experiment_label
+  platform=${1:?platform is required}
+  variant=${2:?variant is required}
+  is_release=${3:?is_release is required}
+
+  bytecode_mode="default"
+  experiment_label="disabled"
+
+  if [[ "$platform" == "windows" && "$variant" == "production" && "$is_release" != "true" ]]; then
+    bytecode_mode="skip"
+    experiment_label="windows-production-non-release"
+    echo "PYTHONDONTWRITEBYTECODE=1" >> "$GITHUB_ENV"
+  fi
+
+  {
+    echo "ROSTOC_PYTHON_BYTECODE_MODE=$bytecode_mode"
+    echo "ROSTOC_PYTHON_BYTECODE_EXPERIMENT=$experiment_label"
+  } >> "$GITHUB_ENV"
+
+  echo "[INFO] Python bytecode mode: $bytecode_mode"
+  echo "[INFO] Python bytecode experiment: $experiment_label"
+  if [[ "$bytecode_mode" == "skip" ]]; then
+    echo "[INFO] Exported PYTHONDONTWRITEBYTECODE=1 for CI experiment"
+  fi
+}
+
 capture_diagnostic_environment() {
   local platform arch
   platform=${1:?platform is required}
@@ -310,6 +337,9 @@ generate_build_fingerprint() {
     echo ""
     echo "# Config Selection"
     echo "tauri_config: ${TAURI_CONFIG_FLAG:-<base>}"
+    echo "python_bytecode_mode: ${ROSTOC_PYTHON_BYTECODE_MODE:-default}"
+    echo "python_bytecode_experiment: ${ROSTOC_PYTHON_BYTECODE_EXPERIMENT:-disabled}"
+    echo "pythondontwritebytecode: ${PYTHONDONTWRITEBYTECODE:-0}"
     if [[ -n "${TAURI_CONFIG_FLAG:-}" && -f "${TAURI_CONFIG_FLAG}" ]]; then
       echo "config_hash: $(shasum "${TAURI_CONFIG_FLAG}" 2>/dev/null | awk '{print $1}' || echo 'N/A')"
     fi
@@ -404,6 +434,9 @@ case "$COMMAND" in
     ;;
   set-tauri-config-flag)
     set_tauri_config_flag "$@"
+    ;;
+  configure-python-bytecode-mode)
+    configure_python_bytecode_mode "$@"
     ;;
   capture-diagnostic-environment)
     capture_diagnostic_environment "$@"

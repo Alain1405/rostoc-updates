@@ -157,6 +157,7 @@ jobs:
           path: |
             ${{ runner.temp }}\update-smoke\summary.json
             ${{ runner.temp }}\update-smoke\debug-state.json
+            ${{ runner.temp }}\update-smoke\msi-action-timeline.json
             ${{ runner.temp }}\update-smoke\summary.stdout.log
             ${{ runner.temp }}\update-smoke\previous-install.log
             ${{ runner.temp }}\update-smoke\update-install.log

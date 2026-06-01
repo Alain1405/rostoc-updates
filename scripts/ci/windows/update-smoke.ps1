@@ -227,6 +227,41 @@ function Write-StepSummary {
     "- Debug snapshot: $DebugStatePath"
   )
 
+  if ($Summary.msi_table_counts) {
+    if ($Summary.msi_table_counts.previous_msi -and $Summary.msi_table_counts.previous_msi.available) {
+      $previousTables = $Summary.msi_table_counts.previous_msi.tables
+      $lines += "- Previous MSI tables: File=$($previousTables.File), Component=$($previousTables.Component), Directory=$($previousTables.Directory), FeatureComponents=$($previousTables.FeatureComponents)"
+    }
+
+    if ($Summary.msi_table_counts.new_msi -and $Summary.msi_table_counts.new_msi.available) {
+      $newTables = $Summary.msi_table_counts.new_msi.tables
+      $lines += "- New MSI tables: File=$($newTables.File), Component=$($newTables.Component), Directory=$($newTables.Directory), FeatureComponents=$($newTables.FeatureComponents)"
+    }
+  }
+
+  if ($Summary.msi_log_analysis) {
+    foreach ($label in @('previous_install', 'update_install')) {
+      $analysis = $Summary.msi_log_analysis.$label
+      if ($analysis -and $analysis.available) {
+        $keyActions = @()
+        foreach ($actionName in @('InstallValidate', 'RemoveExistingProducts', 'RemoveFiles', 'InstallFiles', 'InstallFinalize')) {
+          $duration = $analysis.key_action_durations_seconds.$actionName
+          if ($null -ne $duration) {
+            $keyActions += "${actionName}=${duration}s"
+          }
+        }
+
+        if ($keyActions.Count -gt 0) {
+          $lines += "- $label MSI actions: $($keyActions -join ', ')"
+        }
+      }
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($Summary.msi_action_timeline_artifact)) {
+    $lines += "- MSI action timeline artifact: $($Summary.msi_action_timeline_artifact)"
+  }
+
   if (-not [string]::IsNullOrWhiteSpace($Summary.error)) {
     $lines += "- Error: $($Summary.error)"
   }
@@ -262,6 +297,334 @@ function Invoke-MsiInstall {
   }
 }
 
+function Get-MsiTableRowCount {
+  param(
+    [Parameter(Mandatory = $true)]
+    $Database,
+
+    [Parameter(Mandatory = $true)]
+    [string]$TableName
+  )
+
+  $view = $null
+  $record = $null
+
+  try {
+    $query = ('SELECT COUNT(*) FROM `{0}`' -f $TableName)
+    $view = $Database.OpenView($query)
+    $view.Execute()
+    $record = $view.Fetch()
+    if ($null -eq $record) {
+      return $null
+    }
+
+    return [int]$record.StringData(1)
+  }
+  catch {
+    return $null
+  }
+  finally {
+    if ($record) {
+      [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($record)
+    }
+    if ($view) {
+      [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($view)
+    }
+  }
+}
+
+function Get-MsiTableCounts {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Label
+  )
+
+  $result = [ordered]@{
+    label      = $Label
+    path       = $Path
+    available  = $false
+    error      = $null
+    tables     = [ordered]@{
+      File              = $null
+      Component         = $null
+      Directory         = $null
+      FeatureComponents = $null
+    }
+  }
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    $result.error = "MSI path does not exist: $Path"
+    return $result
+  }
+
+  $installer = $null
+  $database = $null
+
+  try {
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    $database = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($Path, 0))
+
+    foreach ($tableName in @('File', 'Component', 'Directory', 'FeatureComponents')) {
+      $result.tables[$tableName] = Get-MsiTableRowCount -Database $database -TableName $tableName
+    }
+
+    $result.available = $true
+  }
+  catch {
+    $result.error = $_.Exception.Message
+  }
+  finally {
+    if ($database) {
+      [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($database)
+    }
+    if ($installer) {
+      [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($installer)
+    }
+  }
+
+  return $result
+}
+
+function Convert-ClockTextToSeconds {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ClockText
+  )
+
+  $parsedTime = [datetime]::ParseExact($ClockText, 'H:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
+  return ($parsedTime.Hour * 3600) + ($parsedTime.Minute * 60) + $parsedTime.Second
+}
+
+function Get-MsiLogAnalysis {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$LogPath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Label
+  )
+
+  $summary = [ordered]@{
+    label                                 = $Label
+    log_path                              = $LogPath
+    available                             = $false
+    total_action_span_seconds             = $null
+    action_count                          = 0
+    incomplete_action_count               = 0
+    unmatched_end_count                   = 0
+    key_action_durations_seconds          = [ordered]@{
+      InstallValidate       = $null
+      RemoveExistingProducts = $null
+      RemoveFiles           = $null
+      InstallFiles          = $null
+      InstallFinalize       = $null
+    }
+    remove_existing_products_occurrences  = 0
+    remove_existing_products_nested_actions = @()
+    top_actions_by_duration               = @()
+    error                                 = $null
+  }
+
+  $timeline = @()
+
+  if (-not (Test-Path -LiteralPath $LogPath)) {
+    $summary.error = "MSI log not found: $LogPath"
+    return [pscustomobject]@{
+      Summary  = $summary
+      Timeline = $timeline
+    }
+  }
+
+  $startPattern = [regex]'Action start (?<time>\d{1,2}:\d{2}:\d{2}): (?<name>.+?)\.'
+  $endPattern = [regex]'Action ended (?<time>\d{1,2}:\d{2}:\d{2}): (?<name>.+?)\. Return value (?<return>\d+)\.'
+  $openActions = New-Object System.Collections.ArrayList
+  $completedActions = New-Object System.Collections.ArrayList
+  $dayOffset = 0
+  $lastClockSeconds = $null
+  $unmatchedEndCount = 0
+
+  try {
+    $lines = Get-Content -LiteralPath $LogPath
+    for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
+      $line = $lines[$lineIndex]
+      $startMatch = $startPattern.Match($line)
+      $endMatch = $endPattern.Match($line)
+
+      if (-not $startMatch.Success -and -not $endMatch.Success) {
+        continue
+      }
+
+      $clockText = if ($startMatch.Success) { $startMatch.Groups['time'].Value } else { $endMatch.Groups['time'].Value }
+      $clockSeconds = Convert-ClockTextToSeconds -ClockText $clockText
+      if ($null -ne $lastClockSeconds -and $clockSeconds -lt $lastClockSeconds) {
+        $dayOffset += 86400
+      }
+      $absoluteSeconds = $clockSeconds + $dayOffset
+      $lastClockSeconds = $clockSeconds
+
+      if ($startMatch.Success) {
+        $entry = [ordered]@{
+          name          = $startMatch.Groups['name'].Value
+          start_time    = $clockText
+          start_seconds = $absoluteSeconds
+          start_line    = $lineIndex + 1
+          depth         = $openActions.Count
+        }
+        [void]$openActions.Add($entry)
+        continue
+      }
+
+      $name = $endMatch.Groups['name'].Value
+      $matchIndex = -1
+      for ($openIndex = $openActions.Count - 1; $openIndex -ge 0; $openIndex--) {
+        if ($openActions[$openIndex].name -eq $name) {
+          $matchIndex = $openIndex
+          break
+        }
+      }
+
+      if ($matchIndex -lt 0) {
+        $unmatchedEndCount += 1
+        continue
+      }
+
+      $started = $openActions[$matchIndex]
+      $openActions.RemoveAt($matchIndex)
+      [void]$completedActions.Add([ordered]@{
+        name             = $name
+        start_time       = $started.start_time
+        end_time         = $clockText
+        start_seconds    = $started.start_seconds
+        end_seconds      = $absoluteSeconds
+        duration_seconds = [math]::Round(($absoluteSeconds - $started.start_seconds), 3)
+        start_line       = $started.start_line
+        end_line         = $lineIndex + 1
+        depth            = $started.depth
+        return_value     = [int]$endMatch.Groups['return'].Value
+      })
+    }
+
+    if ($completedActions.Count -gt 0) {
+      $sortedActions = @($completedActions | Sort-Object start_seconds, end_seconds, name)
+      $timeline = $sortedActions | ForEach-Object {
+        [ordered]@{
+          name             = $_.name
+          start_time       = $_.start_time
+          end_time         = $_.end_time
+          duration_seconds = $_.duration_seconds
+          depth            = $_.depth
+          start_line       = $_.start_line
+          end_line         = $_.end_line
+          return_value     = $_.return_value
+        }
+      }
+
+      $summary.available = $true
+      $summary.action_count = $sortedActions.Count
+      $summary.incomplete_action_count = $openActions.Count
+      $summary.unmatched_end_count = $unmatchedEndCount
+      $summary.total_action_span_seconds = [math]::Round(($sortedActions[-1].end_seconds - $sortedActions[0].start_seconds), 3)
+
+      foreach ($actionName in @('InstallValidate', 'RemoveExistingProducts', 'RemoveFiles', 'InstallFiles', 'InstallFinalize')) {
+        $matchingActions = @($sortedActions | Where-Object { $_.name -eq $actionName })
+        if ($matchingActions.Count -gt 0) {
+          $summary.key_action_durations_seconds[$actionName] = [math]::Round((($matchingActions | Measure-Object -Property duration_seconds -Sum).Sum), 3)
+        }
+      }
+
+      $removeExistingProductsActions = @($sortedActions | Where-Object { $_.name -eq 'RemoveExistingProducts' })
+      $summary.remove_existing_products_occurrences = $removeExistingProductsActions.Count
+
+      if ($removeExistingProductsActions.Count -gt 0) {
+        $primaryRemoveExistingProducts = $removeExistingProductsActions | Sort-Object duration_seconds -Descending | Select-Object -First 1
+        $nestedActions = @(
+          $sortedActions | Where-Object {
+            $_.name -ne 'RemoveExistingProducts' -and
+            $_.start_seconds -ge $primaryRemoveExistingProducts.start_seconds -and
+            $_.end_seconds -le $primaryRemoveExistingProducts.end_seconds
+          }
+        )
+
+        $summary.remove_existing_products_nested_actions = $nestedActions | ForEach-Object {
+          [ordered]@{
+            name             = $_.name
+            start_time       = $_.start_time
+            end_time         = $_.end_time
+            duration_seconds = $_.duration_seconds
+          }
+        }
+      }
+
+      $summary.top_actions_by_duration = @(
+        $sortedActions |
+          Sort-Object duration_seconds -Descending |
+          Select-Object -First 5 |
+          ForEach-Object {
+            [ordered]@{
+              name             = $_.name
+              start_time       = $_.start_time
+              end_time         = $_.end_time
+              duration_seconds = $_.duration_seconds
+            }
+          }
+      )
+    }
+    else {
+      $summary.incomplete_action_count = $openActions.Count
+      $summary.unmatched_end_count = $unmatchedEndCount
+      $summary.error = 'No MSI action markers were found in the verbose log'
+    }
+  }
+  catch {
+    $summary.error = $_.Exception.Message
+  }
+
+  return [pscustomobject]@{
+    Summary  = $summary
+    Timeline = $timeline
+  }
+}
+
+function Write-MsiInstrumentationSummary {
+  param(
+    [Parameter(Mandatory = $true)]
+    [hashtable]$Summary
+  )
+
+  if ($Summary.msi_table_counts) {
+    foreach ($label in @('previous_msi', 'new_msi')) {
+      $counts = $Summary.msi_table_counts.$label
+      if ($counts -and $counts.available) {
+        Write-Host "[INFO] $label table counts: File=$($counts.tables.File), Component=$($counts.tables.Component), Directory=$($counts.tables.Directory), FeatureComponents=$($counts.tables.FeatureComponents)"
+      }
+    }
+  }
+
+  if ($Summary.msi_log_analysis) {
+    foreach ($label in @('previous_install', 'update_install')) {
+      $analysis = $Summary.msi_log_analysis.$label
+      if (-not $analysis -or -not $analysis.available) {
+        continue
+      }
+
+      $parts = @()
+      foreach ($actionName in @('InstallValidate', 'RemoveExistingProducts', 'RemoveFiles', 'InstallFiles', 'InstallFinalize')) {
+        $duration = $analysis.key_action_durations_seconds.$actionName
+        if ($null -ne $duration) {
+          $parts += "${actionName}=${duration}s"
+        }
+      }
+
+      if ($parts.Count -gt 0) {
+        Write-Host "[INFO] $label action durations: $($parts -join ', ')"
+      }
+    }
+  }
+}
+
 if (-not (Test-Path -LiteralPath $NewMsiPath)) {
   throw "New MSI path does not exist: $NewMsiPath"
 }
@@ -272,6 +635,7 @@ $previousInstallLog = Join-Path $LogDir 'previous-install.log'
 $updateInstallLog = Join-Path $LogDir 'update-install.log'
 $summaryPath = Join-Path $LogDir 'summary.json'
 $debugStatePath = Join-Path $LogDir 'debug-state.json'
+$actionTimelinePath = Join-Path $LogDir 'msi-action-timeline.json'
 $previousMsiPath = Join-Path ([System.IO.Path]::GetTempPath()) ("rostoc-update-smoke-previous-{0}.msi" -f [guid]::NewGuid())
 $productName = Get-ProductNameFromMsiPath -Path $NewMsiPath
 $isRelease = $false
@@ -302,6 +666,15 @@ $summary = [ordered]@{
   installed_binary_path    = $null
   previous_install_exit_code = $null
   update_install_exit_code = $null
+  msi_table_counts         = [ordered]@{
+    previous_msi = $null
+    new_msi      = $null
+  }
+  msi_log_analysis         = [ordered]@{
+    previous_install = $null
+    update_install   = $null
+  }
+  msi_action_timeline_artifact = $null
 }
 
 try {
@@ -347,6 +720,28 @@ catch {
   throw
 }
 finally {
+  $summary.msi_table_counts.new_msi = Get-MsiTableCounts -Path $NewMsiPath -Label 'new_msi'
+
+  if (Test-Path -LiteralPath $previousMsiPath) {
+    $summary.msi_table_counts.previous_msi = Get-MsiTableCounts -Path $previousMsiPath -Label 'previous_msi'
+  }
+
+  $previousInstallAnalysis = Get-MsiLogAnalysis -LogPath $previousInstallLog -Label 'previous_install'
+  $updateInstallAnalysis = Get-MsiLogAnalysis -LogPath $updateInstallLog -Label 'update_install'
+  $summary.msi_log_analysis.previous_install = $previousInstallAnalysis.Summary
+  $summary.msi_log_analysis.update_install = $updateInstallAnalysis.Summary
+
+  $timelinePayload = [ordered]@{
+    previous_install = $previousInstallAnalysis.Timeline
+    update_install   = $updateInstallAnalysis.Timeline
+  }
+
+  if (($previousInstallAnalysis.Timeline.Count + $updateInstallAnalysis.Timeline.Count) -gt 0) {
+    $timelineJson = $timelinePayload | ConvertTo-Json -Depth 8
+    Set-Content -LiteralPath $actionTimelinePath -Value $timelineJson -Encoding UTF8
+    $summary.msi_action_timeline_artifact = [System.IO.Path]::GetFileName($actionTimelinePath)
+  }
+
   $debugState = [ordered]@{
     summary          = $summary
     registry_matches = Get-RegistryMatchesForProduct -ProductName $productName
@@ -355,6 +750,7 @@ finally {
       previous_install_log = $previousInstallLog
       update_install_log   = $updateInstallLog
       summary_json         = $summaryPath
+      msi_action_timeline  = $actionTimelinePath
     }
     host             = [ordered]@{
       computer_name    = $env:COMPUTERNAME
@@ -364,7 +760,9 @@ finally {
     }
   }
 
-  $summaryJson = $summary | ConvertTo-Json -Depth 6 -Compress
+  Write-MsiInstrumentationSummary -Summary $summary
+
+  $summaryJson = $summary | ConvertTo-Json -Depth 8 -Compress
   $debugJson = $debugState | ConvertTo-Json -Depth 8
   Set-Content -LiteralPath $summaryPath -Value $summaryJson -Encoding UTF8
   Set-Content -LiteralPath $debugStatePath -Value $debugJson -Encoding UTF8

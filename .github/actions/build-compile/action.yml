@@ -137,6 +137,10 @@ runs:
       shell: bash
       run: bash scripts/ci/run_build_compile.sh set-tauri-config-flag "${{ inputs.platform }}"
 
+    - name: Configure Python bytecode mode
+      shell: bash
+      run: bash scripts/ci/run_build_compile.sh configure-python-bytecode-mode "${{ inputs.platform }}" "${{ inputs.variant }}" "${{ inputs.is_release }}"
+
     - name: Capture diagnostic environment info
       if: always()
       shell: bash
