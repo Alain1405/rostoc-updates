@@ -84,13 +84,13 @@ function Get-RegistryMatchesForProduct {
 
   $registryRoots = Get-UninstallRegistryRoots
 
-  $matches = @()
+  $registryMatches = @()
   foreach ($root in $registryRoots) {
     $entries = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue |
       Where-Object { $_.DisplayName -eq $ProductName }
 
     foreach ($entry in $entries) {
-      $matches += [ordered]@{
+      $registryMatches += [ordered]@{
         registry_root    = $root
         registry_key     = $entry.PSChildName
         display_name     = $entry.DisplayName
@@ -102,7 +102,7 @@ function Get-RegistryMatchesForProduct {
     }
   }
 
-  return $matches
+  return $registryMatches
 }
 
 function Get-InstalledBinaryPathCandidates {
@@ -318,7 +318,17 @@ function Get-MsiTableRowCount {
       return $null
     }
 
-    return [int]$record.StringData(1)
+    try {
+      return [int]$record.IntegerData(1)
+    }
+    catch {
+      $stringValue = $record.StringData(1)
+      if ([string]::IsNullOrWhiteSpace($stringValue)) {
+        return $null
+      }
+
+      return [int]$stringValue
+    }
   }
   catch {
     return $null
@@ -398,6 +408,35 @@ function Convert-ClockTextToSeconds {
   return ($parsedTime.Hour * 3600) + ($parsedTime.Minute * 60) + $parsedTime.Second
 }
 
+function Get-MsiLogLineClockSeconds {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Line,
+
+    [Parameter(Mandatory = $true)]
+    [string]$FallbackClockText
+  )
+
+  $lineTimestampMatch = [regex]::Match(
+    $Line,
+    '\[(?<hour>\d{1,2}):(?<minute>\d{2}):(?<second>\d{2})(?::(?<millisecond>\d{3}))?\]'
+  )
+
+  if (-not $lineTimestampMatch.Success) {
+    return [double](Convert-ClockTextToSeconds -ClockText $FallbackClockText)
+  }
+
+  $hour = [int]$lineTimestampMatch.Groups['hour'].Value
+  $minute = [int]$lineTimestampMatch.Groups['minute'].Value
+  $second = [int]$lineTimestampMatch.Groups['second'].Value
+  $millisecond = 0
+  if ($lineTimestampMatch.Groups['millisecond'].Success) {
+    $millisecond = [int]$lineTimestampMatch.Groups['millisecond'].Value
+  }
+
+  return [double](($hour * 3600) + ($minute * 60) + $second + ($millisecond / 1000.0))
+}
+
 function Get-MsiLogAnalysis {
   param(
     [Parameter(Mandatory = $true)]
@@ -458,7 +497,7 @@ function Get-MsiLogAnalysis {
       }
 
       $clockText = if ($startMatch.Success) { $startMatch.Groups['time'].Value } else { $endMatch.Groups['time'].Value }
-      $clockSeconds = Convert-ClockTextToSeconds -ClockText $clockText
+      $clockSeconds = Get-MsiLogLineClockSeconds -Line $line -FallbackClockText $clockText
       if ($null -ne $lastClockSeconds -and $clockSeconds -lt $lastClockSeconds) {
         $dayOffset += 86400
       }
@@ -466,7 +505,7 @@ function Get-MsiLogAnalysis {
       $lastClockSeconds = $clockSeconds
 
       if ($startMatch.Success) {
-        $entry = [ordered]@{
+        $entry = [pscustomobject][ordered]@{
           name          = $startMatch.Groups['name'].Value
           start_time    = $clockText
           start_seconds = $absoluteSeconds
@@ -493,7 +532,7 @@ function Get-MsiLogAnalysis {
 
       $started = $openActions[$matchIndex]
       $openActions.RemoveAt($matchIndex)
-      [void]$completedActions.Add([ordered]@{
+      [void]$completedActions.Add([pscustomobject][ordered]@{
         name             = $name
         start_time       = $started.start_time
         end_time         = $clockText
