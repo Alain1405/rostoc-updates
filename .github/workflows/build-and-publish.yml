@@ -48,7 +48,7 @@ env:
   PRIVATE_REPO: Rostoc/rostoc
 
 jobs:
-  # Phase 1: Setup & validation (set-status, lint-and-tests)
+  # Phase 1: Resolve target SHA and set pending status in the private repo.
   setup:
     uses: ./.github/workflows/setup.yml
     with:
@@ -57,7 +57,15 @@ jobs:
       is_release: ${{ inputs.is_release || false }}
     secrets: inherit
 
-  # Phase 2: Build desktop (matrix: macOS M1, Windows x64, + optional platforms)
+  # Phase 2a: Run the private repo lint + smoke suite in parallel with the build.
+  lint-and-tests:
+    needs: setup
+    uses: ./.github/workflows/lint-and-tests.yml
+    with:
+      ref: ${{ inputs.ref }}
+    secrets: inherit
+
+  # Phase 2b: Build desktop (matrix: macOS M1, Windows x64, + optional platforms)
   build:
     needs: setup
     uses: ./.github/workflows/build.yml
@@ -309,8 +317,8 @@ jobs:
 
   # Phase 3a: Publish production channel
   publish-production:
-    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
-    needs: [setup, build, update-smoke-windows]
+    if: ${{ always() && inputs.is_release && needs.lint-and-tests.result == 'success' && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
+    needs: [setup, lint-and-tests, build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -322,8 +330,8 @@ jobs:
 
   # Phase 3b: Publish staging channel
   publish-staging:
-    if: ${{ always() && inputs.is_release && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
-    needs: [setup, build, update-smoke-windows]
+    if: ${{ always() && inputs.is_release && needs.lint-and-tests.result == 'success' && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
+    needs: [setup, lint-and-tests, build, update-smoke-windows]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -337,10 +345,17 @@ jobs:
   finalize:
     if: always()
     needs:
-      [setup, build, update-smoke-windows, publish-production, publish-staging]
+      [
+        setup,
+        lint-and-tests,
+        build,
+        update-smoke-windows,
+        publish-production,
+        publish-staging,
+      ]
     uses: ./.github/workflows/finalize.yml
     with:
       commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: ${{ inputs.is_release || false }}
-      build_result: ${{ (needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' && (needs.publish-production.result == 'success' || needs.publish-production.result == 'skipped') && (needs.publish-staging.result == 'success' || needs.publish-staging.result == 'skipped')) && 'success' || 'failure' }}
+      build_result: ${{ (needs.lint-and-tests.result == 'success' && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' && (needs.publish-production.result == 'success' || needs.publish-production.result == 'skipped') && (needs.publish-staging.result == 'success' || needs.publish-staging.result == 'skipped')) && 'success' || 'failure' }}
     secrets: inherit
