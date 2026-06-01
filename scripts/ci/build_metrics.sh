@@ -63,6 +63,25 @@ path_size() {
   du -sh "$path" 2>/dev/null | awk '{print $1}' || echo "n/a"
 }
 
+emit_two_path_sizes() {
+  local first_label first_path second_label second_path
+  first_label=${1:?first label is required}
+  first_path=${2:-}
+  second_label=${3:?second label is required}
+  second_path=${4:-}
+
+  printf '%s=%s\n' "$first_label" "$(path_size "$first_path")"
+  printf '%s=%s\n' "$second_label" "$(path_size "$second_path")"
+}
+
+format_windows_cargo_sizes() {
+  local registry_size git_size
+  registry_size=${1:-n/a}
+  git_size=${2:-n/a}
+
+  printf 'registry=%s<br>git=%s' "$registry_size" "$git_size"
+}
+
 multi_path_size() {
   local paths line sizes
   paths=${1:-}
@@ -143,6 +162,21 @@ append_cache_row() {
     "$(escape_cell "$size")" >> "$report_file"
 }
 
+append_cache_row_command() {
+  local report_dir variant platform arch cache_name hit details size report_file
+  report_dir=${1:?report_dir is required}
+  variant=${2:?variant is required}
+  platform=${3:?platform is required}
+  arch=${4:?arch is required}
+  cache_name=${5:?cache_name is required}
+  hit=${6:-unknown}
+  details=${7:-n/a}
+  size=${8:-n/a}
+  report_file=$(ensure_report "$report_dir" "$variant" "$platform" "$arch")
+
+  append_cache_row "$report_file" "$cache_name" "$hit" "$details" "$size"
+}
+
 append_timing_row() {
   local report_file step_name status duration
   report_file=${1:?report_file is required}
@@ -196,17 +230,27 @@ append_cache_report_command() {
     "$(multi_path_size "$python_paths")"
 
   if [[ "$platform" == "windows" ]]; then
-    windows_detail=$(printf 'lookup=%s<br>matched-key=%s<br>restore-key=%s<br>cargo-home=%s' \
+    windows_detail=$(printf 'lookup-only-hit=%s<br>expected-key=%s<br>matched-key=%s<br>restore-hit=%s<br>restore-state=%s<br>api-exact-visible=%s<br>api-exact-id=%s<br>api-exact-version=%s<br>api-exact-size-bytes=%s<br>api-exact-last-accessed=%s<br>api-exact-created=%s<br>pre-restore-sizes=%s<br>post-restore-sizes=%s<br>cargo-home=%s' \
       "${WINDOWS_CARGO_LOOKUP_HIT:-unknown}" \
-      "${WINDOWS_CARGO_LOOKUP_MATCHED_KEY:-n/a}" \
       "${WINDOWS_CARGO_LOOKUP_PRIMARY_KEY:-n/a}" \
+      "${WINDOWS_CARGO_LOOKUP_MATCHED_KEY:-n/a}" \
+      "${WINDOWS_CARGO_CACHE_HIT:-unknown}" \
+      "${WINDOWS_CARGO_CACHE_STATE:-unknown}" \
+      "${WINDOWS_CARGO_API_EXACT_VISIBLE:-unknown}" \
+      "${WINDOWS_CARGO_API_EXACT_ID:-n/a}" \
+      "${WINDOWS_CARGO_API_EXACT_VERSION:-n/a}" \
+      "${WINDOWS_CARGO_API_EXACT_SIZE_BYTES:-n/a}" \
+      "${WINDOWS_CARGO_API_EXACT_LAST_ACCESSED_AT:-n/a}" \
+      "${WINDOWS_CARGO_API_EXACT_CREATED_AT:-n/a}" \
+      "$(format_windows_cargo_sizes "${WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE:-n/a}" "${WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE:-n/a}")" \
+      "$(format_windows_cargo_sizes "${WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE:-n/a}" "${WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE:-n/a}")" \
       "${WINDOWS_CARGO_HOME:-n/a}")
     append_cache_row \
       "$report_file" \
-      "windows cargo" \
+      "windows cargo restore" \
       "${WINDOWS_CARGO_CACHE_HIT:-unknown}" \
       "$windows_detail" \
-      "$(multi_path_size "${WINDOWS_CARGO_REGISTRY:-}"$'\n'"${WINDOWS_CARGO_GIT:-}")"
+      "$(format_windows_cargo_sizes "${WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE:-n/a}" "${WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE:-n/a}")"
   else
     rust_detail=$(printf 'target=%s' "${RUST_TARGET_DIR:-target}")
     append_cache_row \
@@ -216,6 +260,24 @@ append_cache_report_command() {
       "$rust_detail" \
       "$(path_size "${RUST_TARGET_DIR:-target}")"
   fi
+}
+
+append_windows_post_build_row_command() {
+  local report_dir variant platform arch report_file registry_path git_path
+  report_dir=${1:?report_dir is required}
+  variant=${2:?variant is required}
+  platform=${3:?platform is required}
+  arch=${4:?arch is required}
+  registry_path=${5:-}
+  git_path=${6:-}
+  report_file=$(ensure_report "$report_dir" "$variant" "$platform" "$arch")
+
+  append_cache_row \
+    "$report_file" \
+    "windows cargo post-build" \
+    "n/a" \
+    "registry-path=$(escape_cell "$registry_path")<br>git-path=$(escape_cell "$git_path")" \
+    "$(format_windows_cargo_sizes "$(path_size "$registry_path")" "$(path_size "$git_path")")"
 }
 
 run_timed_command() {
@@ -257,6 +319,15 @@ case "$COMMAND" in
     ;;
   append-cache-report)
     append_cache_report_command "$@"
+    ;;
+  append-cache-row)
+    append_cache_row_command "$@"
+    ;;
+  append-windows-post-build-row)
+    append_windows_post_build_row_command "$@"
+    ;;
+  emit-two-path-sizes)
+    emit_two_path_sizes "$@"
     ;;
   run-timed-command)
     run_timed_command "$@"

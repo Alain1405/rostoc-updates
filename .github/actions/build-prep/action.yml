@@ -376,12 +376,22 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
+        CACHE_LOOKUP_ENV_FILE: ${{ runner.temp }}/windows-cargo-cache-api.env
         EXPECTED_KEY: ${{ steps.windows-cargo-cache.outputs.key }}
         RESTORE_PREFIX: windows-cargo-${{ steps.rust-cache-key.outputs.key }}-
         WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home }}
         CACHE_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
         CACHE_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
       run: bash scripts/ci/debug_windows_cache_lookup.sh
+
+    - name: Snapshot Windows Cargo cache paths before restore
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-size-before
+      shell: bash
+      env:
+        WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
+        WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
+      run: bash scripts/ci/build_metrics.sh emit-two-path-sizes registry "$WINDOWS_CARGO_REGISTRY" git "$WINDOWS_CARGO_GIT" >> "$GITHUB_OUTPUT"
 
     - name: Lookup Windows Cargo cache
       if: ${{ inputs.platform == 'windows' }}
@@ -422,6 +432,88 @@ runs:
         restore-keys: |
           windows-cargo-${{ steps.rust-cache-key.outputs.key }}-
 
+    - name: Snapshot Windows Cargo cache paths after restore
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-size-after
+      shell: bash
+      env:
+        WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
+        WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
+      run: bash scripts/ci/build_metrics.sh emit-two-path-sizes registry "$WINDOWS_CARGO_REGISTRY" git "$WINDOWS_CARGO_GIT" >> "$GITHUB_OUTPUT"
+
+    - name: Classify Windows Cargo cache restore state
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-classification
+      shell: bash
+      env:
+        CACHE_LOOKUP_ENV_FILE: ${{ runner.temp }}/windows-cargo-cache-api.env
+        EXPECTED_KEY: ${{ steps.windows-cargo-cache.outputs.key }}
+        WINDOWS_CARGO_LOOKUP_HIT: ${{ steps.windows-cargo-lookup.outputs.cache-hit || 'false' }}
+        WINDOWS_CARGO_LOOKUP_PRIMARY_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-primary-key || '' }}
+        WINDOWS_CARGO_LOOKUP_MATCHED_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-matched-key || '' }}
+        WINDOWS_CARGO_RESTORE_HIT: ${{ steps.windows-cargo-restore.outputs.cache-hit || 'false' }}
+      run: |
+        set -euo pipefail
+
+        if [[ -f "$CACHE_LOOKUP_ENV_FILE" ]]; then
+          set -a
+          # shellcheck disable=SC1090
+          . "$CACHE_LOOKUP_ENV_FILE"
+          set +a
+        fi
+
+        state="unknown"
+        should_debug_upterm="false"
+
+        if [[ "$WINDOWS_CARGO_RESTORE_HIT" == "true" ]]; then
+          if [[ -n "$WINDOWS_CARGO_LOOKUP_MATCHED_KEY" && "$WINDOWS_CARGO_LOOKUP_MATCHED_KEY" != "$EXPECTED_KEY" ]]; then
+            state="restored-prefix"
+          else
+            state="restored-exact"
+          fi
+        elif [[ "${WINDOWS_CARGO_API_EXACT_VISIBLE:-false}" == "true" ]]; then
+          state="api-visible/action-miss"
+          echo "::warning::Windows Cargo cache exact key is visible via API but actions/cache restore missed it. expected-key=$EXPECTED_KEY api-id=${WINDOWS_CARGO_API_EXACT_ID:-n/a} api-version=${WINDOWS_CARGO_API_EXACT_VERSION:-n/a} api-ref=${WINDOWS_CARGO_API_EXACT_REF:-n/a}"
+        else
+          state="api-miss"
+        fi
+
+        if [[ "$WINDOWS_CARGO_RESTORE_HIT" != "true" || "$state" == "api-visible/action-miss" ]]; then
+          should_debug_upterm="true"
+        fi
+
+        echo "::group::Windows Cargo cache classification"
+        echo "[INFO] state=$state"
+        echo "[INFO] expected-key=$EXPECTED_KEY"
+        echo "[INFO] lookup-hit=$WINDOWS_CARGO_LOOKUP_HIT"
+        echo "[INFO] lookup-primary-key=$WINDOWS_CARGO_LOOKUP_PRIMARY_KEY"
+        echo "[INFO] lookup-matched-key=$WINDOWS_CARGO_LOOKUP_MATCHED_KEY"
+        echo "[INFO] restore-hit=$WINDOWS_CARGO_RESTORE_HIT"
+        echo "[INFO] api-exact-visible=${WINDOWS_CARGO_API_EXACT_VISIBLE:-false}"
+        echo "[INFO] api-exact-id=${WINDOWS_CARGO_API_EXACT_ID:-n/a}"
+        echo "[INFO] api-exact-version=${WINDOWS_CARGO_API_EXACT_VERSION:-n/a}"
+        echo "[INFO] should-debug-upterm=$should_debug_upterm"
+        echo "::endgroup::"
+
+        {
+          echo "state=$state"
+          echo "api_exact_visible=${WINDOWS_CARGO_API_EXACT_VISIBLE:-false}"
+          echo "api_exact_id=${WINDOWS_CARGO_API_EXACT_ID:-}"
+          echo "api_exact_ref=${WINDOWS_CARGO_API_EXACT_REF:-}"
+          echo "api_exact_version=${WINDOWS_CARGO_API_EXACT_VERSION:-}"
+          echo "api_exact_size_bytes=${WINDOWS_CARGO_API_EXACT_SIZE_BYTES:-}"
+          echo "api_exact_last_accessed_at=${WINDOWS_CARGO_API_EXACT_LAST_ACCESSED_AT:-}"
+          echo "api_exact_created_at=${WINDOWS_CARGO_API_EXACT_CREATED_AT:-}"
+          echo "should_debug_upterm=$should_debug_upterm"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Setup upterm session (debug-cache)
+      if: ${{ inputs.platform == 'windows' && contains(github.event.head_commit.message, '[debug-cache]') && steps.windows-cargo-classification.outputs.should_debug_upterm == 'true' }}
+      uses: lhotari/action-upterm@v1
+      with:
+        limit-access-to-actor: true
+        wait-timeout-minutes: 20
+
     - name: Cache Rust dependencies and build artifacts
       if: ${{ inputs.platform != 'windows' }}
       id: rust-cache
@@ -442,20 +534,34 @@ runs:
         RUST_CACHE_HIT: ${{ steps.rust-cache.outputs.cache-hit || 'false' }}
       run: bash ../scripts/ci/inspect_rust_cache.sh post . "$RUST_CACHE_HIT"
 
-    - name: Report Windows Cargo cache restore result
+    - name: Report Windows Cargo cache restore diagnostics
       if: ${{ inputs.platform == 'windows' }}
       shell: bash
       env:
         WINDOWS_CARGO_CACHE_HIT: ${{ steps.windows-cargo-restore.outputs.cache-hit || 'false' }}
+        WINDOWS_CARGO_CACHE_STATE: ${{ steps.windows-cargo-classification.outputs.state || 'unknown' }}
+        WINDOWS_CARGO_API_EXACT_VISIBLE: ${{ steps.windows-cargo-classification.outputs.api_exact_visible || 'false' }}
+        WINDOWS_CARGO_API_EXACT_ID: ${{ steps.windows-cargo-classification.outputs.api_exact_id || '' }}
+        WINDOWS_CARGO_API_EXACT_VERSION: ${{ steps.windows-cargo-classification.outputs.api_exact_version || '' }}
         WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home }}
         WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
         WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
+        WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.registry || 'n/a' }}
+        WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.git || 'n/a' }}
+        WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.registry || 'n/a' }}
+        WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.git || 'n/a' }}
       run: |
         echo "::group::Windows Cargo cache restore result"
         echo "[INFO] cache-hit=$WINDOWS_CARGO_CACHE_HIT"
+        echo "[INFO] state=$WINDOWS_CARGO_CACHE_STATE"
+        echo "[INFO] api-exact-visible=$WINDOWS_CARGO_API_EXACT_VISIBLE"
+        echo "[INFO] api-exact-id=$WINDOWS_CARGO_API_EXACT_ID"
+        echo "[INFO] api-exact-version=$WINDOWS_CARGO_API_EXACT_VERSION"
         echo "[INFO] cargo-home=$WINDOWS_CARGO_HOME"
         echo "[INFO] registry=$WINDOWS_CARGO_REGISTRY"
         echo "[INFO] git=$WINDOWS_CARGO_GIT"
+        echo "[INFO] before-restore registry=$WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE git=$WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE"
+        echo "[INFO] after-restore registry=$WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE git=$WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE"
         echo "::endgroup::"
 
     - name: Write cache metrics report
@@ -472,9 +578,21 @@ runs:
         WINDOWS_CARGO_LOOKUP_PRIMARY_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-primary-key || '' }}
         WINDOWS_CARGO_LOOKUP_MATCHED_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-matched-key || '' }}
         WINDOWS_CARGO_CACHE_HIT: ${{ steps.windows-cargo-restore.outputs.cache-hit || '' }}
+        WINDOWS_CARGO_CACHE_STATE: ${{ steps.windows-cargo-classification.outputs.state || '' }}
+        WINDOWS_CARGO_API_EXACT_VISIBLE: ${{ steps.windows-cargo-classification.outputs.api_exact_visible || '' }}
+        WINDOWS_CARGO_API_EXACT_ID: ${{ steps.windows-cargo-classification.outputs.api_exact_id || '' }}
+        WINDOWS_CARGO_API_EXACT_REF: ${{ steps.windows-cargo-classification.outputs.api_exact_ref || '' }}
+        WINDOWS_CARGO_API_EXACT_VERSION: ${{ steps.windows-cargo-classification.outputs.api_exact_version || '' }}
+        WINDOWS_CARGO_API_EXACT_SIZE_BYTES: ${{ steps.windows-cargo-classification.outputs.api_exact_size_bytes || '' }}
+        WINDOWS_CARGO_API_EXACT_LAST_ACCESSED_AT: ${{ steps.windows-cargo-classification.outputs.api_exact_last_accessed_at || '' }}
+        WINDOWS_CARGO_API_EXACT_CREATED_AT: ${{ steps.windows-cargo-classification.outputs.api_exact_created_at || '' }}
         WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home || '' }}
         WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry || '' }}
         WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git || '' }}
+        WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.registry || '' }}
+        WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.git || '' }}
+        WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.registry || '' }}
+        WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.git || '' }}
       run: bash ../scripts/ci/build_metrics.sh append-cache-report . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Extract version

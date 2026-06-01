@@ -164,6 +164,19 @@ jobs:
           tauri_signing_private_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           tauri_signing_private_key_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Append Windows Cargo post-build snapshot
+        if: always() && matrix.platform == 'windows' && steps.prep.outputs.metrics_report_path != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ci/build_metrics.sh append-windows-post-build-row \
+            private-src \
+            "${{ matrix.variant }}" \
+            "${{ matrix.platform }}" \
+            "${{ matrix.arch }}" \
+            "$GITHUB_WORKSPACE/.cargo-ci/registry" \
+            "$GITHUB_WORKSPACE/.cargo-ci/git"
+
       - name: Upload build timings report
         if: always() && steps.prep.outputs.metrics_report_path != ''
         uses: actions/upload-artifact@v4
@@ -319,15 +332,6 @@ jobs:
 
           # Use dedicated script for batched, efficient log shipping
           scripts/ci/ship_logs_to_loki.sh "$LOG_FILE" "$LABELS"
-
-      # --- DEBUG MODE: SSH into runner on failure ---
-      - name: Setup upterm session (debug mode)
-        if: failure() && contains(github.event.head_commit.message, '[debug]')
-        uses: owenthereal/action-upterm@v1
-        timeout-minutes: 30
-        with:
-          limit-access-to-actor: true
-          wait-timeout-minutes: 30
 
       # --- Notify on failure ---
       - name: Notify build failure (Slack)
