@@ -299,8 +299,8 @@ runs:
         set -euo pipefail
         cache_key="${{ inputs.platform }}-${{ inputs.arch }}-${{ inputs.variant }}"
         if [[ "${{ inputs.platform }}" == "windows" ]]; then
-          # Rotate the Windows namespace for the workspace-local CARGO_HOME probe.
-          cache_key="${cache_key}-v3"
+          # Rotate the Windows Cargo namespace again to escape unretrievable v3 entries.
+          cache_key="${cache_key}-v4"
         fi
         echo "key=$cache_key" >> "$GITHUB_OUTPUT"
 
