@@ -164,6 +164,28 @@ jobs:
           tauri_signing_private_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           tauri_signing_private_key_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Upload build timings report
+        if: always() && steps.prep.outputs.metrics_report_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prep.outputs.metrics_report_artifact_name }}
+          path: ${{ steps.prep.outputs.metrics_report_path }}
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Append build timings to job summary
+        if: always() && steps.prep.outputs.metrics_report_path != ''
+        shell: bash
+        env:
+          REPORT_PATH: ${{ steps.prep.outputs.metrics_report_path }}
+        run: |
+          set -euo pipefail
+          if [[ -f "$REPORT_PATH" ]]; then
+            cat "$REPORT_PATH" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "[WARN] Build timings report not found at $REPORT_PATH" >&2
+          fi
+
       # --- Upload build logs IMMEDIATELY (even on failure) ---
       - name: Upload build logs (always)
         if: always()

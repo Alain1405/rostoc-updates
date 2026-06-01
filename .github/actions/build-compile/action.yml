@@ -112,17 +112,17 @@ runs:
     - name: Download embedded Python
       working-directory: private-src
       shell: bash
-      run: bash ../scripts/ci/run_build_compile.sh download-embedded-python "${{ inputs.platform }}" "${{ inputs.arch }}"
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "embedded Python download" -- bash ../scripts/ci/run_build_compile.sh download-embedded-python "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Verify embedded Python architecture
       working-directory: private-src
       shell: bash
-      run: bash ../scripts/ci/run_build_compile.sh verify-embedded-python-arch "${{ inputs.platform }}" "${{ inputs.arch }}"
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "embedded Python arch verification" -- bash ../scripts/ci/run_build_compile.sh verify-embedded-python-arch "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Install JS dependencies
       working-directory: private-src
       shell: bash
-      run: pnpm install --frozen-lockfile
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "pnpm install" -- pnpm install --frozen-lockfile
 
     - name: Stamp build version (dev builds only)
       if: env.RELEASE_VERSION == ''
@@ -131,10 +131,7 @@ runs:
       env:
         GITHUB_SHA: ${{ github.sha }}
         GITHUB_RUN_NUMBER: ${{ github.run_number }}
-      run: |
-        set -euo pipefail
-        # Dev builds: generate unique version and update Cargo.lock
-        scripts/ci/stamp_dev_version.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "dev version stamping" -- scripts/ci/stamp_dev_version.sh
 
     - name: Set variant-specific Tauri config flag
       shell: bash
@@ -144,7 +141,7 @@ runs:
       if: always()
       shell: bash
       working-directory: private-src
-      run: bash ../scripts/ci/run_build_compile.sh capture-diagnostic-environment "${{ inputs.platform }}" "${{ inputs.arch }}"
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "diagnostic environment capture" -- bash ../scripts/ci/run_build_compile.sh capture-diagnostic-environment "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Upload diagnostic info
       if: always()
@@ -158,7 +155,7 @@ runs:
     - name: Generate build fingerprint
       shell: bash
       working-directory: private-src
-      run: bash ../scripts/ci/run_build_compile.sh generate-build-fingerprint "${{ inputs.platform }}" "${{ inputs.arch }}"
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "build fingerprint generation" -- bash ../scripts/ci/run_build_compile.sh generate-build-fingerprint "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Upload build fingerprint
       if: always()
@@ -172,13 +169,13 @@ runs:
     - name: Generate Python config (before runtime staging)
       working-directory: private-src
       shell: bash
-      run: ../scripts/ci/generate_and_verify_config.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "Python config generation" -- ../scripts/ci/generate_and_verify_config.sh
 
     - name: '[macOS] Stage Python runtime (before Tauri build/sign)'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
-      run: ../scripts/ci/stage_and_verify_runtime.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "runtime staging" -- ../scripts/ci/stage_and_verify_runtime.sh
 
     - name: '[macOS] Sign Python binaries and libraries (before Tauri build)'
       if: ${{ inputs.platform == 'macos' }}
@@ -186,25 +183,25 @@ runs:
       shell: bash
       env:
         APPLE_SIGNING_IDENTITY: ${{ inputs.apple_signing_identity }}
-      run: ../scripts/ci/sign_python_runtime.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "macOS runtime signing" -- ../scripts/ci/sign_python_runtime.sh
 
     - name: '[macOS] Verify generated_config.py after signing'
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
-      run: ../scripts/ci/verify_config_after_signing.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "macOS post-sign verification" -- ../scripts/ci/verify_config_after_signing.sh
 
     - name: '[Windows] Stage Python runtime (before Tauri build)'
       if: ${{ inputs.platform == 'windows' }}
       working-directory: private-src
       shell: bash
-      run: ../scripts/ci/stage_and_verify_runtime.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "runtime staging" -- ../scripts/ci/stage_and_verify_runtime.sh
 
     - name: '[Windows] Set PYO3_PYTHON for correct embedded Python linking'
       if: ${{ inputs.platform == 'windows' }}
       working-directory: private-src
       shell: bash
-      run: bash ../scripts/ci/run_build_compile.sh set-windows-pyo3-python "${{ inputs.arch }}"
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "Windows PYO3_PYTHON setup" -- bash ../scripts/ci/run_build_compile.sh set-windows-pyo3-python "${{ inputs.arch }}"
 
     - name: Validate version matches tag (release builds only)
       if: ${{ inputs.is_release == 'true' }}
@@ -212,7 +209,7 @@ runs:
       shell: bash
       env:
         GITHUB_REF: ${{ github.ref }}
-      run: ../scripts/ci/validate_release_version.sh
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "release version validation" -- ../scripts/ci/validate_release_version.sh
 
     - name: Build application
       working-directory: private-src
@@ -239,4 +236,4 @@ runs:
         # Enable debug symbols for build dependencies (better error traces)
         CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: 'true'
         # PYO3_PYTHON is set by previous step for Windows, inherited for other platforms
-      run: ../scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"
+      run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "final Tauri build" -- ../scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"

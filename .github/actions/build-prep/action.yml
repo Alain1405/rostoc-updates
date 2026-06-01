@@ -58,6 +58,12 @@ outputs:
   pnpm_store_path:
     description: 'Path to pnpm store'
     value: ${{ steps.pnpm-store.outputs.STORE_PATH }}
+  metrics_report_path:
+    description: 'Path to the build metrics report in the workspace'
+    value: ${{ steps.metrics-report.outputs.path }}
+  metrics_report_artifact_name:
+    description: 'Artifact name for the build metrics report'
+    value: ${{ steps.metrics-report.outputs.artifact_name }}
   version:
     description: 'Extracted version from tauri.conf.json'
     value: ${{ steps.extract_version.outputs.version }}
@@ -92,6 +98,20 @@ runs:
         ssh-key: ${{ inputs.private_repo_ssh_key }}
         path: private-src
         fetch-depth: 0
+
+    - name: Initialize build metrics report
+      id: metrics-report
+      working-directory: private-src
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash ../scripts/ci/build_metrics.sh init-report . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}"
+        REPORT_FILE_NAME=$(bash ../scripts/ci/build_metrics.sh report-file-name "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}")
+        REPORT_ARTIFACT_NAME=$(bash ../scripts/ci/build_metrics.sh report-artifact-name "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}")
+        {
+          echo "path=private-src/$REPORT_FILE_NAME"
+          echo "artifact_name=$REPORT_ARTIFACT_NAME"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Force pull latest commit from private repo
       working-directory: private-src
@@ -182,6 +202,7 @@ runs:
       run: scripts/ci/hash_lockfiles.sh private-src
 
     - name: Cache pnpm store
+      id: pnpm-cache
       uses: actions/cache@v4
       with:
         path: ${{ steps.pnpm-store.outputs.STORE_PATH }}
@@ -206,6 +227,7 @@ runs:
         uv --version
 
     - name: Cache Python wheels
+      id: python-wheel-cache
       uses: actions/cache@v4
       with:
         path: |
@@ -435,6 +457,25 @@ runs:
         echo "[INFO] registry=$WINDOWS_CARGO_REGISTRY"
         echo "[INFO] git=$WINDOWS_CARGO_GIT"
         echo "::endgroup::"
+
+    - name: Write cache metrics report
+      if: always()
+      working-directory: private-src
+      shell: bash
+      env:
+        PNPM_CACHE_HIT: ${{ steps.pnpm-cache.outputs.cache-hit || 'false' }}
+        PNPM_STORE_PATH: ${{ steps.pnpm-store.outputs.STORE_PATH }}
+        PYTHON_CACHE_HIT: ${{ steps.python-wheel-cache.outputs.cache-hit || 'false' }}
+        RUST_CACHE_HIT: ${{ steps.rust-cache.outputs.cache-hit || 'false' }}
+        RUST_TARGET_DIR: target
+        WINDOWS_CARGO_LOOKUP_HIT: ${{ steps.windows-cargo-lookup.outputs.cache-hit || '' }}
+        WINDOWS_CARGO_LOOKUP_PRIMARY_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-primary-key || '' }}
+        WINDOWS_CARGO_LOOKUP_MATCHED_KEY: ${{ steps.windows-cargo-lookup.outputs.cache-matched-key || '' }}
+        WINDOWS_CARGO_CACHE_HIT: ${{ steps.windows-cargo-restore.outputs.cache-hit || '' }}
+        WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home || '' }}
+        WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry || '' }}
+        WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git || '' }}
+      run: bash ../scripts/ci/build_metrics.sh append-cache-report . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Extract version
       id: extract_version
