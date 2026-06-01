@@ -138,7 +138,7 @@ runs:
 
     - name: Set variant-specific Tauri config flag
       shell: bash
-      run: bash scripts/ci/run_build_compile.sh set-tauri-config-flag
+      run: bash scripts/ci/run_build_compile.sh set-tauri-config-flag "${{ inputs.platform }}"
 
     - name: Capture diagnostic environment info
       if: always()

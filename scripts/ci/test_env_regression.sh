@@ -102,8 +102,48 @@ else
 fi
 echo ""
 
+# Test Case 5: Verify platform-specific TAURI config selection
+echo "Test 5: Verify set-tauri-config-flag platform selection"
+echo "--------------------------------------------------------"
+TEST_GITHUB_ENV=/tmp/test_github_env.txt
+
+assert_config_flag() {
+  local variant platform expected actual
+  variant=${1:?variant is required}
+  platform=${2:?platform is required}
+  if [[ $# -lt 3 ]]; then
+    echo "❌ expected value argument is required"
+    exit 1
+  fi
+  expected=$3
+
+  : > "$TEST_GITHUB_ENV"
+  if ! output=$(GITHUB_ENV="$TEST_GITHUB_ENV" ROSTOC_APP_VARIANT="$variant" \
+    bash "$SCRIPT_DIR/run_build_compile.sh" set-tauri-config-flag "$platform" 2>&1); then
+    echo "❌ set-tauri-config-flag failed for variant=$variant platform=$platform"
+    echo "$output"
+    exit 1
+  fi
+
+  actual=$(grep '^TAURI_CONFIG_FLAG=' "$TEST_GITHUB_ENV" | tail -1 | cut -d'=' -f2-)
+  if [[ "$actual" != "$expected" ]]; then
+    echo "❌ Unexpected config flag for variant=$variant platform=$platform"
+    echo "   Expected: '$expected'"
+    echo "   Actual:   '$actual'"
+    exit 1
+  fi
+
+  echo "✅ variant=$variant platform=$platform -> ${actual:-<empty>}"
+}
+
+assert_config_flag production windows src-tauri/tauri.windows.production.conf.json
+assert_config_flag production macos ""
+assert_config_flag staging windows src-tauri/tauri.staging.conf.json
+assert_config_flag dev windows src-tauri/tauri.dev.conf.json
+echo ""
+
 # Cleanup
-rm -f /tmp/test_bug.sh /tmp/test_fix.sh /tmp/bug_output.txt /tmp/fix_unset.txt /tmp/bug_unset.txt
+rm -f /tmp/test_bug.sh /tmp/test_fix.sh /tmp/bug_output.txt /tmp/fix_unset.txt /tmp/bug_unset.txt "$TEST_GITHUB_ENV"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ All regression tests passed!"
@@ -112,5 +152,6 @@ echo "Summary of fix:"
 echo "  WRONG: \${TAURI_CONFIG_FLAG:?msg}  # Fails on empty (what we had)"
 echo "  RIGHT: \${TAURI_CONFIG_FLAG?msg}   # Allows empty (what we have now)"
 echo ""
-echo "Production builds set TAURI_CONFIG_FLAG='' (no overlay), which is valid."
+echo "Production non-Windows builds keep TAURI_CONFIG_FLAG='' (no overlay), which is valid."
+echo "Production Windows builds now set the embedBootstrapper overlay explicitly."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

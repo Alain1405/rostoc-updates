@@ -198,7 +198,8 @@ verify_embedded_python_architecture() {
 }
 
 set_tauri_config_flag() {
-  local config_flag
+  local platform config_flag
+  platform=${1:-}
 
   case "${ROSTOC_APP_VARIANT:-production}" in
     staging)
@@ -208,11 +209,21 @@ set_tauri_config_flag() {
       config_flag="src-tauri/tauri.dev.conf.json"
       ;;
     production)
-      config_flag=""
+      # Production Windows builds still need the Windows-only overlay so Tauri
+      # embeds the WebView2 bootstrapper in installers.
+      if [[ "$platform" == "windows" ]]; then
+        config_flag="src-tauri/tauri.windows.production.conf.json"
+      else
+        config_flag=""
+      fi
       ;;
     *)
       echo "::warning::Unknown variant '${ROSTOC_APP_VARIANT:-}', defaulting to production"
-      config_flag=""
+      if [[ "$platform" == "windows" ]]; then
+        config_flag="src-tauri/tauri.windows.production.conf.json"
+      else
+        config_flag=""
+      fi
       ;;
   esac
 
