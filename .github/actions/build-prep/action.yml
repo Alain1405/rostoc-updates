@@ -365,10 +365,21 @@ runs:
           } | hash_stream
         )
 
+        restore_path_list_raw=$(printf '%s\n%s' "${{ steps.windows-cargo-home.outputs.registry }}" "${{ steps.windows-cargo-home.outputs.git }}")
+        restore_path_list_normalized=$(printf '%s\n%s' "${{ steps.windows-cargo-home.outputs.registry }}" "${{ steps.windows-cargo-home.outputs.git }}" | tr '\\' '/')
+        restore_path_fingerprint=$(printf '%s\n%s\n' "${{ steps.windows-cargo-home.outputs.registry }}" "${{ steps.windows-cargo-home.outputs.git }}" | hash_stream)
+
         {
           echo "registry=${{ steps.windows-cargo-home.outputs.registry }}"
           echo "git=${{ steps.windows-cargo-home.outputs.git }}"
           echo "key=windows-cargo-${{ steps.rust-cache-key.outputs.key }}-$combined_hash"
+          echo "restore_path_list_raw<<EOF"
+          printf '%s\n' "$restore_path_list_raw"
+          echo "EOF"
+          echo "restore_path_list_normalized<<EOF"
+          printf '%s\n' "$restore_path_list_normalized"
+          echo "EOF"
+          echo "restore_path_fingerprint=$restore_path_fingerprint"
         } >> "$GITHUB_OUTPUT"
 
     - name: Debug Windows cache lookup inputs
@@ -542,10 +553,15 @@ runs:
         WINDOWS_CARGO_CACHE_STATE: ${{ steps.windows-cargo-classification.outputs.state || 'unknown' }}
         WINDOWS_CARGO_API_EXACT_VISIBLE: ${{ steps.windows-cargo-classification.outputs.api_exact_visible || 'false' }}
         WINDOWS_CARGO_API_EXACT_ID: ${{ steps.windows-cargo-classification.outputs.api_exact_id || '' }}
+        WINDOWS_CARGO_API_EXACT_REF: ${{ steps.windows-cargo-classification.outputs.api_exact_ref || '' }}
         WINDOWS_CARGO_API_EXACT_VERSION: ${{ steps.windows-cargo-classification.outputs.api_exact_version || '' }}
+        WINDOWS_CARGO_CURRENT_REF: ${{ github.ref }}
         WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home }}
         WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry }}
         WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
+        WINDOWS_CARGO_RESTORE_PATHS_RAW: ${{ steps.windows-cargo-cache.outputs.restore_path_list_raw }}
+        WINDOWS_CARGO_RESTORE_PATHS_NORMALIZED: ${{ steps.windows-cargo-cache.outputs.restore_path_list_normalized }}
+        WINDOWS_CARGO_RESTORE_PATH_FINGERPRINT: ${{ steps.windows-cargo-cache.outputs.restore_path_fingerprint }}
         WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.registry || 'n/a' }}
         WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.git || 'n/a' }}
         WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.registry || 'n/a' }}
@@ -556,10 +572,15 @@ runs:
         echo "[INFO] state=$WINDOWS_CARGO_CACHE_STATE"
         echo "[INFO] api-exact-visible=$WINDOWS_CARGO_API_EXACT_VISIBLE"
         echo "[INFO] api-exact-id=$WINDOWS_CARGO_API_EXACT_ID"
+        echo "[INFO] api-exact-ref=$WINDOWS_CARGO_API_EXACT_REF"
         echo "[INFO] api-exact-version=$WINDOWS_CARGO_API_EXACT_VERSION"
+        echo "[INFO] workflow-ref=$WINDOWS_CARGO_CURRENT_REF"
+        echo "[INFO] restore-path-fingerprint=$WINDOWS_CARGO_RESTORE_PATH_FINGERPRINT"
         echo "[INFO] cargo-home=$WINDOWS_CARGO_HOME"
         echo "[INFO] registry=$WINDOWS_CARGO_REGISTRY"
         echo "[INFO] git=$WINDOWS_CARGO_GIT"
+        printf '[INFO] restore-paths-raw:\n%s\n' "$WINDOWS_CARGO_RESTORE_PATHS_RAW"
+        printf '[INFO] restore-paths-normalized:\n%s\n' "$WINDOWS_CARGO_RESTORE_PATHS_NORMALIZED"
         echo "[INFO] before-restore registry=$WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE git=$WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE"
         echo "[INFO] after-restore registry=$WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE git=$WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE"
         echo "::endgroup::"
@@ -586,9 +607,13 @@ runs:
         WINDOWS_CARGO_API_EXACT_SIZE_BYTES: ${{ steps.windows-cargo-classification.outputs.api_exact_size_bytes || '' }}
         WINDOWS_CARGO_API_EXACT_LAST_ACCESSED_AT: ${{ steps.windows-cargo-classification.outputs.api_exact_last_accessed_at || '' }}
         WINDOWS_CARGO_API_EXACT_CREATED_AT: ${{ steps.windows-cargo-classification.outputs.api_exact_created_at || '' }}
+        WINDOWS_CARGO_CURRENT_REF: ${{ github.ref }}
         WINDOWS_CARGO_HOME: ${{ steps.windows-cargo-home.outputs.cargo_home || '' }}
         WINDOWS_CARGO_REGISTRY: ${{ steps.windows-cargo-cache.outputs.registry || '' }}
         WINDOWS_CARGO_GIT: ${{ steps.windows-cargo-cache.outputs.git || '' }}
+        WINDOWS_CARGO_RESTORE_PATHS_RAW: ${{ steps.windows-cargo-cache.outputs.restore_path_list_raw || '' }}
+        WINDOWS_CARGO_RESTORE_PATHS_NORMALIZED: ${{ steps.windows-cargo-cache.outputs.restore_path_list_normalized || '' }}
+        WINDOWS_CARGO_RESTORE_PATH_FINGERPRINT: ${{ steps.windows-cargo-cache.outputs.restore_path_fingerprint || '' }}
         WINDOWS_CARGO_REGISTRY_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.registry || '' }}
         WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.git || '' }}
         WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.registry || '' }}
