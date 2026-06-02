@@ -310,36 +310,23 @@ function Get-MsiTableRowCount {
   $record = $null
 
   try {
-    $query = ('SELECT COUNT(*) FROM `{0}`' -f $TableName)
+    $query = ('SELECT * FROM `{0}`' -f $TableName)
     $view = $Database.OpenView($query)
     $view.Execute()
-    $record = $view.Fetch()
-    if ($null -eq $record) {
-      throw "COUNT(*) query for MSI table '$TableName' returned no rows"
-    }
 
-    try {
-      return [int]$record.IntegerData(1)
-    }
-    catch {
-      try {
-        $stringValue = $record.StringData(1)
-      }
-      catch {
-        throw "Unable to read COUNT(*) result for MSI table '$TableName' via IntegerData(1) or StringData(1): $($_.Exception.Message)"
+    $rowCount = 0
+    while ($true) {
+      $record = $view.Fetch()
+      if ($null -eq $record) {
+        break
       }
 
-      if ([string]::IsNullOrWhiteSpace($stringValue)) {
-        throw "COUNT(*) result for MSI table '$TableName' was empty"
-      }
-
-      try {
-        return [int]$stringValue
-      }
-      catch {
-        throw "COUNT(*) result for MSI table '$TableName' was not an integer: '$stringValue'"
-      }
+      $rowCount += 1
+      [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($record)
+      $record = $null
     }
+
+    return $rowCount
   }
   catch {
     throw "Unable to query MSI table '$TableName': $($_.Exception.Message)"

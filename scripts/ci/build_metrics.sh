@@ -230,7 +230,7 @@ append_cache_report_command() {
     "$(multi_path_size "$python_paths")"
 
   if [[ "$platform" == "windows" ]]; then
-    windows_detail=$(printf 'lookup-only-hit=%s<br>expected-key=%s<br>matched-key=%s<br>restore-hit=%s<br>restore-state=%s<br>api-exact-visible=%s<br>api-exact-id=%s<br>api-exact-ref=%s<br>api-exact-version=%s<br>workflow-ref=%s<br>restore-path-fingerprint=%s<br>restore-paths-raw=%s<br>restore-paths-normalized=%s<br>api-exact-size-bytes=%s<br>api-exact-last-accessed=%s<br>api-exact-created=%s<br>pre-restore-sizes=%s<br>post-restore-sizes=%s<br>cargo-home=%s' \
+    windows_detail=$(printf 'lookup-only-hit=%s<br>expected-key=%s<br>matched-key=%s<br>restore-hit=%s<br>restore-state=%s<br>api-exact-visible=%s<br>api-exact-id=%s<br>api-exact-ref=%s<br>api-exact-version=%s<br>workflow-ref=%s<br>runner-os=%s<br>runner-arch=%s<br>msystem=%s<br>cache-restore-action=%s<br>cache-save-action=%s<br>compression-candidate=%s<br>tar-kind=%s<br>tar-path=%s<br>tar-version=%s<br>tar-candidates=%s<br>bsdtar-path=%s<br>bsdtar-version=%s<br>bsdtar-candidates=%s<br>zstd-path=%s<br>zstd-version=%s<br>zstd-candidates=%s<br>restore-path-fingerprint=%s<br>restore-paths-raw=%s<br>restore-paths-normalized=%s<br>api-exact-size-bytes=%s<br>api-exact-last-accessed=%s<br>api-exact-created=%s<br>pre-restore-sizes=%s<br>post-restore-sizes=%s<br>cargo-home=%s' \
       "${WINDOWS_CARGO_LOOKUP_HIT:-unknown}" \
       "${WINDOWS_CARGO_LOOKUP_PRIMARY_KEY:-n/a}" \
       "${WINDOWS_CARGO_LOOKUP_MATCHED_KEY:-n/a}" \
@@ -241,6 +241,22 @@ append_cache_report_command() {
       "${WINDOWS_CARGO_API_EXACT_REF:-n/a}" \
       "${WINDOWS_CARGO_API_EXACT_VERSION:-n/a}" \
       "${WINDOWS_CARGO_CURRENT_REF:-n/a}" \
+      "${WINDOWS_CARGO_RUNNER_OS:-n/a}" \
+      "${WINDOWS_CARGO_RUNNER_ARCH:-n/a}" \
+      "${WINDOWS_CARGO_MSYSTEM:-n/a}" \
+      "${WINDOWS_CARGO_CACHE_RESTORE_ACTION_VERSION:-n/a}" \
+      "${WINDOWS_CARGO_CACHE_SAVE_ACTION_VERSION:-n/a}" \
+      "${WINDOWS_CARGO_COMPRESSION_CANDIDATE:-n/a}" \
+      "${WINDOWS_CARGO_TAR_KIND:-n/a}" \
+      "${WINDOWS_CARGO_TAR_PATH:-n/a}" \
+      "${WINDOWS_CARGO_TAR_VERSION:-n/a}" \
+      "${WINDOWS_CARGO_TAR_CANDIDATES:-n/a}" \
+      "${WINDOWS_CARGO_BSDTAR_PATH:-n/a}" \
+      "${WINDOWS_CARGO_BSDTAR_VERSION:-n/a}" \
+      "${WINDOWS_CARGO_BSDTAR_CANDIDATES:-n/a}" \
+      "${WINDOWS_CARGO_ZSTD_PATH:-n/a}" \
+      "${WINDOWS_CARGO_ZSTD_VERSION:-n/a}" \
+      "${WINDOWS_CARGO_ZSTD_CANDIDATES:-n/a}" \
       "${WINDOWS_CARGO_RESTORE_PATH_FINGERPRINT:-n/a}" \
       "$(escape_cell "${WINDOWS_CARGO_RESTORE_PATHS_RAW:-n/a}")" \
       "$(escape_cell "${WINDOWS_CARGO_RESTORE_PATHS_NORMALIZED:-n/a}")" \

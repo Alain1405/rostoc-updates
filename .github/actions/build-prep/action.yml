@@ -395,6 +395,17 @@ runs:
         CACHE_GIT: ${{ steps.windows-cargo-cache.outputs.git }}
       run: bash scripts/ci/debug_windows_cache_lookup.sh
 
+    - name: Probe Windows cache archive tooling
+      if: ${{ inputs.platform == 'windows' }}
+      id: windows-cargo-tooling
+      shell: bash
+      env:
+        WINDOWS_CACHE_ACTION_RESTORE_VERSION: v4
+        WINDOWS_CACHE_ACTION_SAVE_VERSION: v4
+        WINDOWS_CACHE_RUNNER_OS: ${{ runner.os }}
+        WINDOWS_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+      run: bash scripts/ci/inspect_windows_cache_tooling.sh >> "$GITHUB_OUTPUT"
+
     - name: Snapshot Windows Cargo cache paths before restore
       if: ${{ inputs.platform == 'windows' }}
       id: windows-cargo-size-before
@@ -566,6 +577,22 @@ runs:
         WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.git || 'n/a' }}
         WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.registry || 'n/a' }}
         WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.git || 'n/a' }}
+        WINDOWS_CARGO_RUNNER_OS: ${{ steps.windows-cargo-tooling.outputs.runner_os || 'unknown' }}
+        WINDOWS_CARGO_RUNNER_ARCH: ${{ steps.windows-cargo-tooling.outputs.runner_arch || 'unknown' }}
+        WINDOWS_CARGO_MSYSTEM: ${{ steps.windows-cargo-tooling.outputs.msystem || 'unknown' }}
+        WINDOWS_CARGO_CACHE_RESTORE_ACTION_VERSION: ${{ steps.windows-cargo-tooling.outputs.cache_restore_action_version || 'unknown' }}
+        WINDOWS_CARGO_CACHE_SAVE_ACTION_VERSION: ${{ steps.windows-cargo-tooling.outputs.cache_save_action_version || 'unknown' }}
+        WINDOWS_CARGO_TAR_PATH: ${{ steps.windows-cargo-tooling.outputs.tar_path || 'n/a' }}
+        WINDOWS_CARGO_TAR_VERSION: ${{ steps.windows-cargo-tooling.outputs.tar_version || 'n/a' }}
+        WINDOWS_CARGO_TAR_KIND: ${{ steps.windows-cargo-tooling.outputs.tar_kind || 'unknown' }}
+        WINDOWS_CARGO_TAR_CANDIDATES: ${{ steps.windows-cargo-tooling.outputs.tar_candidates || 'n/a' }}
+        WINDOWS_CARGO_BSDTAR_PATH: ${{ steps.windows-cargo-tooling.outputs.bsdtar_path || 'n/a' }}
+        WINDOWS_CARGO_BSDTAR_VERSION: ${{ steps.windows-cargo-tooling.outputs.bsdtar_version || 'n/a' }}
+        WINDOWS_CARGO_BSDTAR_CANDIDATES: ${{ steps.windows-cargo-tooling.outputs.bsdtar_candidates || 'n/a' }}
+        WINDOWS_CARGO_ZSTD_PATH: ${{ steps.windows-cargo-tooling.outputs.zstd_path || 'n/a' }}
+        WINDOWS_CARGO_ZSTD_VERSION: ${{ steps.windows-cargo-tooling.outputs.zstd_version || 'n/a' }}
+        WINDOWS_CARGO_ZSTD_CANDIDATES: ${{ steps.windows-cargo-tooling.outputs.zstd_candidates || 'n/a' }}
+        WINDOWS_CARGO_COMPRESSION_CANDIDATE: ${{ steps.windows-cargo-tooling.outputs.compression_candidate || 'unknown' }}
       run: |
         echo "::group::Windows Cargo cache restore result"
         echo "[INFO] cache-hit=$WINDOWS_CARGO_CACHE_HIT"
@@ -576,6 +603,22 @@ runs:
         echo "[INFO] api-exact-version=$WINDOWS_CARGO_API_EXACT_VERSION"
         echo "[INFO] workflow-ref=$WINDOWS_CARGO_CURRENT_REF"
         echo "[INFO] restore-path-fingerprint=$WINDOWS_CARGO_RESTORE_PATH_FINGERPRINT"
+        echo "[INFO] runner-os=$WINDOWS_CARGO_RUNNER_OS"
+        echo "[INFO] runner-arch=$WINDOWS_CARGO_RUNNER_ARCH"
+        echo "[INFO] msystem=$WINDOWS_CARGO_MSYSTEM"
+        echo "[INFO] cache-restore-action=$WINDOWS_CARGO_CACHE_RESTORE_ACTION_VERSION"
+        echo "[INFO] cache-save-action=$WINDOWS_CARGO_CACHE_SAVE_ACTION_VERSION"
+        echo "[INFO] tar-kind=$WINDOWS_CARGO_TAR_KIND"
+        echo "[INFO] tar-path=$WINDOWS_CARGO_TAR_PATH"
+        echo "[INFO] tar-version=$WINDOWS_CARGO_TAR_VERSION"
+        echo "[INFO] tar-candidates=$WINDOWS_CARGO_TAR_CANDIDATES"
+        echo "[INFO] bsdtar-path=$WINDOWS_CARGO_BSDTAR_PATH"
+        echo "[INFO] bsdtar-version=$WINDOWS_CARGO_BSDTAR_VERSION"
+        echo "[INFO] bsdtar-candidates=$WINDOWS_CARGO_BSDTAR_CANDIDATES"
+        echo "[INFO] zstd-path=$WINDOWS_CARGO_ZSTD_PATH"
+        echo "[INFO] zstd-version=$WINDOWS_CARGO_ZSTD_VERSION"
+        echo "[INFO] zstd-candidates=$WINDOWS_CARGO_ZSTD_CANDIDATES"
+        echo "[INFO] compression-candidate=$WINDOWS_CARGO_COMPRESSION_CANDIDATE"
         echo "[INFO] cargo-home=$WINDOWS_CARGO_HOME"
         echo "[INFO] registry=$WINDOWS_CARGO_REGISTRY"
         echo "[INFO] git=$WINDOWS_CARGO_GIT"
@@ -618,6 +661,22 @@ runs:
         WINDOWS_CARGO_GIT_SIZE_BEFORE_RESTORE: ${{ steps.windows-cargo-size-before.outputs.git || '' }}
         WINDOWS_CARGO_REGISTRY_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.registry || '' }}
         WINDOWS_CARGO_GIT_SIZE_AFTER_RESTORE: ${{ steps.windows-cargo-size-after.outputs.git || '' }}
+        WINDOWS_CARGO_RUNNER_OS: ${{ steps.windows-cargo-tooling.outputs.runner_os || '' }}
+        WINDOWS_CARGO_RUNNER_ARCH: ${{ steps.windows-cargo-tooling.outputs.runner_arch || '' }}
+        WINDOWS_CARGO_MSYSTEM: ${{ steps.windows-cargo-tooling.outputs.msystem || '' }}
+        WINDOWS_CARGO_CACHE_RESTORE_ACTION_VERSION: ${{ steps.windows-cargo-tooling.outputs.cache_restore_action_version || '' }}
+        WINDOWS_CARGO_CACHE_SAVE_ACTION_VERSION: ${{ steps.windows-cargo-tooling.outputs.cache_save_action_version || '' }}
+        WINDOWS_CARGO_TAR_PATH: ${{ steps.windows-cargo-tooling.outputs.tar_path || '' }}
+        WINDOWS_CARGO_TAR_VERSION: ${{ steps.windows-cargo-tooling.outputs.tar_version || '' }}
+        WINDOWS_CARGO_TAR_KIND: ${{ steps.windows-cargo-tooling.outputs.tar_kind || '' }}
+        WINDOWS_CARGO_TAR_CANDIDATES: ${{ steps.windows-cargo-tooling.outputs.tar_candidates || '' }}
+        WINDOWS_CARGO_BSDTAR_PATH: ${{ steps.windows-cargo-tooling.outputs.bsdtar_path || '' }}
+        WINDOWS_CARGO_BSDTAR_VERSION: ${{ steps.windows-cargo-tooling.outputs.bsdtar_version || '' }}
+        WINDOWS_CARGO_BSDTAR_CANDIDATES: ${{ steps.windows-cargo-tooling.outputs.bsdtar_candidates || '' }}
+        WINDOWS_CARGO_ZSTD_PATH: ${{ steps.windows-cargo-tooling.outputs.zstd_path || '' }}
+        WINDOWS_CARGO_ZSTD_VERSION: ${{ steps.windows-cargo-tooling.outputs.zstd_version || '' }}
+        WINDOWS_CARGO_ZSTD_CANDIDATES: ${{ steps.windows-cargo-tooling.outputs.zstd_candidates || '' }}
+        WINDOWS_CARGO_COMPRESSION_CANDIDATE: ${{ steps.windows-cargo-tooling.outputs.compression_candidate || '' }}
       run: bash ../scripts/ci/build_metrics.sh append-cache-report . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}"
 
     - name: Extract version
