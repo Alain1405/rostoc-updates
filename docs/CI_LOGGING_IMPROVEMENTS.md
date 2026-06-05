@@ -416,7 +416,7 @@ exit "${BUILD_EXIT_CODE}"
 ### Phase 3: Nice to Have (Future)
 6. ✅ **Build fingerprint tool** - #6 above (30 minutes)
 7. ⏳ **Automated diff comparison** - Compare fingerprints across runs (2 hours)
-8. ⏳ **Slack/Discord notifications** - Post failures to team chat (1 hour)
+8. ⏳ **Discord notifications** - Post failures to team chat (1 hour)
 
 ---
 

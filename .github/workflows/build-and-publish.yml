@@ -202,7 +202,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           UPDATE_VARIANT: 'production'
           UPDATE_SMOKE_THRESHOLD_SECONDS: '90'
         run: |
@@ -231,38 +231,24 @@ jobs:
             exit 0
           }
 
-          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
-            Write-Host '[WARN] SLACK_WEBHOOK_URL is not set; skipping threshold notification'
-            exit 0
-          }
-
-          $payload = @{
-            text = "⚠️ Rostoc Windows update smoke exceeded $threshold seconds"
-            blocks = @(
-              @{
-                type = 'header'
-                text = @{ type = 'plain_text'; text = '⚠️ Slow Windows update smoke' }
-              },
-              @{
-                type = 'section'
-                fields = @(
-                  @{ type = 'mrkdwn'; text = "*Update install seconds:* $seconds" },
-                  @{ type = 'mrkdwn'; text = "*Threshold:* $threshold" },
-                  @{ type = 'mrkdwn'; text = "*Run:* ${{ github.run_id }}" },
-                  @{ type = 'mrkdwn'; text = "*Variant:* $env:UPDATE_VARIANT" }
-                )
-              }
-            )
-          } | ConvertTo-Json -Depth 6
-
-          Invoke-RestMethod -Uri $env:SLACK_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $payload | Out-Null
+          python scripts/ci/send_discord_webhook.py `
+            --skip-missing `
+            --label 'threshold notification' `
+            --content "Rostoc Windows update smoke exceeded $threshold seconds" `
+            --title 'Slow Windows update smoke' `
+            --color '16766720' `
+            --field "Update install seconds=$seconds" `
+            --field "Threshold=$threshold seconds" `
+            --field "Run=${{ github.run_id }}" `
+            --field "Variant=$env:UPDATE_VARIANT" `
+            --field "Logs=[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
       - name: Warn on update install regression
         if: always()
         continue-on-error: true
         shell: pwsh
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           UPDATE_SMOKE_BASELINE_SECONDS: '135'
         run: |
           $summaryPath = Join-Path (Join-Path $env:RUNNER_TEMP 'update-smoke') 'summary.json'
@@ -291,30 +277,17 @@ jobs:
             exit 0
           }
 
-          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
-            Write-Host '[WARN] SLACK_WEBHOOK_URL is not set; skipping regression notification'
-            exit 0
-          }
-
-          $payload = @{
-            text = "🚨 Rostoc Windows update smoke regressed beyond the baseline"
-            blocks = @(
-              @{
-                type = 'header'
-                text = @{ type = 'plain_text'; text = '🚨 Windows update smoke regression' }
-              },
-              @{
-                type = 'section'
-                fields = @(
-                  @{ type = 'mrkdwn'; text = "*Update install seconds:* $seconds" },
-                  @{ type = 'mrkdwn'; text = "*Baseline:* $baseline seconds" },
-                  @{ type = 'mrkdwn'; text = "*Regression threshold:* $regressionThreshold seconds" }
-                )
-              }
-            )
-          } | ConvertTo-Json -Depth 6
-
-          Invoke-RestMethod -Uri $env:SLACK_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $payload | Out-Null
+          python scripts/ci/send_discord_webhook.py `
+            --skip-missing `
+            --label 'regression notification' `
+            --content 'Rostoc Windows update smoke regressed beyond the baseline' `
+            --title 'Windows update smoke regression' `
+            --color '15158332' `
+            --field "Update install seconds=$seconds" `
+            --field "Baseline=$baseline seconds" `
+            --field "Regression threshold=$regressionThreshold seconds" `
+            --field "Run=${{ github.run_id }}" `
+            --field "Logs=[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
   # Phase 3a: Publish production channel
   publish-production:

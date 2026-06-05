@@ -59,7 +59,7 @@ These trigger automatically based on task context:
 | `APPLE_ID` | Apple ID for notarization |
 | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for notarytool |
 | `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater signing key |
-| `SLACK_WEBHOOK_URL` | Build failure notifications |
+| `DISCORD_WEBHOOK_URL` | Build failure notifications |
 | `LOKI_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD` | Grafana Cloud Loki |
 
 ## Key Files

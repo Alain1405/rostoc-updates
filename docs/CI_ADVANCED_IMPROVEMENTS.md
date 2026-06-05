@@ -78,7 +78,7 @@ After implementing basic logging improvements, we still face:
 
 **Problem**: Need to manually check GitHub Actions tab; no proactive alerts.
 
-**Solution**: Send notifications to Slack/Discord with error summaries.
+**Solution**: Send notifications to Discord with error summaries.
 
 **Implementation** - Add to [.github/workflows/build.yml](../.github/workflows/build.yml):
 
@@ -88,87 +88,24 @@ After implementing basic logging improvements, we still face:
         # ... existing code ...
 
       # --- Notify on failure ---
-      - name: Notify build failure (Slack/Discord)
-        if: failure()
-        uses: slackapi/slack-github-action@v1.27.0
-        with:
-          payload: |
-            {
-              "text": "❌ Build Failed: ${{ matrix.name }}",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "❌ Build Failed: ${{ matrix.name }}"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Platform:* ${{ matrix.platform }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Arch:* ${{ matrix.arch }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Variant:* ${{ matrix.variant }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Version:* ${{ steps.prep.outputs.version }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Quick Links:*\n• <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>\n• Download: `build-logs-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}`\n• Download: `diagnostics-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}`"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Commit:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>\n*Author:* ${{ github.actor }}\n*Branch:* ${{ github.ref_name }}"
-                  }
-                }
-              ]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-```
-
-**Alternative: Discord Webhook** (simpler setup):
-
-```yaml
       - name: Notify build failure (Discord)
         if: failure()
-        uses: tsickert/discord-webhook@v6.0.0
-        with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          username: "CI Bot"
-          avatar-url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-          embed-title: "❌ Build Failed: ${{ matrix.name }}"
-          embed-description: |
-            **Platform**: ${{ matrix.platform }} ${{ matrix.arch }}
-            **Variant**: ${{ matrix.variant }}
-            **Version**: ${{ steps.prep.outputs.version }}
-            **Author**: ${{ github.actor }}
-            
-            [View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          embed-color: 15158332
+        continue-on-error: true
+        shell: bash
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_VARIANT: ${{ matrix.variant }}
+          BUILD_VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          scripts/ci/notify_build_failure_discord.sh
 ```
 
 **Setup**:
-1. Create Slack/Discord webhook
-2. Add as repository secret: `SLACK_WEBHOOK_URL` or `DISCORD_WEBHOOK_URL`
+1. Create a Discord webhook
+2. Add it as the repository secret: `DISCORD_WEBHOOK_URL`
 3. Done!
 
 **Benefits**:
@@ -539,7 +476,7 @@ fi
 
 ### Phase 1: Immediate Wins (30 minutes total)
 1. ✅ Fast-fail validation (10 min)
-2. ✅ Slack/Discord notifications (15 min)
+2. ✅ Discord notifications (15 min)
 3. ✅ Error pattern detection (20 min)
 
 **Expected savings**: 30-60 min per failed build
