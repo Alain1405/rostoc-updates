@@ -1,0 +1,5 @@
+interface:
+  display_name: "Rostoc Updates Tmate"
+  short_description: "Explicit-only Rostoc workflow: rostoc-updates-tmate."
+policy:
+  allow_implicit_invocation: false

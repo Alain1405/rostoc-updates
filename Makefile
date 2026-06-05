@@ -1,4 +1,4 @@
-.PHONY: format lint lint-ci test-local test-script test-env test-env-regression validate-paths setup-act ai-test-smoke ai-test-full ai-test help
+.PHONY: format lint lint-ci test-local test-script test-env test-env-regression validate-paths setup-act ai-test-smoke ai-test-full ai-test llm-validate help
 
 WORKFLOW_FILES := $(shell find .github -name '*.yml' -o -name '*.yaml')
 
@@ -18,6 +18,13 @@ ai-test-full:
 
 ai-test:
 	$(if $(MODE),bash scripts/ai-test $(MODE),bash scripts/ai-test smoke)
+
+llm-validate:
+	@python3 scripts/llm/validate_codex_assets.py \
+		--repo . \
+		--scope $(if $(SCOPE),$(SCOPE),repo) \
+		--format $(if $(FORMAT),$(FORMAT),text) \
+		$(if $(STRICT),--strict,)
 
 validate-paths:
 	@./scripts/ci/validate_workflow_paths.sh
@@ -103,6 +110,7 @@ help:
 	@echo "Rostoc Updates - Local CI Testing Commands"
 	@echo ""
 	@echo "Linting & Formatting:"
+	@echo "  make llm-validate      Validate Codex AGENTS.md, skills, hooks, and config"
 	@echo "  make format              Format workflow YAML files with Prettier"
 	@echo "  make lint                Lint workflows with actionlint"
 	@echo "  make lint-ci             Lint workflows with colored output (CI mode)"

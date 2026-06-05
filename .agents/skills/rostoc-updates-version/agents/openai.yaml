@@ -1,0 +1,5 @@
+interface:
+  display_name: "Rostoc Updates Version"
+  short_description: "Explicit-only Rostoc workflow: rostoc-updates-version."
+policy:
+  allow_implicit_invocation: false

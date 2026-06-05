@@ -1,0 +1,5 @@
+interface:
+  display_name: "Rostoc Updates Loki"
+  short_description: "Explicit-only Rostoc workflow: rostoc-updates-loki."
+policy:
+  allow_implicit_invocation: false

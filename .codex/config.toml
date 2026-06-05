@@ -1,0 +1,6 @@
+# Project-scoped Codex configuration for Rostoc Updates.
+# Keep secrets, personal OAuth state, and user-specific MCP tokens out of this file.
+
+[agents]
+max_threads = 6
+max_depth = 1
