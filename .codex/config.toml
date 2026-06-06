@@ -4,3 +4,52 @@
 [agents]
 max_threads = 6
 max_depth = 1
+
+[mcp_servers.github]
+enabled = true
+url = "https://api.githubcopilot.com/mcp/"
+http_headers = { "X-MCP-Toolsets" = "default,actions" }
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.figma_desktop]
+enabled = true
+url = "http://127.0.0.1:3845/mcp"
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.sentry]
+enabled = true
+command = "sh"
+args = ["-lc", "exec npx -y @sentry/mcp-server@latest --access-token \"$SENTRY_AUTH_TOKEN\""]
+env_vars = ["SENTRY_AUTH_TOKEN"]
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.tanstack]
+enabled = true
+command = "npx"
+args = ["-y", "@tanstack/cli", "mcp"]
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.linear]
+enabled = true
+command = "npx"
+args = ["-y", "mcp-remote", "https://mcp.linear.app/mcp"]
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.playwright]
+enabled = true
+command = "npx"
+args = ["-y", "@playwright/mcp@latest", "--headless", "--caps=testing"]
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.posthog]
+enabled = true
+url = "https://mcp.posthog.com/mcp"
+bearer_token_env_var = "POSTHOG_API_KEY"
+http_headers = { "x-posthog-mcp-version" = "2" }
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.cloudflare]
+enabled = true
+command = "npx"
+args = ["-y", "mcp-remote", "https://bindings.mcp.cloudflare.com/mcp"]
+default_tools_approval_mode = "prompt"
