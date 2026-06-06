@@ -310,7 +310,20 @@ jobs:
           LOKI_USERNAME: ${{ secrets.LOKI_USERNAME }}
           LOKI_PASSWORD: ${{ secrets.LOKI_PASSWORD }}
         run: |
-          LOG_FILE="private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log"
+          LOG_FILE=""
+          for candidate in \
+            "private-src/build-${{ matrix.platform }}-${{ matrix.arch }}.log" \
+            "build-${{ matrix.platform }}-${{ matrix.arch }}.log"; do
+            if [[ -f "$candidate" ]]; then
+              LOG_FILE="$candidate"
+              break
+            fi
+          done
+
+          if [[ -z "$LOG_FILE" ]]; then
+            echo "[WARN] No build log found for Loki shipping"
+            exit 0
+          fi
 
           # Prepare labels as JSON for Loki
           LABELS=$(cat <<EOF
