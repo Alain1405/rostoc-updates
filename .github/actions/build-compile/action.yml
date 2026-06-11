@@ -15,6 +15,10 @@ inputs:
     description: 'Whether this is a release build'
     required: false
     default: 'false'
+  bundle_target:
+    description: 'Installer bundle target passed to scripts/build.py (all, app, msi, nsis, dmg, appimage)'
+    required: false
+    default: 'all'
   apple_signing_identity:
     description: 'Apple signing identity (macOS signing)'
     required: false
@@ -48,7 +52,7 @@ runs:
     - name: Initialize platform-specific config
       id: platform_config
       shell: bash
-      run: bash scripts/ci/run_build_compile.sh init-platform-config "${{ inputs.platform }}" "${{ inputs.arch }}"
+      run: bash scripts/ci/run_build_compile.sh init-platform-config "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ inputs.bundle_target }}"
 
     - name: '[macOS Intel] Confirm runner architecture'
       if: ${{ inputs.arch == 'x86_64' && inputs.platform == 'macos' }}

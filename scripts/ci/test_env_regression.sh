@@ -142,8 +142,76 @@ assert_config_flag staging windows src-tauri/tauri.staging.conf.json
 assert_config_flag dev windows src-tauri/tauri.dev.conf.json
 echo ""
 
+# Test Case 6: Verify bundle target selection for compile commands
+echo "Test 6: Verify init-platform-config bundle target selection"
+echo "-----------------------------------------------------------"
+TEST_GITHUB_OUTPUT=/tmp/test_github_output.txt
+
+capture_build_command() {
+  local platform arch bundle_target output command
+  platform=${1:?platform is required}
+  arch=${2:?arch is required}
+  bundle_target=${3:-all}
+
+  : > "$TEST_GITHUB_OUTPUT"
+  if ! output=$(GITHUB_OUTPUT="$TEST_GITHUB_OUTPUT" ROSTOC_APP_VARIANT=production \
+    bash "$SCRIPT_DIR/run_build_compile.sh" init-platform-config "$platform" "$arch" "$bundle_target" 2>&1); then
+    echo "❌ init-platform-config failed for platform=$platform arch=$arch bundle_target=$bundle_target"
+    echo "$output"
+    exit 1
+  fi
+
+  command=$(grep '^build_command=' "$TEST_GITHUB_OUTPUT" | tail -1 | cut -d'=' -f2-)
+  if [[ -z "$command" ]]; then
+    echo "❌ build_command output missing for platform=$platform arch=$arch bundle_target=$bundle_target"
+    cat "$TEST_GITHUB_OUTPUT"
+    exit 1
+  fi
+
+  echo "$command"
+}
+
+assert_build_command_contains() {
+  local platform arch bundle_target expected command
+  platform=${1:?platform is required}
+  arch=${2:?arch is required}
+  bundle_target=${3:?bundle_target is required}
+  expected=${4:?expected fragment is required}
+
+  command=$(capture_build_command "$platform" "$arch" "$bundle_target")
+  if [[ "$command" != *"$expected"* ]]; then
+    echo "❌ Expected build command to contain '$expected'"
+    echo "   Command: $command"
+    exit 1
+  fi
+
+  echo "✅ platform=$platform arch=$arch bundle_target=$bundle_target -> $expected"
+}
+
+assert_build_command_not_contains() {
+  local platform arch bundle_target unexpected command
+  platform=${1:?platform is required}
+  arch=${2:?arch is required}
+  bundle_target=${3:?bundle_target is required}
+  unexpected=${4:?unexpected fragment is required}
+
+  command=$(capture_build_command "$platform" "$arch" "$bundle_target")
+  if [[ "$command" == *"$unexpected"* ]]; then
+    echo "❌ Build command should not contain '$unexpected'"
+    echo "   Command: $command"
+    exit 1
+  fi
+
+  echo "✅ platform=$platform arch=$arch bundle_target=$bundle_target omits $unexpected"
+}
+
+assert_build_command_not_contains macos aarch64 all "--bundles"
+assert_build_command_contains macos x86_64 app "--bundles app"
+assert_build_command_contains windows x86_64 all "--bundles msi"
+echo ""
+
 # Cleanup
-rm -f /tmp/test_bug.sh /tmp/test_fix.sh /tmp/bug_output.txt /tmp/fix_unset.txt /tmp/bug_unset.txt "$TEST_GITHUB_ENV"
+rm -f /tmp/test_bug.sh /tmp/test_fix.sh /tmp/bug_output.txt /tmp/fix_unset.txt /tmp/bug_unset.txt "$TEST_GITHUB_ENV" "$TEST_GITHUB_OUTPUT"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ All regression tests passed!"
@@ -154,4 +222,5 @@ echo "  RIGHT: \${TAURI_CONFIG_FLAG?msg}   # Allows empty (what we have now)"
 echo ""
 echo "Production non-Windows builds keep TAURI_CONFIG_FLAG='' (no overlay), which is valid."
 echo "Production Windows builds now set the embedBootstrapper overlay explicitly."
+echo "Non-release macOS CI can request --bundles app to avoid DMG-only flakiness."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

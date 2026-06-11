@@ -29,6 +29,11 @@ command = "npx"
 args = ["-y", "@tanstack/cli", "mcp"]
 default_tools_approval_mode = "prompt"
 
+[mcp_servers.google_analytics]
+enabled = true
+command = "/Users/alainscialoja/.codex/bin/google-analytics-mcp"
+default_tools_approval_mode = "prompt"
+
 [mcp_servers.linear]
 enabled = true
 command = "npx"

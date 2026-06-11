@@ -72,12 +72,32 @@ resolve_python_url_fragment() {
   esac
 }
 
+resolve_bundle_flag() {
+  local bundle_target
+  bundle_target=${1:-all}
+
+  case "$bundle_target" in
+    all)
+      echo ""
+      ;;
+    app|msi|nsis|dmg|appimage)
+      echo "--bundles $bundle_target"
+      ;;
+    *)
+      echo "::error::Unsupported bundle target: $bundle_target" >&2
+      exit 1
+      ;;
+  esac
+}
+
 init_platform_config() {
-  local platform arch target py_url_fragment
+  local platform arch target py_url_fragment bundle_target bundle_flag
   platform=${1:?platform is required}
   arch=${2:?arch is required}
+  bundle_target=${3:-all}
   target=$(resolve_target_triple "$platform" "$arch")
   py_url_fragment=$(resolve_python_url_fragment "$platform" "$arch")
+  bundle_flag=$(resolve_bundle_flag "$bundle_target")
 
   local mode_flag=""
   local features_flag=""
@@ -91,7 +111,7 @@ init_platform_config() {
   case "$platform" in
     macos)
       {
-        echo "build_command=python scripts/build.py --locked $mode_flag $features_flag"
+        echo "build_command=python scripts/build.py --locked $bundle_flag $mode_flag $features_flag"
         echo "artifact_extension=tar.gz"
         echo "test_smoke=true"
         echo "target=$target"
