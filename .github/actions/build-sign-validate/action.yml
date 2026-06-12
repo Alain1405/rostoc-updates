@@ -8,6 +8,10 @@ inputs:
   arch:
     description: 'Architecture being built (aarch64, x86_64, i686)'
     required: true
+  bundle_target:
+    description: 'Installer bundle target requested for this build (all, app, msi, nsis, dmg, appimage)'
+    required: false
+    default: 'all'
   apple_signing_identity:
     description: 'Apple signing identity for codesign'
     required: false
@@ -24,7 +28,7 @@ runs:
   using: 'composite'
   steps:
     - name: '[macOS] Sign DMG'
-      if: ${{ inputs.platform == 'macos' }}
+      if: ${{ inputs.platform == 'macos' && inputs.bundle_target != 'app' }}
       working-directory: private-src
       shell: bash
       env:
@@ -54,6 +58,11 @@ runs:
         codesign --verify --deep --strict --verbose=2 "$DMG_PATH"
 
         echo "[INFO] DMG signed successfully"
+
+    - name: '[macOS] Skip DMG signing for app-only bundle'
+      if: ${{ inputs.platform == 'macos' && inputs.bundle_target == 'app' }}
+      shell: bash
+      run: echo "[INFO] App-only macOS bundle requested; skipping DMG signing"
 
     - name: '[macOS] Verify app bundle'
       if: ${{ inputs.platform == 'macos' }}

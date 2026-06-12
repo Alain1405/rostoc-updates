@@ -110,15 +110,21 @@ jobs:
             exit 1
           fi
 
-          # Check disk space upfront
+          # Check disk space upfront. Linux runners can start slightly under
+          # the macOS/Windows budget, and Linux is an optional AppImage leg.
+          MIN_DISK_GB=20
+          if [[ "${{ matrix.platform }}" == "linux" ]]; then
+            MIN_DISK_GB=18
+          fi
+
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             AVAILABLE_GB=$(df -g . | tail -1 | awk '{print $4}')
           else
             AVAILABLE_GB=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
           fi
 
-          if [[ $AVAILABLE_GB -lt 20 ]]; then
-            echo "::error::Insufficient disk space: ${AVAILABLE_GB}GB available, need 20GB minimum"
+          if [[ $AVAILABLE_GB -lt $MIN_DISK_GB ]]; then
+            echo "::error::Insufficient disk space: ${AVAILABLE_GB}GB available, need ${MIN_DISK_GB}GB minimum"
             exit 1
           fi
 
@@ -220,6 +226,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+          bundle_target: ${{ !inputs.is_release && matrix.platform == 'macos' && 'app' || 'all' }}
           apple_signing_identity: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       # --- Phase 4: Tests (smoke tests for all platforms) ---
