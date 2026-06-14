@@ -171,12 +171,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--channel", default="stable")
     parser.add_argument("--build-sha", required=True)
     parser.add_argument("--cdn-base", default="")
+    parser.add_argument(
+        "--notes",
+        help="Release notes text to include in the backend manifest payload",
+    )
+    parser.add_argument(
+        "--notes-file",
+        type=Path,
+        help="Path to a UTF-8 release notes file to include in the backend manifest payload",
+    )
     # NOTE: Removed --manifest and --releases args - backend generates manifests dynamically
     parser.add_argument("--mac-root", default=Path("macos-artifacts"), type=Path)
     parser.add_argument("--windows-root", default=Path("windows-artifacts"), type=Path)
     parser.add_argument("--linux-root", default=Path("linux-artifacts"), type=Path)
     parser.add_argument("--output", default=Path("publish-payload.json"), type=Path)
     return parser.parse_args()
+
+
+def load_release_notes(args: argparse.Namespace) -> str:
+    if args.notes_file and args.notes:
+        raise SystemExit("--notes and --notes-file cannot be used together")
+
+    if args.notes_file:
+        if not args.notes_file.exists():
+            raise SystemExit(f"Release notes file not found: {args.notes_file}")
+        notes = args.notes_file.read_text(encoding="utf-8").strip()
+    elif args.notes:
+        notes = args.notes.strip()
+    else:
+        notes = ""
+
+    return notes or f"Release {args.version}"
 
 
 def get_arch_mapping(platform: str, build_arch: str) -> str:
@@ -343,11 +368,12 @@ def process_platform_artifacts(
 
 def main() -> None:
     args = parse_args()
+    release_notes = load_release_notes(args)
 
     # Build minimal manifest_payload inline (backend generates full manifests dynamically)
     manifest_payload = {
         "version": args.version,
-        "notes": f"Release {args.version}",
+        "notes": release_notes,
         "pub_date": None,  # Backend will set this
     }
 

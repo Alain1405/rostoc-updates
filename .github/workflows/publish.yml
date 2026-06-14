@@ -188,6 +188,11 @@ jobs:
         id: prepare-backend-payload
         run: |
           set -euo pipefail
+          notes_args=()
+          notes_file="private-src/release-notes/v${{ env.RELEASE_VERSION }}.md"
+          if [ -f "$notes_file" ]; then
+            notes_args+=(--notes-file "$notes_file")
+          fi
           # NOTE: Removed --manifest and --releases args - build_backend_payload.py
           # now generates manifest_payload inline (backend generates manifests dynamically)
           python scripts/ci/build_backend_payload.py \
@@ -197,7 +202,8 @@ jobs:
             --cdn-base "${{ env.DO_SPACES_CDN_URL }}" \
             --mac-root macos-artifacts \
             --windows-root windows-artifacts \
-            --linux-root linux-artifacts
+            --linux-root linux-artifacts \
+            "${notes_args[@]}"
           echo "payload=publish-payload.json" >> "$GITHUB_OUTPUT"
 
       - name: Publish release metadata to backend
