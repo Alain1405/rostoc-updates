@@ -2,10 +2,6 @@ name: Build Desktop (Reusable)
 
 on:
   workflow_call:
-    outputs:
-      version:
-        description: 'Built version string'
-        value: ${{ jobs.build-desktop.outputs.version }}
     inputs:
       ref:
         required: true
@@ -85,11 +81,6 @@ jobs:
       VITE_DISABLE_ANALYTICS: ${{ inputs.is_release && '0' || '1' }}
     # macOS Intel release builds spend extra time compressing and signing the full DMG.
     timeout-minutes: ${{ matrix.platform == 'linux' && 30 || (inputs.is_release && matrix.platform == 'macos' && matrix.arch == 'x86_64' && 70 || 50) }}
-    outputs:
-      version: ${{ steps.extract_version.outputs.version }}
-      platform: ${{ matrix.platform }}
-      arch: ${{ matrix.arch }}
-
     steps:
       - name: Checkout repo (actions + workflows)
         uses: actions/checkout@v4
@@ -297,17 +288,6 @@ jobs:
             private-src/*.codesign
           retention-days: 7
           if-no-files-found: ignore
-
-      # --- Export version for downstream jobs ---
-      - name: Export version
-        id: extract_version
-        shell: bash
-        env:
-          BASE_VERSION: ${{ steps.prep.outputs.version }}
-        run: |
-          set -euo pipefail
-          echo "version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "[INFO] Base version: $BASE_VERSION"
 
       # --- Ship logs to Grafana Loki ---
       - name: Send build logs to Loki

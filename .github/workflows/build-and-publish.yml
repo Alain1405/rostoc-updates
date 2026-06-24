@@ -93,7 +93,6 @@ jobs:
       - name: Run Windows update smoke
         shell: pwsh
         env:
-          BASE_VERSION: ${{ needs.build.outputs.version }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           IS_RELEASE: ${{ inputs.is_release || false }}
           UPDATE_CHANNEL: 'stable'
@@ -115,15 +114,25 @@ jobs:
             throw "Downloaded MSI artifact not found under $artifactDir"
           }
 
+          $versionMatch = [regex]::Match(
+            $newMsi.Name,
+            '^Rostoc(?:-staging)?-(?<version>\d+\.\d+\.\d+)-windows-x64\.msi$',
+            [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+          )
+          if (-not $versionMatch.Success) {
+            throw "Unable to derive the base version from Windows MSI artifact '$($newMsi.Name)'"
+          }
+          $baseVersion = $versionMatch.Groups['version'].Value
+
           $updateChannel = $env:UPDATE_CHANNEL
           $expectedNewVersion = if ($env:IS_RELEASE -eq 'true') {
-            $env:BASE_VERSION
+            $baseVersion
           } else {
             $runNumber = [int]$env:GITHUB_RUN_NUMBER
             $windowsVersionSegment = $runNumber % 65536
             # Windows Installer exposes the installed product version as a dotted
             # numeric string even though the dev stamp is derived from semver.
-            "$($env:BASE_VERSION).$windowsVersionSegment"
+            "$baseVersion.$windowsVersionSegment"
           }
 
           # The smoke job always validates the production Windows MSI artifact.
