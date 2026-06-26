@@ -130,6 +130,12 @@ jobs:
           echo "   Secrets: Configured"
           echo "   Build type: ${{ inputs.is_release && 'Release' || 'Development' }}"
 
+          if [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
+            echo "✅ Sentry sourcemap upload token is configured"
+          else
+            echo "::warning::SENTRY_AUTH_TOKEN is not configured; frontend sourcemap upload will be disabled."
+          fi
+
       # --- Phase 1: Prep (checkout, SSH, toolchains) ---
       - uses: ./.github/actions/build-prep
         id: prep
@@ -162,6 +168,32 @@ jobs:
           apple_app_specific_password: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           tauri_signing_private_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           tauri_signing_private_key_password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Check sourcemap shipping signals
+        if: always() && steps.compile.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        working-directory: private-src
+        run: |
+          set -euo pipefail
+          if [[ ! -f scripts/check_sourcemap_shipping.py ]]; then
+            echo "::warning::scripts/check_sourcemap_shipping.py is not present in this source ref; skipping."
+            exit 0
+          fi
+          python3 scripts/check_sourcemap_shipping.py \
+            --path dist \
+            --path target/release/bundle \
+            --path src-tauri/target/release/bundle
+          cat .artifacts/sourcemaps/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sourcemap signal summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourcemap-signals-${{ matrix.variant }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: private-src/.artifacts/sourcemaps
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Append Windows Cargo post-build snapshot
         if: always() && matrix.platform == 'windows' && steps.prep.outputs.metrics_report_path != ''
