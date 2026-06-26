@@ -44,6 +44,27 @@ jobs:
           path: private-src
           fetch-depth: 0
 
+      - name: Run public repo reference hygiene scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 private-src/scripts/reference_hygiene.py \
+            --path . \
+            --commits \
+            --commit-count 25 \
+            --strict \
+            --output-dir .artifacts/reference-hygiene-public
+          cat .artifacts/reference-hygiene-public/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload public reference hygiene summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-reference-hygiene-${{ github.run_id }}
+          path: .artifacts/reference-hygiene-public
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
