@@ -74,6 +74,10 @@ jobs:
       ROSTOC_APP_VARIANT: ${{ matrix.variant }}
       ROSTOC_UPDATE_CHANNEL: ${{ matrix.variant == 'staging' && 'staging' || 'stable' }}
       DO_RELEASE_PREFIX: ${{ matrix.variant == 'staging' && 'releases/staging' || 'releases' }}
+      # Harden crates.io fetches against intermittent HTTP/2 framing errors.
+      CARGO_NET_RETRY: '10'
+      CARGO_HTTP_MULTIPLEXING: 'false'
+      CARGO_HTTP_TIMEOUT: '120'
       # PostHog analytics (native Tauri plugin reads these at build time)
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
