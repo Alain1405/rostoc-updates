@@ -243,5 +243,6 @@ runs:
         VERBOSE: ${{ inputs.platform == 'linux' && '1' || '' }}
         # Enable debug symbols for build dependencies (better error traces)
         CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG: 'true'
+        NODE_OPTIONS: ${{ inputs.platform == 'macos' && '--max-old-space-size=4096' || '' }}
         # PYO3_PYTHON is set by previous step for Windows, inherited for other platforms
       run: bash ../scripts/ci/build_metrics.sh run-timed-command . "${{ inputs.variant }}" "${{ inputs.platform }}" "${{ inputs.arch }}" "final Tauri build" -- ../scripts/ci/execute_build.sh "${{ inputs.platform }}" "${{ inputs.arch }}" "${{ steps.platform_config.outputs.build_command }}"
