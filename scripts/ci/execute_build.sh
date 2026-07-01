@@ -21,6 +21,53 @@ list_artifacts() {
   done || true
 }
 
+default_build_max_attempts() {
+  local platform="$1"
+
+  case "$platform" in
+    macos|windows)
+      echo 2
+      ;;
+    *)
+      echo 1
+      ;;
+  esac
+}
+
+is_retryable_build_failure() {
+  local log_file="$1"
+  local platform="$2"
+
+  case "$platform" in
+    windows)
+      grep -Eiq \
+        "Peer disconnected|connection reset|timed out|TLS connection|Download.*failed|failed to download" \
+        "$log_file"
+      ;;
+    macos)
+      grep -Eiq \
+        "bundle_dmg\\.sh|hdiutil|Resource busy|Operation timed out|device busy" \
+        "$log_file"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+cleanup_retry_artifacts() {
+  local platform="$1"
+
+  case "$platform" in
+    macos)
+      rm -rf target/release/bundle/dmg 2>/dev/null || true
+      ;;
+    windows)
+      rm -rf target/release/bundle/msi 2>/dev/null || true
+      ;;
+  esac
+}
+
 # Required env vars
 : "${ROSTOC_APP_VARIANT:?}"
 # TAURI_CONFIG_FLAG can be empty for production builds
@@ -66,10 +113,43 @@ if [[ "${PLATFORM}" == "linux" ]]; then
 fi
 
 echo "[INFO] Starting build — output will be saved to ${LOG_FILE}"
-# shellcheck disable=SC2086
-${BUILD_COMMAND} 2>&1 | tee "${LOG_FILE}"
-# CRITICAL: Use PIPESTATUS[0] to get build command exit code, not tee's exit code
-BUILD_EXIT_CODE=${PIPESTATUS[0]}
+MAX_ATTEMPTS="${ROSTOC_BUILD_MAX_ATTEMPTS:-$(default_build_max_attempts "${PLATFORM}")}"
+BUILD_EXIT_CODE=0
+BUILD_ATTEMPT=1
+
+: > "${LOG_FILE}"
+
+while [[ ${BUILD_ATTEMPT} -le ${MAX_ATTEMPTS} ]]; do
+  {
+    echo "============================================================"
+    echo "[INFO] Build attempt ${BUILD_ATTEMPT}/${MAX_ATTEMPTS}"
+    echo "============================================================"
+  } | tee -a "${LOG_FILE}"
+
+  set +e
+  # shellcheck disable=SC2086
+  ${BUILD_COMMAND} 2>&1 | tee -a "${LOG_FILE}"
+  # CRITICAL: Use PIPESTATUS[0] to get build command exit code, not tee's exit code
+  BUILD_EXIT_CODE=${PIPESTATUS[0]}
+  set -e
+
+  if [[ ${BUILD_EXIT_CODE} -eq 0 ]]; then
+    break
+  fi
+
+  if [[ ${BUILD_ATTEMPT} -ge ${MAX_ATTEMPTS} ]]; then
+    break
+  fi
+
+  if ! is_retryable_build_failure "${LOG_FILE}" "${PLATFORM}"; then
+    break
+  fi
+
+  echo "::warning::Retrying transient ${PLATFORM} build failure after exit code ${BUILD_EXIT_CODE}" | tee -a "${LOG_FILE}"
+  cleanup_retry_artifacts "${PLATFORM}"
+  BUILD_ATTEMPT=$((BUILD_ATTEMPT + 1))
+  sleep 15
+done
 
 # Debug: Print captured exit codes
 LAST_CMD_EXIT=$?
@@ -77,8 +157,8 @@ echo ""
 echo "============================================================"
 echo "[DEBUG] Pipeline Exit Codes"
 echo "============================================================"
-echo "PIPESTATUS array: ${PIPESTATUS[*]}"
-echo "BUILD_EXIT_CODE (from PIPESTATUS[0]): ${BUILD_EXIT_CODE}"
+echo "Build attempts: ${BUILD_ATTEMPT}/${MAX_ATTEMPTS}"
+echo "BUILD_EXIT_CODE: ${BUILD_EXIT_CODE}"
 echo "Last command exit code: ${LAST_CMD_EXIT}"
 echo "============================================================"
 echo ""
@@ -101,6 +181,7 @@ if [[ ${BUILD_EXIT_CODE} -ne 0 ]]; then
     
     # Tauri errors (exclude grep separator lines)
     grep -A 5 "Error:" "${LOG_FILE}" 2>/dev/null | grep -v "^--$" || true
+    grep -A 5 -Ei "failed to bundle project|Peer disconnected|bundle_dmg\\.sh" "${LOG_FILE}" 2>/dev/null | grep -v "^--$" || true
     
     # Platform-specific errors
     if [[ "${PLATFORM}" == "macos" ]]; then

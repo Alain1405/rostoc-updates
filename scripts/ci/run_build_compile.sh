@@ -312,7 +312,7 @@ capture_diagnostic_environment() {
 
     echo "## Environment Variables"
     echo '```'
-    env | grep -E '^(ROSTOC|TAURI|SENTRY|GITHUB|RUNNER|PYO3)' | sort || true
+    redact_diagnostic_env
     echo '```'
     echo ""
 
@@ -328,6 +328,23 @@ capture_diagnostic_environment() {
       echo "Runtime staged: NO"
     fi
   } > "diagnostics-${platform}-${arch}.md"
+}
+
+redact_diagnostic_env() {
+  local line key value
+
+  env | grep -E '^(ROSTOC|TAURI|SENTRY|GITHUB|RUNNER|PYO3)' | sort | while IFS= read -r line; do
+    key=${line%%=*}
+    value=${line#*=}
+
+    case "$key" in
+      *TOKEN*|*SECRET*|*PASSWORD*|*PRIVATE*|*KEY*|*DSN*)
+        value="<redacted>"
+        ;;
+    esac
+
+    printf '%s=%s\n' "$key" "$value"
+  done || true
 }
 
 generate_build_fingerprint() {

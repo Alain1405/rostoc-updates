@@ -102,6 +102,14 @@ pip install -e shared-python
 3. Ensure all features are available
 
 **Logs**: Check both Rust and Node logs"
+
+  ["Peer disconnected|failed to bundle project|bundle_dmg\\.sh"]="📦 **Installer Bundler / Download Flake**
+
+**Likely Cause**: Platform installer packaging failed after compile, often during WebView2/WiX download on Windows or DMG creation on macOS.
+
+**CI Behavior**: The final build wrapper retries this class once because the compiled target can usually be reused.
+
+**Debug**: Check the full build log for the first bundler line before the wrapper error."
   
   ["pnpm.*ERR|npm.*ERR"]="📦 **Node Package Error**
 
