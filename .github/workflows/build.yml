@@ -108,8 +108,10 @@ jobs:
           # Check disk space upfront. Linux runners can start slightly under
           # the macOS/Windows budget, and Linux is an optional AppImage leg.
           MIN_DISK_GB=20
+          WARN_DISK_GB=""
           if [[ "${{ matrix.platform }}" == "linux" ]]; then
-            MIN_DISK_GB=18
+            MIN_DISK_GB=16
+            WARN_DISK_GB=18
           fi
 
           if [[ "${{ runner.os }}" == "macOS" ]]; then
@@ -121,6 +123,10 @@ jobs:
           if [[ $AVAILABLE_GB -lt $MIN_DISK_GB ]]; then
             echo "::error::Insufficient disk space: ${AVAILABLE_GB}GB available, need ${MIN_DISK_GB}GB minimum"
             exit 1
+          fi
+
+          if [[ -n "$WARN_DISK_GB" && $AVAILABLE_GB -lt $WARN_DISK_GB ]]; then
+            echo "::warning::Low disk space for optional Linux AppImage build: ${AVAILABLE_GB}GB available, preferred minimum is ${WARN_DISK_GB}GB"
           fi
 
           # Check workflow inputs
