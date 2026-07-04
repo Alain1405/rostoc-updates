@@ -81,6 +81,13 @@ jobs:
       # PostHog analytics (native Tauri plugin reads these at build time)
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+      # PostHog source-map uploads use a personal/CLI API key, not the public project token.
+      POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+      POSTHOG_CLI_PROJECT_ID: ${{ secrets.POSTHOG_CLI_PROJECT_ID || '289366' }}
+      POSTHOG_CLI_HOST: ${{ secrets.POSTHOG_CLI_HOST }}
+      POSTHOG_SOURCEMAP_UPLOAD: ${{ inputs.is_release && '1' || '0' }}
+      POSTHOG_RELEASE_VERSION: ${{ inputs.commit_sha || github.sha }}
+      POSTHOG_BUILD: ${{ github.run_number }}
       # Frontend kill switch for analytics: disable for CI builds, enable for release builds
       VITE_DISABLE_ANALYTICS: ${{ inputs.is_release && '0' || '1' }}
     # macOS Intel release builds spend extra time compressing and signing the full DMG.
@@ -144,6 +151,14 @@ jobs:
             echo "✅ Sentry sourcemap upload token is configured"
           else
             echo "::warning::SENTRY_AUTH_TOKEN is not configured; frontend sourcemap upload will be disabled."
+          fi
+
+          if [[ "${{ inputs.is_release }}" == "true" ]]; then
+            if [[ -n "${POSTHOG_CLI_API_KEY:-}" && -n "${POSTHOG_CLI_PROJECT_ID:-}" ]]; then
+              echo "✅ PostHog sourcemap upload credentials are configured"
+            else
+              echo "::warning::PostHog sourcemap upload is enabled for release builds but POSTHOG_CLI_API_KEY or POSTHOG_CLI_PROJECT_ID is missing."
+            fi
           fi
 
       # --- Phase 1: Prep (checkout, SSH, toolchains) ---
