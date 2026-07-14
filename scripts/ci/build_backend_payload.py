@@ -244,6 +244,18 @@ def get_mime_type(platform: str, kind: str) -> str:
     return "application/octet-stream"
 
 
+def get_updater_archive_name(
+    version: str, platform: str, arch: str, channel: str
+) -> str:
+    """Return the artifact used by updater metadata for this platform."""
+    try:
+        return ARTIFACT_NAMING.get_updater_archive_name(version, platform, arch, channel)
+    except ValueError:
+        if platform == "windows":
+            return ARTIFACT_NAMING.get_installer_name(version, platform, arch, channel)
+        raise
+
+
 def process_platform_artifacts(
     *,
     platform: str,
@@ -270,9 +282,7 @@ def process_platform_artifacts(
     print(f"\n=== Processing {platform} {arch} (channel: {channel}) ===")
 
     # Process updater archive
-    archive_name = ARTIFACT_NAMING.get_updater_archive_name(
-        version, platform, arch, channel
-    )
+    archive_name = get_updater_archive_name(version, platform, arch, channel)
     print(f"Looking for updater archive: {archive_name}")
     archive_path = find_first(artifact_root, archive_name)
     archive_sig = find_first(
