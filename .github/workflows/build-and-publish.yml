@@ -65,7 +65,8 @@ jobs:
       ref: ${{ inputs.ref }}
     secrets: inherit
 
-  # Phase 2b: Build desktop (matrix: macOS M1, Windows x64, + optional platforms)
+  # Phase 2b: Build desktop (required matrix: macOS ARM64 M1, Windows x64).
+  # This is the release-promotion critical path.
   build:
     needs: setup
     uses: ./.github/workflows/build.yml
@@ -73,6 +74,21 @@ jobs:
       ref: ${{ inputs.ref }}
       commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: ${{ inputs.is_release || false }}
+      scope: required
+    secrets: inherit
+
+  # Phase 2c: Build the slow, lowest-priority optional platforms (macOS Intel,
+  # Windows 32-bit, Linux AppImage) independently. Runs in the same pipeline
+  # but is never on the critical path: nothing below gates on this job, so a
+  # slow or failing optional leg never delays release promotion.
+  build-optional:
+    needs: setup
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
+      is_release: ${{ inputs.is_release || false }}
+      scope: optional
     secrets: inherit
 
   # Phase 2.5: Windows update smoke gate.
@@ -315,6 +331,37 @@ jobs:
   publish-staging:
     if: ${{ always() && inputs.is_release && needs.lint-and-tests.result == 'success' && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
     needs: [setup, lint-and-tests, build, update-smoke-windows]
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
+      is_release: true
+      release_channel: 'staging'
+      backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+    secrets: inherit
+
+  # Phase 3c: Backfill optional-platform artifacts (macOS Intel, Windows
+  # 32-bit, Linux AppImage) into the already-published channels once they
+  # land. Independent of Phase 3a/3b timing by design — required platforms
+  # publish without waiting on these. Re-running publish.yml here is safe:
+  # it downloads whatever artifacts exist in this run (including the
+  # already-published required ones still present from Phase 3a/3b) and
+  # re-POSTs the full payload, which the backend upserts.
+  publish-production-optional:
+    if: ${{ always() && inputs.is_release && needs.publish-production.result == 'success' && needs.build-optional.result == 'success' }}
+    needs: [setup, build-optional, publish-production]
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
+      is_release: true
+      release_channel: 'stable'
+      backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+    secrets: inherit
+
+  publish-staging-optional:
+    if: ${{ always() && inputs.is_release && needs.publish-staging.result == 'success' && needs.build-optional.result == 'success' }}
+    needs: [setup, build-optional, publish-staging]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}

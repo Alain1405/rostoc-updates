@@ -16,6 +16,13 @@ on:
         type: boolean
         default: false
         description: 'Whether this is a release build'
+      scope:
+        required: true
+        type: string
+        description: >-
+          Which build-matrix.json subset to build: 'required' (must succeed,
+          gates release promotion) or 'optional' (slow/low-priority legs that
+          run independently and never block promotion)
 
 env:
   PRIVATE_REPO: Rostoc/rostoc
@@ -35,19 +42,28 @@ jobs:
       - name: Load build matrix configuration
         id: load-matrix
         run: |
-          # Load both production and staging configurations
-          PROD_MATRIX=$(cat .github/config/build-matrix.json | jq -c '.production')
-          STAGING_MATRIX=$(cat .github/config/build-matrix.json | jq -c '.staging')
+          SCOPE="${{ inputs.scope }}"
+          if [[ "$SCOPE" != "required" && "$SCOPE" != "optional" ]]; then
+            echo "::error::Invalid scope '$SCOPE' (expected 'required' or 'optional')"
+            exit 1
+          fi
+          WANT_OPTIONAL=$([[ "$SCOPE" == "optional" ]] && echo "true" || echo "false")
+
+          # Load both production and staging configurations, filtered to this
+          # call's scope. is_optional legs (macOS Intel, Windows 32-bit, Linux
+          # AppImage) build independently so they never block release promotion.
+          PROD_MATRIX=$(jq -c --argjson opt "$WANT_OPTIONAL" '[.production[] | select(.is_optional == $opt)]' .github/config/build-matrix.json)
+          STAGING_MATRIX=$(jq -c --argjson opt "$WANT_OPTIONAL" '[.staging[] | select(.is_optional == $opt)]' .github/config/build-matrix.json)
 
           if [[ "${{ inputs.is_release }}" == "true" ]]; then
             # Release builds: both production and staging
             COMBINED_MATRIX=$(jq -s -c 'add' <(echo "$PROD_MATRIX") <(echo "$STAGING_MATRIX"))
             echo "matrix=$COMBINED_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "📦 Release build: $(echo "$COMBINED_MATRIX" | jq 'length') configurations"
+            echo "📦 Release build ($SCOPE): $(echo "$COMBINED_MATRIX" | jq 'length') configurations"
           else
             # CI builds: production only
             echo "matrix=$PROD_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "🔨 CI build: $(echo "$PROD_MATRIX" | jq 'length') configurations"
+            echo "🔨 CI build ($SCOPE): $(echo "$PROD_MATRIX" | jq 'length') configurations"
           fi
 
   build-desktop:
