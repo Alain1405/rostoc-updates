@@ -26,6 +26,11 @@ permissions:
   id-token: write
   actions: write
 
+concurrency:
+  group: >-
+    public-ci-build-${{ github.event.client_payload.sourceRepo || github.repository }}-${{ inputs.ref || github.event.client_payload.ref || 'main' }}
+  cancel-in-progress: true
+
 jobs:
   run-shared-build:
     uses: ./.github/workflows/build-and-publish.yml
