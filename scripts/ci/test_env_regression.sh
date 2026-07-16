@@ -108,38 +108,50 @@ echo "--------------------------------------------------------"
 TEST_GITHUB_ENV=/tmp/test_github_env.txt
 
 assert_config_flag() {
-  local variant platform expected actual
+  local variant platform arch expected expected_target actual actual_target
   variant=${1:?variant is required}
   platform=${2:?platform is required}
-  if [[ $# -lt 3 ]]; then
-    echo "❌ expected value argument is required"
+  arch=${3:?arch is required}
+  if [[ $# -lt 5 ]]; then
+    echo "❌ expected config and deployment target arguments are required"
     exit 1
   fi
-  expected=$3
+  expected=$4
+  expected_target=$5
 
   : > "$TEST_GITHUB_ENV"
   if ! output=$(GITHUB_ENV="$TEST_GITHUB_ENV" ROSTOC_APP_VARIANT="$variant" \
-    bash "$SCRIPT_DIR/run_build_compile.sh" set-tauri-config-flag "$platform" 2>&1); then
-    echo "❌ set-tauri-config-flag failed for variant=$variant platform=$platform"
+    bash "$SCRIPT_DIR/run_build_compile.sh" set-tauri-config-flag "$platform" "$arch" 2>&1); then
+    echo "❌ set-tauri-config-flag failed for variant=$variant platform=$platform arch=$arch"
     echo "$output"
     exit 1
   fi
 
   actual=$(grep '^TAURI_CONFIG_FLAG=' "$TEST_GITHUB_ENV" | tail -1 | cut -d'=' -f2-)
+  actual_target=$(grep '^MACOSX_DEPLOYMENT_TARGET=' "$TEST_GITHUB_ENV" | tail -1 | cut -d'=' -f2- || true)
   if [[ "$actual" != "$expected" ]]; then
-    echo "❌ Unexpected config flag for variant=$variant platform=$platform"
+    echo "❌ Unexpected config flag for variant=$variant platform=$platform arch=$arch"
     echo "   Expected: '$expected'"
     echo "   Actual:   '$actual'"
     exit 1
   fi
+  if [[ "$actual_target" != "$expected_target" ]]; then
+    echo "❌ Unexpected deployment target for variant=$variant platform=$platform arch=$arch"
+    echo "   Expected: '$expected_target'"
+    echo "   Actual:   '$actual_target'"
+    exit 1
+  fi
 
-  echo "✅ variant=$variant platform=$platform -> ${actual:-<empty>}"
+  echo "✅ variant=$variant platform=$platform arch=$arch -> ${actual:-<empty>} target=${actual_target:-<none>}"
 }
 
-assert_config_flag production windows src-tauri/tauri.windows.production.conf.json
-assert_config_flag production macos ""
-assert_config_flag staging windows src-tauri/tauri.staging.conf.json
-assert_config_flag dev windows src-tauri/tauri.dev.conf.json
+assert_config_flag production windows x86_64 src-tauri/tauri.windows.production.conf.json ""
+assert_config_flag production macos aarch64 "" 11.0
+assert_config_flag production macos x86_64 src-tauri/tauri.macos.intel.production.conf.json 10.15
+assert_config_flag staging macos aarch64 src-tauri/tauri.staging.conf.json 11.0
+assert_config_flag staging macos x86_64 src-tauri/tauri.macos.intel.staging.conf.json 10.15
+assert_config_flag staging windows x86_64 src-tauri/tauri.staging.conf.json ""
+assert_config_flag dev windows x86_64 src-tauri/tauri.dev.conf.json ""
 echo ""
 
 # Test Case 6: Verify bundle target selection for compile commands
@@ -220,7 +232,8 @@ echo "Summary of fix:"
 echo "  WRONG: \${TAURI_CONFIG_FLAG:?msg}  # Fails on empty (what we had)"
 echo "  RIGHT: \${TAURI_CONFIG_FLAG?msg}   # Allows empty (what we have now)"
 echo ""
-echo "Production non-Windows builds keep TAURI_CONFIG_FLAG='' (no overlay), which is valid."
+echo "Production builds use architecture-specific overlays only when required."
+echo "macOS Intel selects the Catalina overlay; macOS ARM64 keeps the base 11.0 minimum."
 echo "Production Windows builds now set the embedBootstrapper overlay explicitly."
 echo "Non-release macOS CI can request --bundles app to avoid DMG-only flakiness."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -68,6 +68,8 @@ runs:
       if: ${{ inputs.platform == 'macos' }}
       working-directory: private-src
       shell: bash
+      env:
+        EXPECTED_MACOS_MINIMUM: ${{ inputs.arch == 'x86_64' && '10.15' || '11.0' }}
       run: bash scripts/verify_app_bundle.sh
 
     - name: '[macOS] Locate macOS app bundle'

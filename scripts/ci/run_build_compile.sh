@@ -218,37 +218,69 @@ verify_embedded_python_architecture() {
 }
 
 set_tauri_config_flag() {
-  local platform config_flag
+  local platform arch config_flag deployment_target
   platform=${1:-}
+  arch=${2:-}
+  deployment_target=""
+
+  if [[ "$platform" == "macos" ]]; then
+    if [[ "$arch" == "x86_64" ]]; then
+      deployment_target="10.15"
+    else
+      deployment_target="11.0"
+    fi
+  fi
 
   case "${ROSTOC_APP_VARIANT:-production}" in
     staging)
-      config_flag="src-tauri/tauri.staging.conf.json"
+      if [[ "$platform" == "macos" && "$arch" == "x86_64" ]]; then
+        # Intel releases support Catalina; Apple Silicon keeps the base 11.0 floor.
+        config_flag="src-tauri/tauri.macos.intel.staging.conf.json"
+      else
+        config_flag="src-tauri/tauri.staging.conf.json"
+      fi
       ;;
     dev)
       config_flag="src-tauri/tauri.dev.conf.json"
       ;;
     production)
-      # Production Windows builds still need the Windows-only overlay so Tauri
-      # embeds the WebView2 bootstrapper in installers.
-      if [[ "$platform" == "windows" ]]; then
-        config_flag="src-tauri/tauri.windows.production.conf.json"
-      else
-        config_flag=""
-      fi
+      case "$platform:$arch" in
+        macos:x86_64)
+          # Intel releases support Catalina; Apple Silicon keeps the base 11.0 floor.
+          config_flag="src-tauri/tauri.macos.intel.production.conf.json"
+          ;;
+        windows:*)
+          # Production Windows builds still need the Windows-only overlay so
+          # Tauri embeds the WebView2 bootstrapper in installers.
+          config_flag="src-tauri/tauri.windows.production.conf.json"
+          ;;
+        *)
+          config_flag=""
+          ;;
+      esac
       ;;
     *)
       echo "::warning::Unknown variant '${ROSTOC_APP_VARIANT:-}', defaulting to production"
-      if [[ "$platform" == "windows" ]]; then
-        config_flag="src-tauri/tauri.windows.production.conf.json"
-      else
-        config_flag=""
-      fi
+      case "$platform:$arch" in
+        macos:x86_64)
+          config_flag="src-tauri/tauri.macos.intel.production.conf.json"
+          ;;
+        windows:*)
+          config_flag="src-tauri/tauri.windows.production.conf.json"
+          ;;
+        *)
+          config_flag=""
+          ;;
+      esac
       ;;
   esac
 
   echo "TAURI_CONFIG_FLAG=$config_flag" >> "$GITHUB_ENV"
   echo "[INFO] TAURI_CONFIG_FLAG=${config_flag:-<empty>}"
+  if [[ -n "$deployment_target" ]]; then
+    echo "MACOSX_DEPLOYMENT_TARGET=$deployment_target" >> "$GITHUB_ENV"
+    echo "[INFO] MACOSX_DEPLOYMENT_TARGET=$deployment_target"
+  fi
 }
 
 configure_python_bytecode_mode() {
