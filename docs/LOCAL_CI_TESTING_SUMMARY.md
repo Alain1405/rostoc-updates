@@ -80,7 +80,7 @@ Updated [README.md](../README.md) with:
 | **Self-Hosted Runner** | 🐢 30+ min | Exact CI environment | ✅ Full | ⚠️ **OVERKILL** |
 | **Component Testing** | ⚡ 1-2 min | Build logic validation | ✅ Full | ✅ **PRIMARY** |
 
-**Note**: Act cannot run the build workflow because it requires `macos-15` and `windows-2022` runners, which Act doesn't support. Your pipeline is inherently platform-specific, making Act unsuitable for testing build jobs.
+**Note**: Act cannot run the build workflow because it requires `macos-26`, `macos-15-intel`, and `windows-2022` runners, which Act doesn't support. Your pipeline is inherently platform-specific, making Act unsuitable for testing build jobs.
 
 ## 🚀 Quick Start Examples
 

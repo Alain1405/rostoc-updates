@@ -2,7 +2,7 @@
   "production": [
     {
       "variant": "production",
-      "os": "macos-15",
+      "os": "macos-26",
       "platform": "macos",
       "arch": "aarch64",
       "name": "macOS ARM64 (M1)",
@@ -44,7 +44,7 @@
   "staging": [
     {
       "variant": "staging",
-      "os": "macos-15",
+      "os": "macos-26",
       "platform": "macos",
       "arch": "aarch64",
       "name": "macOS ARM64 (M1) — Staging",

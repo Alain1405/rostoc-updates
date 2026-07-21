@@ -12,7 +12,7 @@ build-desktop:
     matrix:
       include:
         # BLOCKING platforms (required for release)
-        - os: macos-15
+        - os: macos-26
           platform: macos
           arch: aarch64
           name: "macOS ARM64 (M1)"
@@ -48,9 +48,9 @@ build-desktop:
 
 | Platform       | Runner                  | Arch   | Blocking | Status     | Notes                                    |
 | -------------- | ----------------------- | ------ | -------- | ---------- | ---------------------------------------- |
-| macOS M1       | `macos-15` (free)       | ARM64  | ✅        | ✅ Stable   | Xcode 26, notarization + codesigning     |
+| macOS M1       | `macos-26` (free)       | ARM64  | ✅        | ✅ Stable   | Xcode 26.6, notarization + codesigning   |
 | Windows x64    | `windows-2022` (free)   | x86-64 | ✅        | ✅ Stable   | MSI packaging, WiX                       |
-| macOS Intel    | `macos-15-intel` (free) | x86-64 | ❌        | 🧪 Optional | Xcode 26, same signing as M1             |
+| macOS Intel    | `macos-15-intel` (free) | x86-64 | ❌        | 🧪 Optional | Xcode 26.3, same signing as M1           |
 | Windows x86    | `windows-2022` (free)   | x86    | ❌        | 🧪 Optional | Cross-compile via `i686-pc-windows-msvc` |
 | Linux AppImage | `ubuntu-latest` (free)  | x86-64 | ❌        | 🧪 Optional | New: AppImage bundler                    |
 
@@ -72,7 +72,7 @@ A new `Initialize platform-specific config` step detects the matrix variables an
 ### 2. Platform-Specific Initialization
 Before the main build:
 
-- **macOS**: Select Xcode 26 so Tauri can compile native Liquid Glass icon assets
+- **macOS**: Pin Xcode 26.6 on ARM and 26.3 on Intel so Tauri can compile native Liquid Glass icon assets
 - **macOS Intel**: Confirm runner is actually x86-64 (logs runner uname output)
 - **Windows x86**: Install `i686-pc-windows-msvc` Rust target for cross-compilation
 - **Linux**: Install AppImage build dependencies (libssl-dev, libffi-dev, libx11-6, fuse3)

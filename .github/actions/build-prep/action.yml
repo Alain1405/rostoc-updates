@@ -151,11 +151,13 @@ runs:
         fi
         echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
 
-    - name: '[macOS] Select Xcode 26 for Liquid Glass icons'
+    - name: '[macOS] Select Xcode for Liquid Glass icons'
       if: ${{ inputs.platform == 'macos' }}
       uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: '^26.0.0'
+        # Xcode 26.3's asset runtime crashes on macOS 15 ARM while compiling
+        # Icon Composer catalogs. The Intel runner succeeds with 26.3.
+        xcode-version: ${{ inputs.arch == 'aarch64' && '26.6' || '26.3' }}
 
     - name: '[macOS] Verify Liquid Glass asset compiler'
       if: ${{ inputs.platform == 'macos' }}
