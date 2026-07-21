@@ -239,7 +239,7 @@ This catches:
 
 **Best for**: Testing platform-agnostic workflows only.
 
-**⚠️ IMPORTANT LIMITATION**: Your CI pipeline requires `macos-15` and `windows-2022` runners for building the desktop app. **Act cannot simulate these runners** because it only supports Linux containers via Docker. This means **you cannot test your main build workflow with Act**.
+**⚠️ IMPORTANT LIMITATION**: Your CI pipeline requires `macos-26`, `macos-15-intel`, and `windows-2022` runners for building the desktop app. **Act cannot simulate these runners** because it only supports Linux containers via Docker. This means **you cannot test your main build workflow with Act**.
 
 ### What Act CAN Test ✅
 
@@ -286,7 +286,7 @@ act workflow_dispatch -W .github/workflows/ci-dispatch.yml -n
 Your workflow matrix from `build.yml`:
 ```yaml
 runs-on: ${{ matrix.os }}
-# Uses: macos-15, macos-15-intel, windows-2022, ubuntu-latest
+# Uses: macos-26, macos-15-intel, windows-2022, ubuntu-latest
 ```
 
 **Act limitation**: Can only simulate `ubuntu-latest`. The macOS and Windows jobs that comprise your primary build targets cannot be tested.
