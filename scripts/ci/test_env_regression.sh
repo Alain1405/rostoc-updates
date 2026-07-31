@@ -222,6 +222,29 @@ assert_build_command_contains macos x86_64 app "--bundles app"
 assert_build_command_contains windows x86_64 all "--bundles msi"
 echo ""
 
+# Test Case 7: Observability releases use the checked-out private source SHA
+echo "Test 7: Verify private source SHA observability stamping"
+echo "--------------------------------------------------------"
+BUILD_PREP_ACTION="$SCRIPT_DIR/../../.github/actions/build-prep/action.yml"
+BUILD_WORKFLOW="$SCRIPT_DIR/../../.github/workflows/build.yml"
+
+for assignment in \
+  'echo "SENTRY_RELEASE=$CURRENT_SHA"' \
+  'echo "VITE_SENTRY_RELEASE=$CURRENT_SHA"' \
+  'echo "POSTHOG_RELEASE_VERSION=$CURRENT_SHA"'; do
+  if ! grep -Fq "$assignment" "$BUILD_PREP_ACTION"; then
+    echo "❌ Missing private source SHA stamp: $assignment"
+    exit 1
+  fi
+done
+
+if grep -q '^      POSTHOG_RELEASE_VERSION:' "$BUILD_WORKFLOW"; then
+  echo "❌ build.yml still has a second, potentially wrong release source"
+  exit 1
+fi
+echo "✅ Sentry and PostHog releases use CURRENT_SHA from private-src"
+echo ""
+
 # Cleanup
 rm -f /tmp/test_bug.sh /tmp/test_fix.sh /tmp/bug_output.txt /tmp/fix_unset.txt /tmp/bug_unset.txt "$TEST_GITHUB_ENV" "$TEST_GITHUB_OUTPUT"
 

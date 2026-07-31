@@ -102,7 +102,6 @@ jobs:
       POSTHOG_CLI_PROJECT_ID: ${{ secrets.POSTHOG_CLI_PROJECT_ID || '289366' }}
       POSTHOG_CLI_HOST: ${{ secrets.POSTHOG_CLI_HOST }}
       POSTHOG_SOURCEMAP_UPLOAD: ${{ inputs.is_release && '1' || '0' }}
-      POSTHOG_RELEASE_VERSION: ${{ inputs.commit_sha || github.sha }}
       POSTHOG_BUILD: ${{ github.run_number }}
       # Frontend kill switch for analytics: disable for CI builds, enable for release builds
       VITE_DISABLE_ANALYTICS: ${{ inputs.is_release && '0' || '1' }}

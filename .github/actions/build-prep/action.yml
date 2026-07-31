@@ -122,6 +122,11 @@ runs:
         git fetch origin "${{ inputs.ref }}"
         git reset --hard FETCH_HEAD
         CURRENT_SHA=$(git rev-parse HEAD)
+        {
+          echo "SENTRY_RELEASE=$CURRENT_SHA"
+          echo "VITE_SENTRY_RELEASE=$CURRENT_SHA"
+          echo "POSTHOG_RELEASE_VERSION=$CURRENT_SHA"
+        } >> "$GITHUB_ENV"
         echo "::notice::Building at commit $CURRENT_SHA"
         echo "::endgroup::"
 
