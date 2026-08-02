@@ -42,12 +42,6 @@ UNSUPPORTED_AGENT_FIELDS = {
     "user-invocable",
     "argument-hint",
 }
-LEGACY_PATH_MARKERS = (
-    ".github/agents",
-    ".github/skills",
-    ".github/prompts",
-    ".github/copilot-instructions.md",
-)
 SECRET_KEYS = ("api_key", "apikey", "token", "secret", "password")
 
 
@@ -111,9 +105,6 @@ def validate_agents_md(repo: Path, reporter: Reporter) -> None:
         reporter.error(repo, path, "AGENTS.md is empty")
     if len(text.encode("utf-8")) > 32_768:
         reporter.error(repo, path, "AGENTS.md exceeds Codex default project_doc_max_bytes")
-    for marker in LEGACY_PATH_MARKERS:
-        if marker in text:
-            reporter.error(repo, path, f"active instructions reference legacy path {marker}")
 
 
 def validate_skills(repo: Path, reporter: Reporter) -> None:
@@ -153,18 +144,8 @@ def validate_skills(repo: Path, reporter: Reporter) -> None:
         for field in UNSUPPORTED_SKILL_FIELDS:
             if field in data:
                 reporter.error(repo, skill_file, f"unsupported Codex skill frontmatter field: {field}")
-        for marker in LEGACY_PATH_MARKERS:
-            if marker in text:
-                reporter.error(repo, skill_file, f"skill references legacy path {marker}")
         if len(lines) > 500:
             reporter.warn(repo, skill_file, "SKILL.md is over 500 lines; consider progressive disclosure")
-
-    legacy_prompts = sorted((repo / ".github" / "prompts").glob("*.prompt.md"))
-    for prompt_file in legacy_prompts:
-        skill_name = prompt_file.name.removesuffix(".prompt.md")
-        migrated = skills_root / skill_name / "SKILL.md"
-        if not migrated.exists():
-            reporter.error(repo, prompt_file, f"legacy prompt has no migrated skill at {migrated}")
 
 
 def validate_codex_agents(repo: Path, reporter: Reporter) -> None:
@@ -175,9 +156,7 @@ def validate_codex_agents(repo: Path, reporter: Reporter) -> None:
         text = path.read_text(encoding="utf-8")
         for field in UNSUPPORTED_AGENT_FIELDS:
             if f"{field} =" in text or f"{field}:" in text:
-                reporter.error(repo, path, f"unsupported Copilot agent field: {field}")
-        if "(copilot)" in text.lower():
-            reporter.error(repo, path, "agent contains Copilot model string")
+                reporter.error(repo, path, f"unsupported Codex agent field: {field}")
         if tomllib is None:
             reporter.warn(repo, path, "tomllib unavailable; skipped TOML parse")
             continue

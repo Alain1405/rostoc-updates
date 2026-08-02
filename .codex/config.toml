@@ -2,7 +2,11 @@
 # Keep secrets, personal OAuth state, and user-specific MCP tokens out of this file.
 # Shared external MCPs and app/plugin connectors live in ~/.codex/config.toml.
 
+model = "gpt-5.6-sol"
+review_model = "gpt-5.6-sol"
+
 [agents]
+default_subagent_model = "gpt-5.6-terra"
 max_threads = 6
 max_depth = 1
 

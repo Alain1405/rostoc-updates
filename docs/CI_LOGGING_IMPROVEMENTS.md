@@ -486,7 +486,6 @@ git push origin test/ci-logging
 ## Related Documentation
 
 - [LOCAL_CI_TESTING.md](./LOCAL_CI_TESTING.md) - Local testing strategies
-- [CI_DEBUGGING_WITH_COPILOT.md](./CI_DEBUGGING_WITH_COPILOT.md) - Using Copilot to debug CI
 - [ENV_VAR_TESTING_SUMMARY.md](./ENV_VAR_TESTING_SUMMARY.md) - Environment variable testing
 
 ---
