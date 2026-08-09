@@ -49,3 +49,4 @@ node_modules/
 .commit-queue
 .commit-queue.log
 .commit-queue.lock/
+.commit-queue.tree.*

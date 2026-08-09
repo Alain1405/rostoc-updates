@@ -486,10 +486,15 @@ cmd_run() {
 # session that never read the docs still hits the gate: its commit either
 # auto-joins (queue free) or fails with a report saying exactly what to run.
 
+tree_sidecar() { printf '%s/.commit-queue.tree.%s' "$ROOT" "$(printf '%s' "$ME" | tr -c 'A-Za-z0-9._-' _)"; }
+
 cmd_hook_gate() {
   [ "${COMMIT_QUEUE_BYPASS:-}" = "1" ] && { echo "commit-queue: BYPASSED by env" >&2; log "gate bypassed"; return 0; }
 
   local files; files=$(collect_files)
+  # Snapshot the tree size so hook-done can detect a chained hook eating
+  # unstaged work (pre-commit stashes the whole tree and can fail to restore).
+  printf '%s %s\n' "$(gitq -C "$MY_TREE" status --porcelain 2>/dev/null | wc -l | tr -d ' ')" "$(now)" >"$(tree_sidecar)" 2>/dev/null || true
   lock_acquire; ensure_queue; prune
   local mine; mine=$(entry_of "$ME")
   if [ -z "$mine" ]; then
@@ -523,7 +528,53 @@ cmd_hook_gate() {
   return 1
 }
 
+# After the commit: did the chained hooks give the tree back? A pre-commit
+# framework stashes every unstaged change during its run; a failed restore
+# silently strands the whole tree's in-flight work in its cache (seen live
+# 2026-08-10: 30 files, several sessions). Compare tree size against the
+# gate-time snapshot, allowing for what the commit itself consumed.
+verify_tree_restored() {
+  local sc before gate_ts after committed floor
+  sc=$(tree_sidecar)
+  [ -f "$sc" ] || return 0
+  read -r before gate_ts <"$sc" || true
+  rm -f "$sc"
+  [ -n "${before:-}" ] || return 0
+  after=$({ gitq -C "$MY_TREE" status --porcelain 2>/dev/null || true; } | wc -l | tr -d ' ')
+  committed=$({ gitq -C "$MY_TREE" diff --name-only HEAD~1..HEAD 2>/dev/null || true; } | wc -l | tr -d ' ')
+  floor=$((before - committed - 2))   # slack: hook autofixes, renames
+  # committed=0 means the diff was killed or failed (a real commit is never
+  # empty here) — the measurement is unusable, don't raise a false alarm.
+  if [ "$committed" -gt 0 ] && [ "$after" -lt "$floor" ]; then
+    {
+      printf 'commit-queue: WARNING — the working tree SHRANK during your commit.\n'
+      printf '  %s changed files before, %s in the commit, only %s left (expected >= %s).\n' \
+        "$before" "$committed" "$after" "$floor"
+      printf '  A chained pre-commit hook may have stashed unstaged work and failed to\n'
+      printf '  restore it. Check for a fresh patch in ~/.cache/pre-commit/ and reapply:\n'
+      printf '      ls -t ~/.cache/pre-commit/patch* | head -3\n'
+      printf '      git apply --3way <newest patch created since %s>\n' "$(date -r "${gate_ts:-0}" +%H:%M:%S 2>/dev/null || echo 'your commit started')"
+      printf '  Other sessions'\'' in-flight work may be in there — do NOT ignore this.\n'
+    } >&2
+    log "TREE SHRANK during commit: before=$before committed=$committed after=$after"
+  fi
+  # Newest pre-commit stash patch created since the gate = failed restore.
+  # One find call — the cache can hold thousands of old patches.
+  local cache="$HOME/.cache/pre-commit" ref p
+  if [ -n "${gate_ts:-}" ] && [ -d "$cache" ]; then
+    ref=$(mktemp "${TMPDIR:-/tmp}/cq-ref.XXXXXX")
+    touch -t "$(date -r "$gate_ts" +%Y%m%d%H%M.%S 2>/dev/null || date +%Y%m%d%H%M.%S)" "$ref" 2>/dev/null || true
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      printf 'commit-queue: WARNING — pre-commit left a stash patch from this commit run:\n      %s\n  If your unstaged changes are gone, reapply it: git apply --3way %s\n' "$p" "$p" >&2
+      log "leftover pre-commit stash: $p"
+    done < <(find "$cache" -maxdepth 1 -name 'patch*' -newer "$ref" 2>/dev/null || true)
+    rm -f "$ref"
+  fi
+}
+
 cmd_hook_done() {
+  verify_tree_restored
   lock_acquire; ensure_queue
   local mine; mine=$(entry_of "$ME")
   if [ -n "$mine" ] && [ "$(position_of "$ME")" = "1" ]; then
