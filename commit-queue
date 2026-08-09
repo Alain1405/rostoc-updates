@@ -555,21 +555,22 @@ verify_tree_restored() {
       printf '      ls -t ~/.cache/pre-commit/patch* | head -3\n'
       printf '      git apply --3way <newest patch created since %s>\n' "$(date -r "${gate_ts:-0}" +%H:%M:%S 2>/dev/null || echo 'your commit started')"
       printf '  Other sessions'\'' in-flight work may be in there — do NOT ignore this.\n'
+      # Point at the stash patch from this run. pre-commit keeps the patch
+      # file even after a successful restore, so its existence alone proves
+      # nothing — it is only named when the tree actually shrank.
+      local cache="$HOME/.cache/pre-commit" ref p
+      if [ -n "${gate_ts:-}" ] && [ -d "$cache" ]; then
+        ref=$(mktemp "${TMPDIR:-/tmp}/cq-ref.XXXXXX")
+        touch -t "$(date -r "$gate_ts" +%Y%m%d%H%M.%S 2>/dev/null || date +%Y%m%d%H%M.%S)" "$ref" 2>/dev/null || true
+        while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          printf '  Stash patch from this run: %s\n' "$p"
+          log "leftover pre-commit stash: $p"
+        done < <(find "$cache" -maxdepth 1 -name 'patch*' -newer "$ref" 2>/dev/null || true)
+        rm -f "$ref"
+      fi
     } >&2
     log "TREE SHRANK during commit: before=$before committed=$committed after=$after"
-  fi
-  # Newest pre-commit stash patch created since the gate = failed restore.
-  # One find call — the cache can hold thousands of old patches.
-  local cache="$HOME/.cache/pre-commit" ref p
-  if [ -n "${gate_ts:-}" ] && [ -d "$cache" ]; then
-    ref=$(mktemp "${TMPDIR:-/tmp}/cq-ref.XXXXXX")
-    touch -t "$(date -r "$gate_ts" +%Y%m%d%H%M.%S 2>/dev/null || date +%Y%m%d%H%M.%S)" "$ref" 2>/dev/null || true
-    while IFS= read -r p; do
-      [ -n "$p" ] || continue
-      printf 'commit-queue: WARNING — pre-commit left a stash patch from this commit run:\n      %s\n  If your unstaged changes are gone, reapply it: git apply --3way %s\n' "$p" "$p" >&2
-      log "leftover pre-commit stash: $p"
-    done < <(find "$cache" -maxdepth 1 -name 'patch*' -newer "$ref" 2>/dev/null || true)
-    rm -f "$ref"
   fi
 }
 
