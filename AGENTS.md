@@ -77,3 +77,29 @@ Run this before committing Codex instruction, skill, agent, hook, or MCP changes
 ```bash
 make llm-validate
 ```
+
+## Commit queue (all agent sessions)
+
+Parallel sessions in this repo and its worktrees serialize commits through
+`./commit-queue` (repo root). It is enforced by a pre-commit hook — you do not
+need to remember it, but you do need to react correctly:
+
+- A commit with a free queue auto-joins and auto-releases after the commit.
+  Nothing to do.
+- A blocked commit fails with a holder report (who, since when, which files,
+  what they're doing) and the exact commands to queue up. Follow them:
+  `./commit-queue join --label "<what you are committing>"` — exit 75 means
+  still waiting with your place kept (re-run to keep waiting); exit 0 means
+  the queue is yours: commit, push, then `./commit-queue release`.
+- Never stash, checkout, or reset paths another session is carrying
+  (`./commit-queue status` lists each session's files).
+- Holder hung past its 10-minute lease? `./commit-queue check` reports on it;
+  dead sessions are reclaimed automatically; evicting a live one requires an
+  explicit `./commit-queue evict <session> --force`.
+- Hooks live in the shared `.git/hooks` and cover every worktree. If a hook
+  manager (pre-commit, husky) reinstalls its own hook, re-run
+  `./commit-queue install-hook` — it chains the existing hook after the gate.
+
+The queue file `.commit-queue` sits at the main worktree root (gitignored).
+The same system runs in rostoc, rostoc-updates, rostoc-backend, and rostoc-kb;
+each repo has its own independent queue.

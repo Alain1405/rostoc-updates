@@ -44,3 +44,8 @@ node_modules/
 
 # AI test runner artifacts
 .artifacts/
+
+# commit-queue runtime (the commit-queue script itself IS committed)
+.commit-queue
+.commit-queue.log
+.commit-queue.lock/

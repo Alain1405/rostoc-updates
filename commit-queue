@@ -1,0 +1,636 @@
+#!/usr/bin/env bash
+# commit-queue — cooperative FIFO lock so parallel agent sessions stop
+# stashing each other's work.
+#
+# The queue is a tab-separated text file at the main worktree root
+# (.commit-queue, gitignored). One line per session; the first line holds the
+# lock, the rest wait in join order. Every worktree of this repo shares one
+# queue, because they share one index-adjacent workflow (commit -> spaice push).
+#
+#   ./commit-queue join --label "sivetz tracker edit"   # blocks until it's yours
+#   ... git add / git commit / ./spaice push ...
+#   ./commit-queue release
+#
+# or, for a single command:
+#
+#   ./commit-queue run -- git commit -m "..."
+#
+# Clearing is self-managed: any session that touches the queue prunes entries
+# whose owning process is gone. A holder that is still alive is never evicted
+# automatically — past the lease (default 10 min) the next session reports on
+# it instead, and eviction stays an explicit call.
+
+set -euo pipefail
+
+LEASE_MIN=${COMMIT_QUEUE_LEASE_MIN:-10}
+POLL_SEC=${COMMIT_QUEUE_POLL_SEC:-3}
+WAIT_SEC=${COMMIT_QUEUE_WAIT_SEC:-100}
+LOCK_STALE_SEC=30
+PRUNE_GRACE_SEC=15
+
+HEADER=$'# session\tstate\tpid\thost\tjoined\tjoined_epoch\tbeat_epoch\ttree\tbranch\tlabel\tfiles'
+FILES_SHOWN=${COMMIT_QUEUE_FILES_SHOWN:-12}
+
+die() { printf 'commit-queue: %s\n' "$*" >&2; exit 64; }
+now() { date +%s; }
+iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+mtime() {
+  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+# git against another session's worktree can wedge (stale fsmonitor, index
+# lock). Never let a diagnostic hang the queue.
+gitq() {
+  if command -v timeout >/dev/null 2>&1; then timeout 5 git "$@"; else git "$@"; fi
+}
+
+fmt_age() {
+  local s=$1
+  if [ "$s" -lt 60 ]; then printf '%ds' "$s"
+  elif [ "$s" -lt 3600 ]; then printf '%dm%02ds' $((s / 60)) $((s % 60))
+  else printf '%dh%02dm' $((s / 3600)) $(((s % 3600) / 60))
+  fi
+}
+
+# ---------------------------------------------------------------- identity ---
+
+HOST=$(hostname -s 2>/dev/null || hostname)
+
+session_id() {
+  local id=${COMMIT_QUEUE_ID:-${CLAUDE_CODE_SESSION_ID:-${CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}}}
+  [ -n "$id" ] && { printf '%s' "$id"; return; }
+  # Fallback: the agent process that owns this shell. Stable across the
+  # separate invocations of one session, unlike $$.
+  printf 'proc-%s' "${CLAUDE_PID:-$PPID}"
+}
+
+# The long-lived process to check liveness against — not this script's pid,
+# which dies the moment the join call returns.
+session_pid() {
+  printf '%s' "${COMMIT_QUEUE_PID:-${CLAUDE_PID:-$PPID}}"
+}
+
+ME=$(session_id)
+MY_PID=$(session_pid)
+
+# ------------------------------------------------------------------ paths ---
+
+git rev-parse --git-common-dir >/dev/null 2>&1 || die "not inside a git repository"
+COMMON_DIR=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+ROOT=$(dirname "$COMMON_DIR")
+QUEUE="$ROOT/.commit-queue"
+LOGF="$ROOT/.commit-queue.log"
+LOCK="$ROOT/.commit-queue.lock"
+
+MY_TREE=$(git rev-parse --show-toplevel)
+MY_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '-')
+
+log() { printf '%s\t%s\t%s\n' "$(iso)" "$ME" "$*" >>"$LOGF"; }
+
+# ------------------------------------------------------------------- lock ---
+# Short-lived mutex over the queue file itself (milliseconds), distinct from
+# the commit lease the queue hands out.
+
+lock_acquire() {
+  local waited=0 ts
+  while ! mkdir "$LOCK" 2>/dev/null; do
+    ts=$(mtime "$LOCK")
+    if [ "$ts" -gt 0 ] && [ $(($(now) - ts)) -gt "$LOCK_STALE_SEC" ]; then
+      rm -rf "$LOCK"
+      continue
+    fi
+    sleep 0.2
+    waited=$((waited + 1))
+    [ "$waited" -gt 150 ] && die "could not acquire $LOCK after 30s"
+  done
+  trap 'rm -rf "$LOCK"' EXIT INT TERM
+}
+
+lock_release() {
+  rm -rf "$LOCK"
+  trap - EXIT INT TERM
+}
+
+ensure_queue() {
+  [ -f "$QUEUE" ] || printf '%s\n' "$HEADER" >"$QUEUE"
+}
+
+entries() { [ -f "$QUEUE" ] && grep -v '^#' "$QUEUE" || true; }
+
+field() { printf '%s' "$1" | cut -d"$(printf '\t')" -f"$2"; }
+
+head_entry() { entries | head -n 1; }
+
+entry_of() {
+  entries | awk -F'\t' -v s="$1" '$1 == s { print; exit }'
+}
+
+position_of() {
+  entries | awk -F'\t' -v s="$1" '$1 == s { print NR; exit }'
+}
+
+# The paths this session is sitting on: everything its worktree has changed,
+# staged or not. Recorded at join and refreshed on heartbeat, so a waiting
+# session can see what the holder is about to commit — and spot an overlap
+# with its own edits before it becomes a stash fight.
+collect_files() {
+  local paths n
+  paths=$(gitq -C "$MY_TREE" status --porcelain 2>/dev/null \
+    | sed -e 's/^...//' -e 's/^.* -> //' -e 's/^"\(.*\)"$/\1/' \
+    | sed 's/[[:space:]]*$//' | grep -v '^$' || true)
+  [ -z "$paths" ] && { printf '%s' '-'; return; }
+  n=$(printf '%s\n' "$paths" | wc -l | tr -d ' ')
+  if [ "$n" -gt "$FILES_SHOWN" ]; then
+    printf '%s, +%s more' \
+      "$(printf '%s\n' "$paths" | head -n "$FILES_SHOWN" | paste -sd, - | sed 's/,/, /g')" \
+      "$((n - FILES_SHOWN))"
+  else
+    printf '%s' "$(printf '%s\n' "$paths" | paste -sd, - | sed 's/,/, /g')"
+  fi
+}
+
+alive() { # alive <pid> <host>
+  local pid=$1 host=$2
+  [ "$host" = "$HOST" ] || return 2   # remote: unknowable, treat as alive
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+# Rewrite the file, recomputing state so the text stays readable.
+rewrite() { # rewrite <<< body
+  local body tmp
+  body=$(cat)
+  tmp="$QUEUE.tmp.$$"
+  {
+    printf '%s\n' "$HEADER"
+    printf '%s' "$body" | awk -F'\t' -v OFS='\t' 'NF { $2 = (NR == 1 ? "holding" : "waiting"); print }'
+  } >"$tmp"
+  mv "$tmp" "$QUEUE"
+}
+
+# Drop entries whose owning process is gone. Called under the lock by every
+# command that reads the queue — this is the self-managed clearing.
+prune() {
+  local kept="" dropped="" line pid host joined age
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    pid=$(field "$line" 3)
+    host=$(field "$line" 4)
+    joined=$(field "$line" 6)
+    age=$(($(now) - joined))
+    if [ "$age" -gt "$PRUNE_GRACE_SEC" ] && ! alive "$pid" "$host"; then
+      dropped="$dropped$line"$'\n'
+      continue
+    fi
+    kept="$kept$line"$'\n'
+  done < <(entries)
+
+  if [ -n "$dropped" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      log "pruned dead session $(field "$line" 1) (pid $(field "$line" 3))"
+      printf 'commit-queue: reclaimed dead entry %s (pid %s, %s)\n' \
+        "$(field "$line" 1)" "$(field "$line" 3)" "$(field "$line" 10)" >&2
+    done <<<"$dropped"
+  fi
+  printf '%s' "$kept" | rewrite
+}
+
+add_me() { # add_me <label> <files>
+  local label files
+  label=$(printf '%s' "${1:-}" | tr '\t\n' '  ')
+  files=$(printf '%s' "${2:-}" | tr '\t\n' '  ')
+  if [ -n "$(entry_of "$ME")" ]; then
+    # Already queued: keep the position, refresh what we are carrying.
+    touch_beat "$files" "$label"
+    return
+  fi
+  {
+    entries
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$ME" waiting "$MY_PID" "$HOST" "$(iso)" "$(now)" "$(now)" \
+      "$MY_TREE" "$MY_BRANCH" "${label:--}" "${files:--}"
+  } | rewrite
+  log "joined${label:+ — $label} [${files:--}]"
+}
+
+touch_beat() { # touch_beat [files] [label]
+  entries | awk -F'\t' -v OFS='\t' -v s="$ME" -v t="$(now)" \
+    -v f="${1:-}" -v l="${2:-}" \
+    '{ if ($1 == s) { $7 = t; if (f != "") $11 = f; if (l != "") $10 = l } print }' \
+    | rewrite
+}
+
+remove() { # remove <session>
+  entries | awk -F'\t' -v s="$1" '$1 != s' | rewrite
+}
+
+# ---------------------------------------------------------------- reports ---
+
+# Two sessions touching the same path is the case that used to end in a stash.
+# Name it explicitly while the second one is still waiting.
+overlap_warning() { # overlap_warning <mine> <theirs>
+  local mine=$1 theirs=$2 shared
+  [ -n "$mine" ] && [ "$mine" != "-" ] || return 0
+  [ -n "$theirs" ] && [ "$theirs" != "-" ] || return 0
+  shared=$(comm -12 \
+    <(printf '%s' "$mine"   | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$\|^+.* more$' | sort -u) \
+    <(printf '%s' "$theirs" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$\|^+.* more$' | sort -u))
+  [ -n "$shared" ] || return 0
+  printf '  OVERLAP — you and the holder both have local changes to:\n'
+  printf '%s\n' "$shared" | sed 's/^/    /'
+  printf '  Do not stash or checkout those paths. Wait, or take it up with that session.\n'
+}
+
+describe() { # describe <line>
+  local line=$1 sess pid host joined beat tree branch label state files
+  sess=$(field "$line" 1); state=$(field "$line" 2); pid=$(field "$line" 3)
+  host=$(field "$line" 4); joined=$(field "$line" 6); beat=$(field "$line" 7)
+  tree=$(field "$line" 8); branch=$(field "$line" 9); label=$(field "$line" 10)
+  files=$(field "$line" 11)
+
+  local liveness rc
+  set +e; alive "$pid" "$host"; rc=$?; set -e
+  case $rc in
+    0) liveness="alive" ;;
+    2) liveness="unknown (other host: $host)" ;;
+    *) liveness="DEAD" ;;
+  esac
+
+  printf '  session   %s\n' "$sess"
+  printf '  state     %s\n' "$state"
+  printf '  process   pid %s on %s — %s\n' "$pid" "$host" "$liveness"
+  printf '  held for  %s (last heartbeat %s ago)\n' \
+    "$(fmt_age $(($(now) - joined)))" "$(fmt_age $(($(now) - beat)))"
+  printf '  doing     %s\n' "$label"
+  printf '  files     %s\n' "${files:--}"
+  printf '  tree      %s [%s]\n' "$tree" "$branch"
+  if [ -d "$tree" ]; then
+    local dirty staged
+    dirty=$(gitq -C "$tree" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    staged=$(gitq -C "$tree" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+    printf '  git       %s changed file(s), %s staged, HEAD %s\n' \
+      "$dirty" "$staged" "$(gitq -C "$tree" log -1 --format=%h\ %s 2>/dev/null || echo '-')"
+  else
+    printf '  git       tree is gone from disk\n'
+  fi
+}
+
+# ----------------------------------------------------------------- checks ---
+# check_head: diagnose the current holder. Reclaims it when the process is
+# dead; never silently evicts a live one. Returns 0 if the queue looks healthy.
+
+cmd_check() {
+  local target=${1:-}
+  lock_acquire; ensure_queue; prune
+  local line
+  if [ -n "$target" ]; then line=$(entry_of "$target"); else line=$(head_entry); fi
+  lock_release
+
+  if [ -z "$line" ]; then
+    echo "commit-queue: nothing holding the queue."
+    return 0
+  fi
+
+  local sess joined age
+  sess=$(field "$line" 1); joined=$(field "$line" 6); age=$(($(now) - joined))
+
+  printf 'commit-queue: holder report\n'
+  describe "$line"
+
+  if [ "$age" -gt $((LEASE_MIN * 60)) ]; then
+    printf '\n  OVER LEASE by %s (lease %sm). The process is still alive, so it\n' \
+      "$(fmt_age $((age - LEASE_MIN * 60)))" "$LEASE_MIN"
+    printf '  was not evicted. Look at that session before taking the queue:\n'
+    printf '    - if it is mid-commit, wait;\n'
+    printf '    - if it is idle or abandoned, run:\n'
+    printf '        ./commit-queue evict %s --force\n' "$sess"
+    return 3
+  fi
+  return 0
+}
+
+# ------------------------------------------------------------------- join ---
+
+cmd_join() {
+  local label="" files="" wait_for=$WAIT_SEC
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --label) label=${2:-}; shift 2 ;;
+      --label=*) label=${1#--label=}; shift ;;
+      --files) files=${2:-}; shift 2 ;;
+      --files=*) files=${1#--files=}; shift ;;
+      --timeout) wait_for=${2:-}; shift 2 ;;
+      --timeout=*) wait_for=${1#--timeout=}; shift ;;
+      --no-wait) wait_for=0; shift ;;
+      *) die "join: unknown option $1" ;;
+    esac
+  done
+  [ -n "$label" ] || label="(no description given)"
+
+  local waited=0 warned=0 add_files=""
+  while :; do
+    # Re-read the tree each pass: the files a session is carrying change
+    # while it waits.
+    [ -n "$files" ] && add_files=$files || add_files=$(collect_files)
+    lock_acquire; ensure_queue; prune; add_me "$label" "$add_files"
+    local head pos
+    head=$(head_entry); pos=$(position_of "$ME")
+    lock_release
+
+    if [ "$(field "$head" 1)" = "$ME" ]; then
+      lock_acquire; touch_beat; lock_release
+      printf 'commit-queue: granted to %s. Release when done: ./commit-queue release\n' "$ME"
+      return 0
+    fi
+
+    if [ "$waited" -ge "$wait_for" ]; then
+      printf 'commit-queue: still queued at position %s behind %s.\n' \
+        "$pos" "$(field "$head" 1)" >&2
+      printf '  holder is doing: %s\n' "$(field "$head" 10)" >&2
+      printf '  holder is carrying: %s\n' "$(field "$head" 11)" >&2
+      overlap_warning "$add_files" "$(field "$head" 11)" >&2
+      printf 'commit-queue: your place is kept — re-run the same join to keep waiting.\n' >&2
+      return 75
+    fi
+
+    # First time we notice the holder is over its lease, report on it.
+    if [ "$warned" -eq 0 ] && \
+       [ $(($(now) - $(field "$head" 6))) -gt $((LEASE_MIN * 60)) ]; then
+      warned=1
+      printf 'commit-queue: the holder is over its %sm lease — checking on it.\n' "$LEASE_MIN" >&2
+      set +e; cmd_check >&2; set -e
+    fi
+
+    sleep "$POLL_SEC"
+    waited=$((waited + POLL_SEC))
+  done
+}
+
+# ---------------------------------------------------------------- release ---
+
+cmd_release() {
+  lock_acquire; ensure_queue
+  local mine; mine=$(entry_of "$ME")
+  if [ -z "$mine" ]; then
+    lock_release
+    echo "commit-queue: $ME was not in the queue — nothing to release."
+    return 0
+  fi
+  remove "$ME"
+  local next; next=$(head_entry)
+  lock_release
+  log "released"
+  printf 'commit-queue: released by %s.\n' "$ME"
+  [ -n "$next" ] && printf 'commit-queue: next up is %s (%s).\n' \
+    "$(field "$next" 1)" "$(field "$next" 10)"
+  return 0
+}
+
+# ----------------------------------------------------------------- evict ---
+
+cmd_evict() {
+  local target="" force=0
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --force) force=1; shift ;;
+      *) target=$1; shift ;;
+    esac
+  done
+  [ -n "$target" ] || die "evict: which session? (see ./commit-queue status)"
+
+  lock_acquire; ensure_queue
+  local line; line=$(entry_of "$target")
+  if [ -z "$line" ]; then lock_release; die "evict: no entry for $target"; fi
+
+  local pid host rc
+  pid=$(field "$line" 3); host=$(field "$line" 4)
+  set +e; alive "$pid" "$host"; rc=$?; set -e
+  if [ "$rc" -eq 0 ] && [ "$force" -eq 0 ]; then
+    lock_release
+    printf 'commit-queue: %s is still alive — refusing to evict without --force.\n' "$target" >&2
+    describe "$line" >&2
+    return 3
+  fi
+  remove "$target"
+  lock_release
+  log "evicted $target (force=$force)"
+  printf 'commit-queue: evicted %s.\n' "$target"
+}
+
+# ---------------------------------------------------------------- status ---
+
+cmd_status() {
+  lock_acquire; ensure_queue; prune; local body; body=$(entries); lock_release
+
+  if [ -z "$body" ]; then
+    printf 'commit-queue: empty (%s)\n' "$QUEUE"
+    return 0
+  fi
+  printf '%-9s %-38s %-8s %-7s %s\n' STATE SESSION WAITED ALIVE DOING
+  local line rc a files
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    set +e; alive "$(field "$line" 3)" "$(field "$line" 4)"; rc=$?; set -e
+    case $rc in 0) a=yes ;; 2) a=remote ;; *) a=no ;; esac
+    printf '%-9s %-38s %-8s %-7s %s\n' \
+      "$(field "$line" 2)" "$(field "$line" 1)" \
+      "$(fmt_age $(($(now) - $(field "$line" 6))))" "$a" "$(field "$line" 10)"
+    files=$(field "$line" 11)
+    [ -n "$files" ] && [ "$files" != "-" ] && \
+      printf '%s\n' "$files" | tr ',' '\n' | sed 's/^ *//;/^$/d;s/^/          /'
+  done <<<"$body"
+
+  local head; head=$(printf '%s' "$body" | head -n 1)
+  if [ $(($(now) - $(field "$head" 6))) -gt $((LEASE_MIN * 60)) ]; then
+    printf '\nHolder is over the %sm lease — run: ./commit-queue check\n' "$LEASE_MIN"
+  fi
+}
+
+# ------------------------------------------------------------------- run ---
+
+cmd_run() {
+  [ "${1:-}" = "--" ] && shift
+  [ $# -gt 0 ] || die "run: give a command after --"
+  local label="$*"
+  cmd_join --label "$label" --timeout "$WAIT_SEC" || return $?
+  local rc=0
+  trap 'cmd_release >/dev/null' EXIT
+  set +e; "$@"; rc=$?; set -e
+  trap - EXIT
+  cmd_release
+  return $rc
+}
+
+# ------------------------------------------------------------------ hooks ---
+# The autonomous path. install-hook wires the queue into git itself, so a
+# session that never read the docs still hits the gate: its commit either
+# auto-joins (queue free) or fails with a report saying exactly what to run.
+
+cmd_hook_gate() {
+  [ "${COMMIT_QUEUE_BYPASS:-}" = "1" ] && { echo "commit-queue: BYPASSED by env" >&2; log "gate bypassed"; return 0; }
+
+  local files; files=$(collect_files)
+  lock_acquire; ensure_queue; prune
+  local mine; mine=$(entry_of "$ME")
+  if [ -z "$mine" ]; then
+    add_me "auto: commit on $MY_BRANCH" "$files"
+  fi
+  local head; head=$(head_entry)
+  lock_release
+
+  if [ "$(field "$head" 1)" = "$ME" ]; then
+    if [ -z "$mine" ]; then
+      printf 'commit-queue: gate passed (auto-joined; released after this commit).\n' >&2
+    fi
+    return 0
+  fi
+
+  # Blocked. Explain the situation and the protocol in the failure itself.
+  {
+    printf 'commit-queue: COMMIT BLOCKED — another session holds the commit queue.\n\n'
+    describe "$head"
+    overlap_warning "$files" "$(field "$head" 11)"
+    printf '\nWhat to do (in this order):\n'
+    printf '  1. Keep working on other things, or wait and retry the commit.\n'
+    printf '  2. Queue properly so you get a turn:\n'
+    printf '       ./commit-queue join --label "<what you are committing>"\n'
+    printf '     (exit 75 = still waiting, place kept — re-run to keep waiting;\n'
+    printf '      exit 0 = the queue is yours, commit then ./commit-queue release)\n'
+    printf '  3. If the holder looks hung (over its %sm lease): ./commit-queue check\n' "$LEASE_MIN"
+    printf '     Never git-stash/checkout/reset the files it is carrying.\n'
+  } >&2
+  log "gate blocked commit on $MY_BRANCH (holder $(field "$head" 1))"
+  return 1
+}
+
+cmd_hook_done() {
+  lock_acquire; ensure_queue
+  local mine; mine=$(entry_of "$ME")
+  if [ -n "$mine" ] && [ "$(position_of "$ME")" = "1" ]; then
+    case "$(field "$mine" 10)" in
+      auto:*)
+        remove "$ME"
+        local next; next=$(head_entry)
+        lock_release
+        log "auto-released after commit"
+        printf 'commit-queue: auto-join released.%s\n' \
+          "${next:+ next up: $(field "$next" 1)}" >&2
+        return 0 ;;
+      *)
+        lock_release
+        printf 'commit-queue: you still hold the queue (explicit join) — release after your push:\n  ./commit-queue release\n' >&2
+        return 0 ;;
+    esac
+  fi
+  lock_release
+  return 0
+}
+
+hook_body() { # hook_body <gate|done> <chained-name>
+  cat <<EOF
+#!/bin/sh
+# commit-queue $1 (generated by ./commit-queue install-hook — edits are overwritten)
+MAIN_ROOT=\$(dirname "\$(cd "\$(git rev-parse --git-common-dir)" && pwd)")
+if [ -x "\$MAIN_ROOT/commit-queue" ]; then
+  "\$MAIN_ROOT/commit-queue" hook-$1 || exit 1
+fi
+# chain the pre-existing hook, if any
+HERE=\$(cd "\$(dirname "\$0")" && pwd)
+if [ -x "\$HERE/$2" ]; then
+  exec "\$HERE/$2" "\$@"
+fi
+exit 0
+EOF
+}
+
+cmd_install_hook() {
+  local hooks_dir marker="commit-queue" name saved
+  hooks_dir=$(git config core.hooksPath || true)
+  if [ -n "$hooks_dir" ]; then
+    case $hooks_dir in /*) ;; *) hooks_dir="$MY_TREE/$hooks_dir" ;; esac
+  else
+    hooks_dir="$COMMON_DIR/hooks"
+  fi
+  mkdir -p "$hooks_dir"
+
+  for name in pre-commit post-commit; do
+    saved="$name.post-queue"
+    if [ -f "$hooks_dir/$name" ] && ! grep -q "$marker" "$hooks_dir/$name"; then
+      mv "$hooks_dir/$name" "$hooks_dir/$saved"
+      printf 'commit-queue: existing %s hook preserved as %s (runs after the gate).\n' \
+        "$name" "$saved"
+    fi
+    case $name in
+      pre-commit)  hook_body gate "$saved" >"$hooks_dir/$name" ;;
+      post-commit) hook_body done "$saved" >"$hooks_dir/$name" ;;
+    esac
+    chmod +x "$hooks_dir/$name"
+  done
+  printf 'commit-queue: hooks installed in %s (covers every worktree of this repo).\n' "$hooks_dir"
+  printf 'commit-queue: re-run install-hook if a hook manager (pre-commit, husky) reinstalls its own.\n'
+}
+
+# ------------------------------------------------------------------ main ---
+
+usage() {
+  cat <<EOF
+commit-queue — FIFO commit lock shared by every session in this repo.
+
+  join [--label TEXT] [--files "a,b"] [--timeout SEC] [--no-wait]
+        Take a ticket and block until it is yours. --label is the one-line
+        description other sessions see; the files you are carrying are read
+        from your worktree automatically unless you pass --files. Exit 75
+        means "still waiting, place kept" — re-run the identical command to
+        keep waiting. Waiting sessions are told when their paths overlap the
+        holder's.
+  release
+        Give up the queue (holding or waiting).
+  run -- CMD ...
+        join, run CMD, release even on failure.
+  status
+        Show the queue.
+  check [SESSION]
+        Report on the holder (default) — liveness, age, its tree's git state.
+        Reclaims it if the process is dead; exit 3 if it is alive but over the
+        ${LEASE_MIN}m lease.
+  evict SESSION [--force]
+        Remove someone else's entry. Refuses on a live session without --force.
+  heartbeat
+        Extend your lease during long work and re-read your file list.
+  install-hook
+        Wire the queue into git: a pre-commit gate (auto-joins when the queue
+        is free, blocks with instructions when it is not) and a post-commit
+        release for auto-joins. Explicit joins keep the queue through the
+        push. Existing hooks are preserved and chained after the gate.
+        COMMIT_QUEUE_BYPASS=1 skips the gate (emergencies only).
+  path | log
+        Print the queue file / the audit log.
+
+Identity: \$COMMIT_QUEUE_ID, else \$CLAUDE_CODE_SESSION_ID / \$CODEX_SESSION_ID,
+else the owning process. Lease: \$COMMIT_QUEUE_LEASE_MIN (${LEASE_MIN}m).
+Queue file: $QUEUE
+EOF
+}
+
+cmd=${1:-status}
+[ $# -gt 0 ] && shift
+case $cmd in
+  join)      cmd_join "$@" ;;
+  release)   cmd_release ;;
+  run)       cmd_run "$@" ;;
+  status)    cmd_status ;;
+  check)     cmd_check "$@" ;;
+  evict)     cmd_evict "$@" ;;
+  hook-gate) cmd_hook_gate ;;
+  hook-done) cmd_hook_done ;;
+  install-hook) cmd_install_hook ;;
+  heartbeat) beat_files=$(collect_files)
+             lock_acquire; ensure_queue; touch_beat "$beat_files"; lock_release
+             printf 'commit-queue: heartbeat for %s — carrying: %s\n' "$ME" "$beat_files" ;;
+  whoami)    printf '%s (pid %s on %s)\n' "$ME" "$MY_PID" "$HOST" ;;
+  path)      printf '%s\n' "$QUEUE" ;;
+  log)       [ -f "$LOGF" ] && cat "$LOGF" || echo "commit-queue: no log yet" ;;
+  -h|--help|help) usage ;;
+  *)         usage >&2; exit 64 ;;
+esac
