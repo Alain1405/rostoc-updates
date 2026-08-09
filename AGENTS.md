@@ -95,7 +95,11 @@ need to remember it, but you do need to react correctly:
   (`./commit-queue status` lists each session's files).
 - Holder hung past its 10-minute lease? `./commit-queue check` reports on it;
   dead sessions are reclaimed automatically; evicting a live one requires an
-  explicit `./commit-queue evict <session> --force`.
+  explicit `./commit-queue evict <session> --force`. A live holder may
+  simply not know it is holding (its commit failed after the gate, or it
+  forgot to release): auto-join holds expire on their own at the lease;
+  for explicit holds, notify that session (session message or operator)
+  before considering eviction.
 - Hooks live in the shared `.git/hooks` and cover every worktree. If a hook
   manager (pre-commit, husky) reinstalls its own hook, re-run
   `./commit-queue install-hook` — it chains the existing hook after the gate.

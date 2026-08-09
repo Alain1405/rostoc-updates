@@ -84,7 +84,10 @@ LOGF="$ROOT/.commit-queue.log"
 LOCK="$ROOT/.commit-queue.lock"
 
 MY_TREE=$(git rev-parse --show-toplevel)
-MY_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '-')
+# head -n1: on an unborn HEAD, rev-parse prints "HEAD" AND fails, so a
+# `|| echo` fallback would append a second line and split the queue record.
+MY_BRANCH=$({ git rev-parse --abbrev-ref HEAD 2>/dev/null || true; } | head -n1)
+[ -n "$MY_BRANCH" ] || MY_BRANCH='-'
 
 log() { printf '%s\t%s\t%s\n' "$(iso)" "$ME" "$*" >>"$LOGF"; }
 
@@ -170,27 +173,41 @@ rewrite() { # rewrite <<< body
 
 # Drop entries whose owning process is gone. Called under the lock by every
 # command that reads the queue — this is the self-managed clearing.
+# Auto-join entries (label `auto:`) also expire at the lease even when the
+# process is alive: they exist only to cover one commit's own hooks, and a
+# lingering one means the commit failed after the gate and the session does
+# not know it is holding. Explicit joins never expire this way.
 prune() {
-  local kept="" dropped="" line pid host joined age
+  local kept="" dropped="" line pid host joined age why
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     pid=$(field "$line" 3)
     host=$(field "$line" 4)
     joined=$(field "$line" 6)
     age=$(($(now) - joined))
+    why=""
     if [ "$age" -gt "$PRUNE_GRACE_SEC" ] && ! alive "$pid" "$host"; then
-      dropped="$dropped$line"$'\n'
+      why="dead"
+    else
+      case "$(field "$line" 10)" in
+        auto:*) [ "$age" -gt $((LEASE_MIN * 60)) ] && why="expired auto-join" ;;
+      esac
+    fi
+    if [ -n "$why" ]; then
+      dropped="$dropped$why"$'\t'"$line"$'\n'
       continue
     fi
     kept="$kept$line"$'\n'
   done < <(entries)
 
   if [ -n "$dropped" ]; then
+    local why_of entry
     while IFS= read -r line; do
       [ -n "$line" ] || continue
-      log "pruned dead session $(field "$line" 1) (pid $(field "$line" 3))"
-      printf 'commit-queue: reclaimed dead entry %s (pid %s, %s)\n' \
-        "$(field "$line" 1)" "$(field "$line" 3)" "$(field "$line" 10)" >&2
+      why_of=$(field "$line" 1); entry=${line#*$'\t'}
+      log "pruned $why_of $(field "$entry" 1) (pid $(field "$entry" 3))"
+      printf 'commit-queue: reclaimed %s entry %s (pid %s, %s)\n' \
+        "$why_of" "$(field "$entry" 1)" "$(field "$entry" 3)" "$(field "$entry" 10)" >&2
     done <<<"$dropped"
   fi
   printf '%s' "$kept" | rewrite
@@ -359,7 +376,9 @@ cmd_join() {
        [ $(($(now) - $(field "$head" 6))) -gt $((LEASE_MIN * 60)) ]; then
       warned=1
       printf 'commit-queue: the holder is over its %sm lease — checking on it.\n' "$LEASE_MIN" >&2
-      set +e; cmd_check >&2; set -e
+      # || true, not set +e: callees toggle set -e internally, which would
+      # re-arm it before their nonzero return reaches us.
+      cmd_check >&2 || true
     fi
 
     sleep "$POLL_SEC"
