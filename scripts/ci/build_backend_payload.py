@@ -10,12 +10,26 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-# Add rostoc scripts to path for runtime_config import
+# Add rostoc scripts to path for runtime_config import (sibling-checkout layout,
+# i.e. local development).
+#
+# Deliberately NOT resolved against the CI `private-src/` checkout: publish.yml
+# pins this repo to main ("always use latest scripts") while private-src is the
+# release ref, so importing the contract from private-src would let a release
+# cut from an older rostoc tag disagree with the stager that actually named the
+# files. CI therefore runs on the vendored fallback below, which travels with
+# run_build_artifacts.sh. scripts/ci/check_artifact_naming_parity.py fails the
+# build if the two ever disagree -- that silent divergence is what left the
+# Linux AppImage built, signed, uploaded, and absent from every manifest.
 ROSTOC_SCRIPTS = Path(__file__).resolve().parents[3] / "rostoc" / "scripts"
 if ROSTOC_SCRIPTS.exists():
     sys.path.insert(0, str(ROSTOC_SCRIPTS))
     from runtime_config import ARTIFACT_NAMING, STORAGE_PATHS
+
+    print(f"Using canonical artifact naming from {ROSTOC_SCRIPTS / 'runtime_config.py'}")
 else:
+    print("Using vendored fallback artifact naming (canonical runtime_config.py absent)")
+
     # Fallback for when running without rostoc repo
     class ARTIFACT_NAMING:
         @staticmethod
@@ -31,7 +45,9 @@ else:
                     "x64" if arch == "x86_64" else "x86" if arch == "i686" else arch
                 )
                 return f"{variant_prefix}-{version}-windows-{norm_arch}.msi"
-            return f"{variant_prefix}-{version}-{platform}-{arch}.tar.gz"
+            # Linux: Tauri v2 signs the AppImage itself, so it doubles as the
+            # updater archive (same arrangement as the Windows MSI above).
+            return f"{variant_prefix}-{version}-{platform}-{arch}.AppImage"
 
         @staticmethod
         def get_installer_name(
@@ -95,6 +111,56 @@ def find_first(root: Path, name: str) -> Path | None:
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+# Files a platform root carries for bookkeeping rather than as shippable output.
+BOOKKEEPING_FILENAMES = {"checksums.txt", "checksums.json", "version.txt"}
+
+
+def staged_artifacts(root: Path) -> list[Path]:
+    """Return build outputs staged under a platform root, ignoring bookkeeping."""
+    if not root.exists():
+        return []
+    return [
+        path
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and path.name not in BOOKKEEPING_FILENAMES
+    ]
+
+
+def report_unmatched_platforms(
+    roots: list[tuple[str, Path]],
+    assets: list[Dict[str, Any]],
+    strict: bool,
+) -> None:
+    """Fail loudly when staged artifacts never made it into the payload.
+
+    A platform that staged nothing is genuinely absent -- an optional build may
+    be slow or broken, and that must not gate a release. A platform that staged
+    files which then matched no expected name is something else entirely: a
+    contract break that resolves itself on no future run. Reported either way;
+    fatal only where failing cannot delay promotion.
+    """
+    platforms_with_assets = {asset["platform"] for asset in assets}
+
+    for platform, root in roots:
+        staged = staged_artifacts(root)
+        if not staged or platform in platforms_with_assets:
+            continue
+
+        print(
+            f"::error::{platform}: {len(staged)} artifact(s) were staged in {root} "
+            f"but none matched the names the manifest contract expects, so this "
+            f"payload ships without {platform}. Reconcile the staged names with "
+            f"ARTIFACT_NAMING in runtime_config.py."
+        )
+        for path in staged:
+            print(f"    staged but unmatched: {path.relative_to(root)}")
+
+        if strict:
+            raise SystemExit(
+                f"{platform} artifacts were staged but produced no manifest entry"
+            )
 
 
 def load_checksums(root: Path) -> Dict[str, str]:
@@ -185,6 +251,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--windows-root", default=Path("windows-artifacts"), type=Path)
     parser.add_argument("--linux-root", default=Path("linux-artifacts"), type=Path)
     parser.add_argument("--output", default=Path("publish-payload.json"), type=Path)
+    parser.add_argument(
+        "--strict-artifact-match",
+        action="store_true",
+        help=(
+            "Exit non-zero when a platform staged build output that matched no "
+            "expected artifact name. Always annotated as an error either way; "
+            "set this only where failing cannot delay release promotion "
+            "(i.e. the optional-platform backfill publish)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -230,7 +306,9 @@ def get_mime_type(platform: str, kind: str) -> str:
     if kind == "archive":
         if platform == "windows":
             return "application/x-msi"  # Windows MSI serves as archive
-        return "application/gzip"  # macOS .app.tar.gz, Linux .tar.gz
+        if platform == "linux":
+            return "application/x-executable"  # Linux AppImage serves as archive
+        return "application/gzip"  # macOS .app.tar.gz
 
     # Platform-specific installer formats
     if platform == "macos":
@@ -437,6 +515,16 @@ def main() -> None:
             release_entry=release_entry,
         )
         assets.extend(platform_assets)
+
+    report_unmatched_platforms(
+        [
+            ("macos", args.mac_root),
+            ("windows", args.windows_root),
+            ("linux", args.linux_root),
+        ],
+        assets,
+        strict=args.strict_artifact_match,
+    )
 
     # Allow publishing without Linux (optional platform)
     # Require at least one macOS or Windows asset

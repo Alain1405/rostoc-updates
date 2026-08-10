@@ -147,7 +147,9 @@ runs:
       shell: bash
       env:
         APPIMAGE: ${{ steps.locate-linux.outputs.appimage }}
+        SIGNATURE: ${{ steps.locate-linux.outputs.signature }}
         VERSION: ${{ inputs.version }}
+        ARCH: ${{ inputs.arch }}
         VARIANT: ${{ inputs.variant }}
       run: bash ../scripts/ci/run_build_artifacts.sh prepare-linux
 

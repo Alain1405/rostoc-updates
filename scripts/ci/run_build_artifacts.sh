@@ -232,7 +232,7 @@ upload_windows() {
 }
 
 locate_linux() {
-  local search_dirs=() appimage="" dir cand appimage_size
+  local search_dirs=() appimage="" dir cand appimage_size sig=""
 
   while IFS= read -r line; do
     search_dirs+=("$line")
@@ -273,31 +273,64 @@ locate_linux() {
     exit 1
   fi
 
+  # Tauri v2 signs the AppImage itself; that signature is what the updater
+  # verifies. Only a release build has to have one -- this step also runs for
+  # non-release CI builds, which never publish -- so record its absence here
+  # and let prepare-linux (release-only) refuse to stage without it.
+  sig="${appimage}.sig"
+  if [[ -f "$sig" ]]; then
+    echo "signature=$sig" >> "$GITHUB_OUTPUT"
+  else
+    echo "[DEBUG] Sibling files next to the AppImage:"
+    ls -la "$(dirname "$appimage")" 2>/dev/null || true
+    echo "::warning::No updater signature alongside the AppImage: $sig"
+    sig=""
+  fi
+
   appimage_size=$(du -h "$appimage" | cut -f1)
   echo "appimage=$appimage" >> "$GITHUB_OUTPUT"
   echo "[INFO] ✅ Located AppImage: $appimage ($appimage_size)"
+  if [[ -n "$sig" ]]; then
+    echo "[INFO] ✅ Located updater signature: $sig"
+  fi
 }
 
 prepare_linux() {
   local appimage=${APPIMAGE:?APPIMAGE is required}
+  local signature=${SIGNATURE:-}
   local version=${VERSION:?VERSION is required}
   local variant=${VARIANT:-production}
-  local product_name appimage_name
+  local arch=${ARCH:-x86_64}
+  local product_name appimage_name rolling_name
 
   if [[ ! -f "$appimage" ]]; then
     echo "::error::AppImage missing: $appimage"
     exit 1
   fi
 
+  # Release-only step: an AppImage the updater cannot verify is worse than no
+  # Linux asset at all, so refuse to stage rather than publish an unusable one.
+  if [[ -z "$signature" || ! -f "$signature" ]]; then
+    echo "::error::No updater signature for the AppImage; refusing to stage an unverifiable Linux release asset (locate-linux found none next to ${appimage})"
+    exit 1
+  fi
+
   product_name=$(product_name_for_variant "$variant")
 
   mkdir -p "../updates/linux"
-  appimage_name="${product_name}-${version}-x86_64.AppImage"
+  # Must match ARTIFACT_NAMING.get_updater_archive_name / get_installer_name for
+  # linux: the manifest generator looks this name up verbatim, so the platform
+  # token is not decoration. Under Tauri v2 the signed AppImage is both the
+  # installer and the updater archive, so the .sig travels with it.
+  appimage_name="${product_name}-${version}-linux-${arch}.AppImage"
+  rolling_name="${product_name}-linux-${arch}.AppImage"
   cp "$appimage" "../updates/linux/$appimage_name"
-  cp "$appimage" "../updates/linux/${product_name}-x86_64.AppImage"
+  cp "$signature" "../updates/linux/${appimage_name}.sig"
+  cp "$appimage" "../updates/linux/$rolling_name"
+  cp "$signature" "../updates/linux/${rolling_name}.sig"
   (cd "../updates/linux" && sha256sum ./*.AppImage > checksums.txt)
 
-  echo "[INFO] Linux artifacts staged: $appimage_name"
+  echo "[INFO] Linux artifacts staged: $appimage_name (+ .sig)"
   echo "[INFO] Variant: ${variant}, Product name: ${product_name}"
   echo "appimage_name=$appimage_name" >> "$GITHUB_OUTPUT"
   echo "product_name=${product_name}" >> "$GITHUB_OUTPUT"
@@ -319,6 +352,9 @@ upload_linux() {
   echo "[INFO] AppImage: ${appimage_name}"
 
   aws s3 cp --endpoint-url "${SPACES_ENDPOINT}" "../updates/linux/${appimage_name}" "s3://${SPACES_BUCKET}/${release_prefix}/v${version}/${appimage_name}" --acl public-read
+  # The updater fetches the .sig from the sibling path the manifest advertises;
+  # shipping the AppImage without it leaves the download unverifiable.
+  aws s3 cp --endpoint-url "${SPACES_ENDPOINT}" "../updates/linux/${appimage_name}.sig" "s3://${SPACES_BUCKET}/${release_prefix}/v${version}/${appimage_name}.sig" --acl public-read
 
   echo "[INFO] ✅ Linux upload complete"
 }

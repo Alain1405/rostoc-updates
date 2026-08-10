@@ -26,6 +26,14 @@ on:
         type: string
         default: 'https://api.rostoc.co/api/updates/publish/'
         description: 'Backend API endpoint for release publishing'
+      strict_artifact_match:
+        required: false
+        type: boolean
+        default: false
+        description: >-
+          Fail the job when a platform staged artifacts that matched no expected
+          name. Safe only for the optional-platform backfill, which runs after
+          the required publish has already promoted the release.
 
 env:
   PRIVATE_REPO: Rostoc/rostoc
@@ -146,8 +154,13 @@ jobs:
             cp -R "${ROOT}"/linux/* linux-artifacts/
             echo "[INFO] ✅ Linux artifacts found and consolidated"
             ls -la linux-artifacts/
+            echo "✅ Linux artifacts consolidated for ${RELEASE_CHANNEL}." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "::notice::No Linux artifacts found (optional platform)"
+            # Absent is legitimate for an optional platform, but it must be
+            # visible in the run summary rather than buried in step logs --
+            # a silent notice is how Linux went unserved for entire releases.
+            echo "::warning::No Linux artifacts found (optional platform); this release will not serve Linux updates"
+            echo "⚠️ No Linux artifacts for ${RELEASE_CHANNEL}; this release does not serve Linux updates." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Download pending notarizations metadata
@@ -195,6 +208,10 @@ jobs:
           fi
           # NOTE: Removed --manifest and --releases args - build_backend_payload.py
           # now generates manifest_payload inline (backend generates manifests dynamically)
+          strict_args=()
+          if [ "${{ inputs.strict_artifact_match }}" = "true" ]; then
+            strict_args+=(--strict-artifact-match)
+          fi
           python scripts/ci/build_backend_payload.py \
             --version "${{ env.RELEASE_VERSION }}" \
             --channel "${{ env.RELEASE_CHANNEL }}" \
@@ -203,6 +220,7 @@ jobs:
             --mac-root macos-artifacts \
             --windows-root windows-artifacts \
             --linux-root linux-artifacts \
+            "${strict_args[@]}" \
             "${notes_args[@]}"
           echo "payload=publish-payload.json" >> "$GITHUB_OUTPUT"
 

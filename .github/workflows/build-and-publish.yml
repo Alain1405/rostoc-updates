@@ -357,6 +357,9 @@ jobs:
       is_release: true
       release_channel: 'stable'
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+      # publish-production has already promoted the release by the time this
+      # runs, so failing here surfaces a naming break without gating promotion.
+      strict_artifact_match: true
     secrets: inherit
 
   publish-staging-optional:
@@ -369,6 +372,8 @@ jobs:
       is_release: true
       release_channel: 'staging'
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
+      # See publish-production-optional: staging is likewise already published.
+      strict_artifact_match: true
     secrets: inherit
 
   # Phase 4: Finalize (update commit status)

@@ -56,6 +56,17 @@ jobs:
             --output-dir .artifacts/reference-hygiene-public
           cat .artifacts/reference-hygiene-public/summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Check artifact naming parity with canonical contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The release publisher runs on the vendored copy of ARTIFACT_NAMING;
+          # drift from the canonical module silently drops a platform from the
+          # manifest, which is how Linux went unserved. Catch it here, at
+          # development time, rather than during a release.
+          python3 scripts/ci/check_artifact_naming_parity.py \
+            --canonical private-src/scripts
+
       - name: Upload public reference hygiene summary
         if: always()
         uses: actions/upload-artifact@v4
