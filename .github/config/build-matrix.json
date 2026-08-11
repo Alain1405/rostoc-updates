@@ -1,4 +1,14 @@
 {
+  "_comment": [
+    "Two independent axes, deliberately not the same flag:",
+    "  is_optional  — may fail without failing the release (continue-on-error).",
+    "  publish_wave — 'primary' ships in the first publish; 'backfill' ships in",
+    "                 a second publish after the channel is already promoted.",
+    "Only put a platform in the backfill wave when it is genuinely slower than",
+    "the required critical path. Measured over v0.3.70-v0.3.73, macOS Intel took",
+    "33-63 min against a 25-31 min required path, while Linux and Windows 32-bit",
+    "finished before the first publish started in every one of those releases."
+  ],
   "production": [
     {
       "variant": "production",
@@ -6,7 +16,8 @@
       "platform": "macos",
       "arch": "aarch64",
       "name": "macOS ARM64 (M1)",
-      "is_optional": false
+      "is_optional": false,
+      "publish_wave": "primary"
     },
     {
       "variant": "production",
@@ -14,7 +25,8 @@
       "platform": "windows",
       "arch": "x86_64",
       "name": "Windows x64",
-      "is_optional": false
+      "is_optional": false,
+      "publish_wave": "primary"
     },
     {
       "variant": "production",
@@ -22,7 +34,8 @@
       "platform": "macos",
       "arch": "x86_64",
       "name": "macOS Intel x86-64",
-      "is_optional": true
+      "is_optional": true,
+      "publish_wave": "backfill"
     },
     {
       "variant": "production",
@@ -30,7 +43,8 @@
       "platform": "windows",
       "arch": "i686",
       "name": "Windows x86 (32-bit)",
-      "is_optional": true
+      "is_optional": true,
+      "publish_wave": "primary"
     },
     {
       "variant": "production",
@@ -38,7 +52,8 @@
       "platform": "linux",
       "arch": "x86_64",
       "name": "Linux AppImage x86-64",
-      "is_optional": true
+      "is_optional": true,
+      "publish_wave": "primary"
     }
   ],
   "staging": [
@@ -48,7 +63,8 @@
       "platform": "macos",
       "arch": "aarch64",
       "name": "macOS ARM64 (M1) — Staging",
-      "is_optional": false
+      "is_optional": false,
+      "publish_wave": "primary"
     },
     {
       "variant": "staging",
@@ -56,7 +72,8 @@
       "platform": "windows",
       "arch": "x86_64",
       "name": "Windows x64 — Staging",
-      "is_optional": false
+      "is_optional": false,
+      "publish_wave": "primary"
     },
     {
       "variant": "staging",
@@ -64,7 +81,8 @@
       "platform": "macos",
       "arch": "x86_64",
       "name": "macOS Intel x86-64 — Staging",
-      "is_optional": true
+      "is_optional": true,
+      "publish_wave": "backfill"
     },
     {
       "variant": "staging",
@@ -72,7 +90,8 @@
       "platform": "windows",
       "arch": "i686",
       "name": "Windows x86 (32-bit) — Staging",
-      "is_optional": true
+      "is_optional": true,
+      "publish_wave": "primary"
     },
     {
       "variant": "staging",
@@ -80,7 +99,8 @@
       "platform": "linux",
       "arch": "x86_64",
       "name": "Linux AppImage x86-64 — Staging",
-      "is_optional": true
+      "is_optional": true,
+      "publish_wave": "primary"
     }
   ]
 }

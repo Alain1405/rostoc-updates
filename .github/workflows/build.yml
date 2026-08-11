@@ -20,9 +20,18 @@ on:
         required: true
         type: string
         description: >-
-          Which build-matrix.json subset to build: 'required' (must succeed,
-          gates release promotion) or 'optional' (slow/low-priority legs that
-          run independently and never block promotion)
+          Which build-matrix.json subset to build. 'required' must succeed and
+          gates release promotion; 'secondary' may fail without failing the
+          release but still ships in the first publish; 'backfill' is the
+          genuinely slow leg that publishes after the channel is promoted.
+      variant:
+        required: false
+        type: string
+        default: 'all'
+        description: >-
+          Which channel variant to build: 'production', 'staging', or 'all'.
+          Naming one keeps a channel's builds independent of the other's, so a
+          slow staging leg cannot hold up a production publish.
 
 env:
   PRIVATE_REPO: Rostoc/rostoc
@@ -42,29 +51,74 @@ jobs:
       - name: Load build matrix configuration
         id: load-matrix
         run: |
+          set -euo pipefail
           SCOPE="${{ inputs.scope }}"
-          if [[ "$SCOPE" != "required" && "$SCOPE" != "optional" ]]; then
-            echo "::error::Invalid scope '$SCOPE' (expected 'required' or 'optional')"
+          VARIANT="${{ inputs.variant }}"
+          CONFIG=.github/config/build-matrix.json
+
+          # A leg's wave defaults to 'primary', so an entry that predates the
+          # publish_wave field ships in the first publish rather than silently
+          # disappearing from every scope.
+          WAVE='(.publish_wave // "primary")'
+          case "$SCOPE" in
+            required)  FILTER=".is_optional == false and $WAVE == \"primary\"" ;;
+            secondary) FILTER=".is_optional == true and $WAVE == \"primary\"" ;;
+            backfill)  FILTER="$WAVE == \"backfill\"" ;;
+            *)
+              echo "::error::Invalid scope '$SCOPE' (expected 'required', 'secondary' or 'backfill')"
+              exit 1
+              ;;
+          esac
+
+          case "$VARIANT" in
+            production|staging|all) ;;
+            *)
+              echo "::error::Invalid variant '$VARIANT' (expected 'production', 'staging' or 'all')"
+              exit 1
+              ;;
+          esac
+
+          # Every leg must be claimed by exactly one scope. Without this a typo
+          # in publish_wave would drop a platform from the build silently, and
+          # the first sign of it would be a manifest missing that platform.
+          TOTAL=$(jq '[.production[], .staging[]] | length' "$CONFIG")
+          CLAIMED=$(jq '
+            [.production[], .staging[]]
+            | map(select(
+                (.is_optional == false and (.publish_wave // "primary") == "primary")
+                or (.is_optional == true and (.publish_wave // "primary") == "primary")
+                or ((.publish_wave // "primary") == "backfill")
+              ))
+            | length' "$CONFIG")
+          if [[ "$TOTAL" != "$CLAIMED" ]]; then
+            echo "::error::build-matrix.json has $TOTAL legs but only $CLAIMED are claimed by a scope"
             exit 1
           fi
-          WANT_OPTIONAL=$([[ "$SCOPE" == "optional" ]] && echo "true" || echo "false")
 
-          # Load both production and staging configurations, filtered to this
-          # call's scope. is_optional legs (macOS Intel, Windows 32-bit, Linux
-          # AppImage) build independently so they never block release promotion.
-          PROD_MATRIX=$(jq -c --argjson opt "$WANT_OPTIONAL" '[.production[] | select(.is_optional == $opt)]' .github/config/build-matrix.json)
-          STAGING_MATRIX=$(jq -c --argjson opt "$WANT_OPTIONAL" '[.staging[] | select(.is_optional == $opt)]' .github/config/build-matrix.json)
+          PROD_MATRIX=$(jq -c "[.production[] | select($FILTER)]" "$CONFIG")
+          STAGING_MATRIX=$(jq -c "[.staging[] | select($FILTER)]" "$CONFIG")
 
-          if [[ "${{ inputs.is_release }}" == "true" ]]; then
+          if [[ "$VARIANT" == "production" ]]; then
+            MATRIX="$PROD_MATRIX"
+          elif [[ "$VARIANT" == "staging" ]]; then
+            MATRIX="$STAGING_MATRIX"
+          elif [[ "${{ inputs.is_release }}" == "true" ]]; then
             # Release builds: both production and staging
-            COMBINED_MATRIX=$(jq -s -c 'add' <(echo "$PROD_MATRIX") <(echo "$STAGING_MATRIX"))
-            echo "matrix=$COMBINED_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "📦 Release build ($SCOPE): $(echo "$COMBINED_MATRIX" | jq 'length') configurations"
+            MATRIX=$(jq -s -c 'add' <(echo "$PROD_MATRIX") <(echo "$STAGING_MATRIX"))
           else
             # CI builds: production only
-            echo "matrix=$PROD_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "🔨 CI build ($SCOPE): $(echo "$PROD_MATRIX" | jq 'length') configurations"
+            MATRIX="$PROD_MATRIX"
           fi
+
+          COUNT=$(echo "$MATRIX" | jq 'length')
+          if [[ "$COUNT" -eq 0 ]]; then
+            echo "::error::No build legs matched scope '$SCOPE' variant '$VARIANT'"
+            exit 1
+          fi
+
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "📦 scope=$SCOPE variant=$VARIANT release=${{ inputs.is_release }}: $COUNT configurations"
+          echo "$MATRIX" | jq -r '.[] | "  - \(.name)"'
 
   build-desktop:
     needs: prepare-matrix

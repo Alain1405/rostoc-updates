@@ -77,18 +77,59 @@ jobs:
       scope: required
     secrets: inherit
 
-  # Phase 2c: Build the slow, lowest-priority optional platforms (macOS Intel,
-  # Windows 32-bit, Linux AppImage) independently. Runs in the same pipeline
-  # but is never on the critical path: nothing below gates on this job, so a
-  # slow or failing optional leg never delays release promotion.
-  build-optional:
+  # Phase 2c: Build the platforms that may fail without failing the release but
+  # are not actually slow. Measured over v0.3.70-v0.3.73, Linux and Windows
+  # 32-bit finished before the first publish started every time, so they belong
+  # in it. The publish jobs wait for this but do not require it to succeed.
+  build-secondary-production:
     needs: setup
     uses: ./.github/workflows/build.yml
     with:
       ref: ${{ inputs.ref }}
       commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
       is_release: ${{ inputs.is_release || false }}
-      scope: optional
+      scope: secondary
+      variant: production
+    secrets: inherit
+
+  build-secondary-staging:
+    if: ${{ inputs.is_release }}
+    needs: setup
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
+      is_release: true
+      scope: secondary
+      variant: staging
+    secrets: inherit
+
+  # Phase 2d: Build the one genuinely slow platform, macOS Intel, which runs
+  # 33-63 min against a 25-31 min required path and so cannot make the first
+  # publish. Split per channel: a production backfill must never wait on a
+  # staging build. In v0.3.70 it did, and held the production backfill 19
+  # minutes after every production artifact was already built.
+  build-backfill-production:
+    needs: setup
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
+      is_release: ${{ inputs.is_release || false }}
+      scope: backfill
+      variant: production
+    secrets: inherit
+
+  build-backfill-staging:
+    if: ${{ inputs.is_release }}
+    needs: setup
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ inputs.ref }}
+      commit_sha: ${{ needs.setup.outputs.resolved_commit_sha }}
+      is_release: true
+      scope: backfill
+      variant: staging
     secrets: inherit
 
   # Phase 2.5: Windows update smoke gate.
@@ -314,10 +355,23 @@ jobs:
             --field "Run=${{ github.run_id }}" `
             --field "Logs=[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
-  # Phase 3a: Publish production channel
+  # Phase 3a: Publish production channel.
+  #
+  # build-secondary-production is in `needs` but deliberately absent from `if`:
+  # the publish waits for those legs so the first manifest's contents are
+  # decided by the graph rather than by whether a build happened to finish
+  # before this job started, but a failed secondary leg still cannot block
+  # promotion.
   publish-production:
     if: ${{ always() && inputs.is_release && needs.lint-and-tests.result == 'success' && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
-    needs: [setup, lint-and-tests, build, update-smoke-windows]
+    needs:
+      [
+        setup,
+        lint-and-tests,
+        build,
+        build-secondary-production,
+        update-smoke-windows,
+      ]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -330,7 +384,14 @@ jobs:
   # Phase 3b: Publish staging channel
   publish-staging:
     if: ${{ always() && inputs.is_release && needs.lint-and-tests.result == 'success' && needs.build.result == 'success' && needs.update-smoke-windows.result == 'success' }}
-    needs: [setup, lint-and-tests, build, update-smoke-windows]
+    needs:
+      [
+        setup,
+        lint-and-tests,
+        build,
+        build-secondary-staging,
+        update-smoke-windows,
+      ]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -340,16 +401,16 @@ jobs:
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
     secrets: inherit
 
-  # Phase 3c: Backfill optional-platform artifacts (macOS Intel, Windows
-  # 32-bit, Linux AppImage) into the already-published channels once they
-  # land. Independent of Phase 3a/3b timing by design — required platforms
-  # publish without waiting on these. Re-running publish.yml here is safe:
-  # it downloads whatever artifacts exist in this run (including the
-  # already-published required ones still present from Phase 3a/3b) and
-  # re-POSTs the full payload, which the backend upserts.
-  publish-production-optional:
-    if: ${{ always() && inputs.is_release && needs.publish-production.result == 'success' && needs.build-optional.result == 'success' }}
-    needs: [setup, build-optional, publish-production]
+  # Phase 3c: Backfill macOS Intel into the already-published channel once it
+  # lands. Independent of Phase 3a/3b timing by design — the required platforms
+  # publish without waiting on it. Re-running publish.yml here is safe: it
+  # downloads whatever artifacts exist in this run (including the
+  # already-published ones still present from Phase 3a/3b) and re-POSTs the
+  # full payload as a new revision. The backend supersedes the revision this
+  # replaces, so only one row per channel and version is ever live.
+  publish-production-backfill:
+    if: ${{ always() && inputs.is_release && needs.publish-production.result == 'success' && needs.build-backfill-production.result == 'success' }}
+    needs: [setup, build-backfill-production, publish-production]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -362,9 +423,9 @@ jobs:
       strict_artifact_match: true
     secrets: inherit
 
-  publish-staging-optional:
-    if: ${{ always() && inputs.is_release && needs.publish-staging.result == 'success' && needs.build-optional.result == 'success' }}
-    needs: [setup, build-optional, publish-staging]
+  publish-staging-backfill:
+    if: ${{ always() && inputs.is_release && needs.publish-staging.result == 'success' && needs.build-backfill-staging.result == 'success' }}
+    needs: [setup, build-backfill-staging, publish-staging]
     uses: ./.github/workflows/publish.yml
     with:
       ref: ${{ inputs.ref }}
@@ -372,7 +433,7 @@ jobs:
       is_release: true
       release_channel: 'staging'
       backend_publish_url: ${{ inputs.backend_publish_url || 'https://api.rostoc.co/api/updates/publish/' }}
-      # See publish-production-optional: staging is likewise already published.
+      # See publish-production-backfill: staging is likewise already published.
       strict_artifact_match: true
     secrets: inherit
 
