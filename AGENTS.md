@@ -107,3 +107,24 @@ need to remember it, but you do need to react correctly:
 The queue file `.commit-queue` sits at the main worktree root (gitignored).
 The same system runs in rostoc, rostoc-updates, rostoc-backend, and rostoc-kb;
 each repo has its own independent queue.
+
+### The guard (destructive commands)
+
+`git commit` is serialized by the pre-commit gate. The commands that actually
+destroy other sessions' work are not commits, and git has no hook for them, so
+a Claude Code PreToolUse hook refuses them:
+
+| refused | do this instead |
+|---|---|
+| `git stash` (mutating forms) | `git add <your paths> && git commit`, or `git stash push -- <your paths>` |
+| `git add -A` / `git add .` / `git add -u` | `git add <the exact paths you changed>` |
+| `git reset --hard`, bare `git reset` | `git checkout HEAD -- <your path>` / `git restore --staged <your path>` |
+| `git clean -f` | `rm` the specific files you created |
+| whole-tree `git checkout .` / `git restore .` | `git checkout -- <the one path>` |
+| `git checkout -- <path another session is carrying>` | leave it alone; `./commit-queue status` shows who has it |
+| `git commit --no-verify` | commit normally; fix the hook rather than bypass the queue |
+
+Read-only forms (`git stash list`, `git status`, `git log`) are never touched.
+The refusal explains itself and names the alternative — follow it rather than
+working around it. `COMMIT_QUEUE_BYPASS=1` exists for genuine emergencies.
+

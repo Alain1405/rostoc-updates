@@ -642,6 +642,145 @@ cmd_install_hook() {
   printf 'commit-queue: re-run install-hook if a hook manager (pre-commit, husky) reinstalls its own.\n'
 }
 
+# ------------------------------------------------------------------ guard ---
+# The queue gates `git commit`, but the operations that actually destroyed
+# work — stash, add -A, checkout --, reset, clean — are not commits and git
+# has no hook for them. `guard` inspects a shell command and refuses the
+# whole-tree destructive forms, which in a shared tree always reach files
+# this session did not write. Wired in as a Claude Code PreToolUse hook.
+
+# Files every OTHER session currently has in the queue.
+others_files() {
+  [ -f "$QUEUE" ] || return 0
+  entries | awk -F'\t' -v me="$ME" '$1 != me { print $11 }' \
+    | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$\|^-$\|^+.* more$' | sort -u
+}
+
+guard_deny() { # guard_deny <headline> <advice>
+  printf 'commit-queue guard: %s\n\n%s\n' "$1" "$2"
+  printf '\nWhy: this repo runs several agent sessions against one working tree.\n'
+  printf 'Whole-tree git commands reach files other sessions are still editing;\n'
+  printf 'that is how ~30 files were lost on 2026-08-10. Commit YOUR paths\n'
+  printf 'explicitly instead — the pre-commit gate serializes commits for you.\n'
+  printf 'See the "Commit queue" section of AGENTS.md.\n'
+  printf 'Genuine emergency: re-run with COMMIT_QUEUE_BYPASS=1 in the environment.\n'
+  exit 2
+}
+
+cmd_guard() {
+  local cmd=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --command) cmd=${2:-}; shift 2 ;;
+      --command=*) cmd=${1#--command=}; shift ;;
+      *) shift ;;
+    esac
+  done
+  [ -n "$cmd" ] || return 0
+  case "$cmd" in *git*) ;; *) return 0 ;; esac
+  [ "${COMMIT_QUEUE_BYPASS:-}" = "1" ] && return 0
+
+  local seg rest sub args
+  while IFS= read -r seg; do
+    # strip wrappers and git's own pre-subcommand options
+    rest=$(printf '%s' "$seg" | sed -E 's/^[[:space:]]*//; s/^(sudo|env|nice)[[:space:]]+//')
+    case "$rest" in
+      git\ *|*/git\ *) ;;
+      *) continue ;;
+    esac
+    rest=$(printf '%s' "$rest" | sed -E 's@^[^[:space:]]*git[[:space:]]+@@')
+    while :; do
+      case "$rest" in
+        -C\ *)  rest=$(printf '%s' "$rest" | sed -E 's/^-C[[:space:]]+[^[:space:]]+[[:space:]]*//') ;;
+        -c\ *)  rest=$(printf '%s' "$rest" | sed -E 's/^-c[[:space:]]+[^[:space:]]+[[:space:]]*//') ;;
+        *) break ;;
+      esac
+    done
+    sub=${rest%% *}
+    args=" ${rest#"$sub"} "
+
+    case "$sub" in
+      stash)
+        case "$args" in
+          *" list"*|*" show"*) continue ;;   # read-only
+        esac
+        guard_deny "\`git stash\` is refused in a shared tree." \
+"The stash is repo-global: it takes every session's unstaged work, and a later
+\`stash pop\` drops another session's changes into your tree (this happened
+2026-08-10 — a pop restored a foreign stash and \`git add -A\` staged it).
+Instead:
+  - to commit only your work:   git add <your paths> && git commit
+  - to park your own edits:     git stash push -- <your paths>   (explicit paths)
+  - to see what is stashed:     git stash list" ;;
+      add)
+        case "$args" in
+          *" -A "*|*" --all "*|*" . "*|*" -u "*|*" --update "*)
+            guard_deny "\`git add\` with a whole-tree pathspec is refused." \
+"-A / . / -u stage every changed file in the tree, including files other
+sessions are mid-edit on, and then they land in your commit.
+Instead: git add <the exact paths you changed>" ;;
+        esac ;;
+      reset)
+        case "$args" in
+          *" --hard"*)
+            guard_deny "\`git reset --hard\` is refused." \
+"It destroys every uncommitted change in the tree — yours and everyone else's,
+with no stash and no recovery.
+Instead:
+  - undo your own file:      git checkout HEAD -- <your path>
+  - unstage your own file:   git restore --staged <your path>" ;;
+          *" -- "*) : ;;                    # path-limited reset is fine
+          *)
+            case "$args" in
+              *[!\ ]*) : ;;                 # reset <commit>/<path> — allowed
+              *) guard_deny "Bare \`git reset\` is refused." \
+"It unstages the whole index, including files another session has staged and is
+about to commit.
+Instead: git restore --staged <your paths>" ;;
+            esac ;;
+        esac ;;
+      clean)
+        case "$args" in
+          *-*f*)
+            guard_deny "\`git clean -f\` is refused." \
+"It deletes untracked files across the tree — new files other sessions have
+written but not yet committed are gone for good.
+Instead: rm the specific files you created." ;;
+        esac ;;
+      checkout|restore)
+        case "$args" in
+          *" . "*|*" -- . "*|*" -A "*|*" --all "*)
+            guard_deny "Whole-tree \`git $sub\` is refused." \
+"It reverts every modified file in the tree, including other sessions' work.
+Instead: git $sub -- <the exact path you want reverted>" ;;
+        esac
+        # Path-limited form: refuse only paths another session is carrying.
+        local clash p
+        clash=""
+        for p in $(printf '%s' "$args" | sed -E 's/^.*-- //' 2>/dev/null); do
+          case "$p" in -*) continue ;; esac
+          if others_files | grep -qxF "$p" 2>/dev/null; then clash="$clash $p"; fi
+        done
+        if [ -n "$clash" ]; then
+          guard_deny "\`git $sub\` targets a path another session is editing:$clash" \
+"That session has uncommitted changes in this exact file and is queued to
+commit it. Reverting it now discards their work.
+Run ./commit-queue status to see who, then leave it alone or talk to them."
+        fi ;;
+      commit)
+        case "$args" in
+          *" --no-verify"*|*" -n "*)
+            guard_deny "\`git commit --no-verify\` is refused." \
+"--no-verify skips the pre-commit hook, which IS the commit queue: your commit
+would race whatever other session is mid-commit.
+Instead: run the commit normally. If a hook is genuinely broken, fix the hook
+or say so — do not bypass the queue." ;;
+        esac ;;
+    esac
+  done < <(printf '%s\n' "$cmd" | awk '{gsub(/&&|\|\||;/,"\n"); print}')
+  return 0
+}
+
 # ------------------------------------------------------------------ main ---
 
 usage() {
@@ -669,6 +808,11 @@ commit-queue — FIFO commit lock shared by every session in this repo.
         Remove someone else's entry. Refuses on a live session without --force.
   heartbeat
         Extend your lease during long work and re-read your file list.
+  guard --command "<shell command>"
+        Policy check for destructive git commands (stash, add -A, reset --hard,
+        whole-tree checkout/restore, clean -f, commit --no-verify). Exit 2 with
+        an explanation = refuse. Wired in as a Claude Code PreToolUse hook so
+        it covers every session, not just the ones that read the docs.
   install-hook
         Wire the queue into git: a pre-commit gate (auto-joins when the queue
         is free, blocks with instructions when it is not) and a post-commit
@@ -693,6 +837,7 @@ case $cmd in
   status)    cmd_status ;;
   check)     cmd_check "$@" ;;
   evict)     cmd_evict "$@" ;;
+  guard)     cmd_guard "$@" ;;
   hook-gate) cmd_hook_gate ;;
   hook-done) cmd_hook_done ;;
   install-hook) cmd_install_hook ;;
