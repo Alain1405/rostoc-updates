@@ -160,7 +160,12 @@ jobs:
       # Frontend kill switch for analytics: disable for CI builds, enable for release builds
       VITE_DISABLE_ANALYTICS: ${{ inputs.is_release && '0' || '1' }}
     # macOS Intel release builds spend extra time compressing and signing the full DMG.
-    timeout-minutes: ${{ matrix.platform == 'linux' && 30 || (inputs.is_release && matrix.platform == 'macos' && matrix.arch == 'x86_64' && 70 || 50) }}
+    # Linux previously sat at 30, which it grew into rather than exceeded: staging
+    # AppImage runs went 27m (08-10) → 28m (08-11) → 29m (08-12) → 30m04s (08-23),
+    # failing by four seconds and taking the whole release with it through
+    # fail-fast. It now shares the 50 the other platforms get, so a slow runner or
+    # another few minutes of build growth costs a slower release, not a dead one.
+    timeout-minutes: ${{ inputs.is_release && matrix.platform == 'macos' && matrix.arch == 'x86_64' && 70 || 50 }}
     steps:
       - name: Checkout repo (actions + workflows)
         uses: actions/checkout@v4
