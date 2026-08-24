@@ -160,12 +160,22 @@ jobs:
       # Frontend kill switch for analytics: disable for CI builds, enable for release builds
       VITE_DISABLE_ANALYTICS: ${{ inputs.is_release && '0' || '1' }}
     # macOS Intel release builds spend extra time compressing and signing the full DMG.
-    # Linux previously sat at 30, which it grew into rather than exceeded: staging
-    # AppImage runs went 27m (08-10) → 28m (08-11) → 29m (08-12) → 30m04s (08-23),
-    # failing by four seconds and taking the whole release with it through
-    # fail-fast. It now shares the 50 the other platforms get, so a slow runner or
-    # another few minutes of build growth costs a slower release, not a dead one.
-    timeout-minutes: ${{ inputs.is_release && matrix.platform == 'macos' && matrix.arch == 'x86_64' && 70 || 50 }}
+    #
+    # Linux gets the widest budget, deliberately. It sat at 30 for months and grew
+    # into it rather than exceeding it — staging AppImage runs went 27m (08-10) →
+    # 28m (08-11) → 29m (08-12) → 30m04s (08-23), four seconds over the cap.
+    #
+    # What that costs is worth stating precisely, because an earlier version of
+    # this comment overstated it: linux is is_optional in build-matrix.json and
+    # the matrix sets fail-fast: false, so a Linux timeout does not fail the
+    # release. It costs the Linux artifact — that channel publishes without an
+    # AppImage and Linux users get no update — which is quiet rather than loud,
+    # and therefore worse in its own way than a broken release.
+    #
+    # Successful runs sit at 22-30m, so 90 is roughly triple the observed worst
+    # case: it still catches a genuinely hung runner, while no amount of ordinary
+    # build growth or runner slowness silently drops a platform again.
+    timeout-minutes: ${{ matrix.platform == 'linux' && 90 || (inputs.is_release && matrix.platform == 'macos' && matrix.arch == 'x86_64' && 70 || 50) }}
     steps:
       - name: Checkout repo (actions + workflows)
         uses: actions/checkout@v4
