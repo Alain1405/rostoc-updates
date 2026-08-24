@@ -181,6 +181,82 @@ function Assert-InstalledBinaryPresent {
   throw "Expected installed binary not found after $Stage install. Checked: $checkedPaths"
 }
 
+function Assert-UpdatedAppStarts {
+  <#
+    .SYNOPSIS
+      Start the updated app and require that it is still running afterwards.
+
+    .DESCRIPTION
+      Until now this smoke proved the MSI installed, upgraded, registered its
+      version, and put a file on disk — but it never ran that file. Rostoc
+      0.3.77 passed it and then could not start at all: the embedded Python
+      exited immediately on a module the bundle was missing, so the app died
+      before the tray appeared and the smoke was green throughout.
+
+      The interpreter writes bootstrap.log before any other logging exists, so
+      that file is the reliable witness. A process that is gone, or a log
+      carrying a non-zero interpreter exit, is a failed launch.
+  #>
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ExePath,
+    [Parameter(Mandatory = $true)]
+    [string]$ProductName
+  )
+
+  $logDirs = @(
+    (Join-Path $env:LOCALAPPDATA (Join-Path $ProductName 'logs')),
+    (Join-Path $env:APPDATA (Join-Path $ProductName 'logs'))
+  )
+  foreach ($dir in $logDirs) {
+    $bootstrap = Join-Path $dir 'bootstrap.log'
+    if (Test-Path -LiteralPath $bootstrap) {
+      Remove-Item -LiteralPath $bootstrap -Force -ErrorAction SilentlyContinue
+    }
+  }
+
+  Write-Host "[INFO] Launching updated app: $ExePath"
+  $proc = Start-Process -FilePath $ExePath -PassThru
+  $deadline = (Get-Date).AddSeconds(45)
+  $exitedEarly = $false
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 3
+    if ($proc.HasExited) { $exitedEarly = $true; break }
+  }
+
+  $bootstrapText = ''
+  foreach ($dir in $logDirs) {
+    $bootstrap = Join-Path $dir 'bootstrap.log'
+    if (Test-Path -LiteralPath $bootstrap) {
+      $bootstrapText = Get-Content -LiteralPath $bootstrap -Raw
+      break
+    }
+  }
+
+  $interpreterFailed = $bootstrapText -match 'interpreter exit code=(?!0)\d+'
+
+  if (-not $proc.HasExited) {
+    $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+  }
+
+  if ($exitedEarly -or $interpreterFailed) {
+    $detail = if ([string]::IsNullOrWhiteSpace($bootstrapText)) {
+      'bootstrap.log was never written, so the app died before the Rust host started logging'
+    }
+    else {
+      "bootstrap.log tail: " + (($bootstrapText -split "`n" | Select-Object -Last 12) -join ' | ')
+    }
+    throw "Updated app failed to stay running after the update. $detail"
+  }
+
+  Write-Host '[INFO] Updated app started and stayed running'
+  return [ordered]@{
+    started            = $true
+    exited_early       = $exitedEarly
+    interpreter_failed = $interpreterFailed
+  }
+}
+
 function Get-PathProbeResults {
   param(
     [Parameter(Mandatory = $true)]
@@ -748,6 +824,9 @@ try {
   if ($summary.new_version -ne $ExpectedNewVersion) {
     throw "Installed version '$($summary.new_version)' does not match expected '$ExpectedNewVersion'"
   }
+
+  $launch = Assert-UpdatedAppStarts -ExePath $summary.installed_binary_path -ProductName $productName
+  $summary.launch = $launch
 
   $summary.status = 'success'
 }
