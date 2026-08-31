@@ -105,8 +105,16 @@ run_mac_gui() {
   }
 }
 
+# The runtime smoke is the last gate that opens a packaged bundle and asks
+# whether it actually works. Its exit code used to be swallowed with `exit 0`
+# on both architectures, so a bundle that imported nothing still reported
+# green -- which is how 0.3.80 shipped to 32-bit Windows with every curve
+# import dead. Tolerating a failed optional platform is a matrix decision, and
+# build.yml already makes it: `continue-on-error: ${{ matrix.is_optional }}`,
+# with i686 marked optional. Deciding it again down here only hid the result
+# from the job that was willing to accept it.
 run_windows_runtime() {
-  local pybin debug_json failure_message
+  local pybin debug_json
 
   pybin=$(find_windows_python)
   if [[ -z "$pybin" ]]; then
@@ -116,11 +124,9 @@ run_windows_runtime() {
 
   if [[ "$ARCH" == "i686" ]]; then
     debug_json="windows_x86_runtime_smoke_debug.json"
-    failure_message="[WARN] x86 smoke test failed (optional platform, continuing): exit code"
     echo "[INFO] Running x86 runtime smoke test: $pybin" >&2
   else
     debug_json="windows_x64_runtime_smoke_debug.json"
-    failure_message="[WARN] x64 smoke test failed (exit code"
     echo "[INFO] Running x64 runtime smoke test: $pybin" >&2
   fi
 
@@ -131,12 +137,8 @@ run_windows_runtime() {
     --debug-json "$debug_json" \
     --strict || {
     exitcode=$?
-    if [[ "$ARCH" == "i686" ]]; then
-      echo "$failure_message $exitcode"
-    else
-      echo "$failure_message $exitcode), continuing"
-    fi
-    exit 0
+    echo "[ERROR] ${ARCH} runtime smoke test failed: exit code $exitcode"
+    exit "$exitcode"
   }
 }
 
