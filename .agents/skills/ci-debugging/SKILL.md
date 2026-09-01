@@ -489,7 +489,7 @@ gh run download <RUN_ID> --repo Alain1405/rostoc-updates -D /tmp/artifacts
 gh run view <RUN_ID> --repo Alain1405/rostoc-updates --json headSha,createdAt
 
 # Get latest rostoc commits
-gh api repos/Alain1405/rostoc/commits?per_page=5 --jq '.[] | {sha: .sha, message: .commit.message, date: .commit.author.date}'
+gh api repos/Rostoc/rostoc/commits?per_page=5 --jq '.[] | {sha: .sha, message: .commit.message, date: .commit.author.date}'
 
 # Workflow checks out rostoc at time of trigger
 # Compare createdAt timestamp with rostoc commit dates

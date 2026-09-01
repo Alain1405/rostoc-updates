@@ -25,7 +25,7 @@ jobs:
       - name: Checkout private rostoc repo
         uses: actions/checkout@v4
         with:
-          repository: Alain1405/rostoc
+          repository: Rostoc/rostoc
           path: rostoc
           # actionlint: disable-next-line expr
           ssh-key: ${{ secrets.PRIVATE_REPO_SSH_KEY }}

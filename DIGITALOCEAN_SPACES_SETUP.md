@@ -45,7 +45,7 @@ This guide walks through setting up DigitalOcean Spaces for hosting Rostoc relea
 
 Add these secrets to **both** repositories:
 
-### Private repo: `Alain1405/rostoc`
+### Private repo: `Rostoc/rostoc`
 Not used directly, but good for local testing.
 
 ### Public repo: `Alain1405/rostoc-updates`

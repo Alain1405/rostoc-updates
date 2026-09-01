@@ -26,7 +26,7 @@ gh run view <RUN_ID> --repo Alain1405/rostoc-updates \
 gh api repos/Alain1405/rostoc-updates/commits/<SHA> --jq '.commit.message'
 
 # Get rostoc version from private repo commit
-gh api repos/Alain1405/rostoc/contents/package.json?ref=<SHA> \
+gh api repos/Rostoc/rostoc/contents/package.json?ref=<SHA> \
   --jq '.content' | base64 -d | jq -r '.version'
 ```
 
@@ -68,7 +68,7 @@ mcp_github_github_get_file_contents(
 cat /path/to/rostoc/package.json | jq -r '.version'
 
 # From GitHub
-gh api repos/Alain1405/rostoc/contents/package.json \
+gh api repos/Rostoc/rostoc/contents/package.json \
   --jq '.content' | base64 -d | jq -r '.version'
 ```
 
@@ -123,7 +123,7 @@ gh run view 20758186226 --json headSha --jq '.headSha'
 
 # Get rostoc version from that commit
 SHA=$(gh run view 20758186226 --json headSha --jq '.headSha')
-gh api repos/Alain1405/rostoc/contents/package.json?ref=$SHA \
+gh api repos/Rostoc/rostoc/contents/package.json?ref=$SHA \
   --jq '.content' | base64 -d | jq -r '.version'
 
 ## Update Smoke Logs
