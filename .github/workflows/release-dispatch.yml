@@ -10,9 +10,8 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Tag or branch to release'
-        required: false
-        default: 'main'
+        description: 'Release tag to build, e.g. v0.4.0'
+        required: true
       commit_sha:
         description: 'Commit SHA for metadata stamping'
         required: false
@@ -26,8 +25,52 @@ permissions:
   id-token: write
   actions: write
 
+# Release builds serialise and never cancel each other. A cancelled release
+# build can leave a channel half-published; a queued one costs only time.
+# (Public CI Build cancels in progress, which is right for a CI lane and wrong
+# here.)
+concurrency:
+  group: >-
+    public-release-build-${{ inputs.ref || github.event.client_payload.ref || github.ref_name || 'main' }}
+  cancel-in-progress: false
+
 jobs:
+  # A release is cut from a tag. Nothing else may reach the publish jobs:
+  # is_release is true unconditionally below, and both dispatch paths default
+  # `ref` to 'main', so without this guard a manual dispatch publishes an
+  # untagged commit. Its version comes from package.json, so it lands as
+  # another revision of the version already released — and
+  # Release._reject_stale_promotion then refuses to promote the real tagged
+  # revision, because a higher one supersedes it.
+  #
+  # A branch build is a CI build. That is what Public CI Build is for.
+  guard-release-ref:
+    name: Refuse a release build that is not a tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the ref is a release tag
+        env:
+          RELEASE_REF: >-
+            ${{ inputs.ref || github.event.client_payload.ref || github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          case "${RELEASE_REF}" in
+            v[0-9]*)
+              echo "Release ref: ${RELEASE_REF}"
+              ;;
+            "")
+              echo "::error::No ref supplied. A release build needs a v* tag."
+              exit 1
+              ;;
+            *)
+              echo "::error::Refusing a release build for '${RELEASE_REF}'."
+              echo "::error::Releases are cut from a v* tag. For a branch, run Public CI Build."
+              exit 1
+              ;;
+          esac
+
   run-shared-build:
+    needs: guard-release-ref
     uses: ./.github/workflows/build-and-publish.yml
     with:
       ref: ${{ inputs.ref || github.event.client_payload.ref || github.ref_name || 'main' }}
