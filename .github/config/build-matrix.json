@@ -1,13 +1,28 @@
 {
   "_comment": [
     "Two independent axes, deliberately not the same flag:",
-    "  is_optional  — may fail without failing the release (continue-on-error).",
-    "  publish_wave — 'primary' ships in the first publish; 'backfill' ships in",
+    "  is_optional  \u2014 may fail without failing the release (continue-on-error).",
+    "  publish_wave \u2014 'primary' ships in the first publish; 'backfill' ships in",
     "                 a second publish after the channel is already promoted.",
-    "Only put a platform in the backfill wave when it is genuinely slower than",
-    "the required critical path. Measured over v0.3.70-v0.3.73, macOS Intel took",
-    "33-63 min against a 25-31 min required path, while Linux and Windows 32-bit",
-    "finished before the first publish started in every one of those releases."
+    "",
+    "Nothing is in the backfill wave any more, and adding something back needs",
+    "a better reason than the original one. The wave existed because macOS",
+    "Intel took 33-63 min against a 25-31 min required path over v0.3.70-73.",
+    "That gap decayed: measured from the published revisions, the second",
+    "publish landed 20.4 min after the first on v0.3.80, 8.1 on v0.3.78, 4.9",
+    "on v0.3.77 and 2.1 on v0.4.0.",
+    "",
+    "It was not free. Every release produced two revisions, and the second",
+    "promotion \u2014 a manual step \u2014 was missed on three of the last ten stable",
+    "versions, leaving the incomplete revision live and macOS Intel off the",
+    "download page. It also put two revisions' asset rows on one spaces_path,",
+    "which is what made the notarization callback raise MultipleObjectsReturned",
+    "and strand Apple Silicon on v0.4.0.",
+    "",
+    "An optional leg still cannot gate a release: is_optional keeps it",
+    "continue-on-error, and the publish jobs list the secondary builds in",
+    "`needs` but not in `if`, so a failed one is waited for and then published",
+    "without."
   ],
   "production": [
     {
@@ -35,7 +50,7 @@
       "arch": "x86_64",
       "name": "macOS Intel x86-64",
       "is_optional": true,
-      "publish_wave": "backfill"
+      "publish_wave": "primary"
     },
     {
       "variant": "production",
@@ -62,7 +77,7 @@
       "os": "macos-26",
       "platform": "macos",
       "arch": "aarch64",
-      "name": "macOS ARM64 (M1) — Staging",
+      "name": "macOS ARM64 (M1) \u2014 Staging",
       "is_optional": false,
       "publish_wave": "primary"
     },
@@ -71,7 +86,7 @@
       "os": "windows-2022",
       "platform": "windows",
       "arch": "x86_64",
-      "name": "Windows x64 — Staging",
+      "name": "Windows x64 \u2014 Staging",
       "is_optional": false,
       "publish_wave": "primary"
     },
@@ -80,16 +95,16 @@
       "os": "macos-15-intel",
       "platform": "macos",
       "arch": "x86_64",
-      "name": "macOS Intel x86-64 — Staging",
+      "name": "macOS Intel x86-64 \u2014 Staging",
       "is_optional": true,
-      "publish_wave": "backfill"
+      "publish_wave": "primary"
     },
     {
       "variant": "staging",
       "os": "windows-2022",
       "platform": "windows",
       "arch": "i686",
-      "name": "Windows x86 (32-bit) — Staging",
+      "name": "Windows x86 (32-bit) \u2014 Staging",
       "is_optional": true,
       "publish_wave": "primary"
     },
@@ -98,7 +113,7 @@
       "os": "ubuntu-22.04",
       "platform": "linux",
       "arch": "x86_64",
-      "name": "Linux AppImage x86-64 — Staging",
+      "name": "Linux AppImage x86-64 \u2014 Staging",
       "is_optional": true,
       "publish_wave": "primary"
     }
