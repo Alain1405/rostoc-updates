@@ -35,10 +35,16 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
+      # Corepack, not a pinned version. The checked-out repo declares
+      # "packageManager": "pnpm@10.17.1" and keeps its packageExtensions in
+      # pnpm-workspace.yaml, which only pnpm 10 reads. Installing with pnpm 9
+      # here left that setting unread, so pnpm computed a different
+      # packageExtensionsChecksum and --frozen-lockfile refused the lockfile on
+      # every run from 2026-08-27T15:26Z. rostoc 59bac8e0 moved the other lanes
+      # to corepack when it moved the setting; this lane lives in another
+      # repository and was missed. Keep it deriving the version from the repo.
+      - name: Enable Corepack (pnpm)
+        run: corepack enable
 
       - name: Install dependencies
         run: |
